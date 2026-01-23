@@ -1,0 +1,20 @@
+{
+  "name": "express-collector-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --loader ts-node/esm src/server.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo 'no lint configured'"
+  },
+  "dependencies": {
+    "@m-software-engineering/heat-collector": "workspace:*",
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.4",
+    "@types/express": "^4.17.21"
+  }
+}

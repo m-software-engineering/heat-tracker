@@ -1,0 +1,49 @@
+{
+  "name": "@m-software-engineering/heat-collector",
+  "version": "0.1.0",
+  "description": "Collector server for heat-tracker sessions and events",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --clean",
+    "dev": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo 'no lint configured'",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
+  },
+  "bin": {
+    "heat-collector-migrate": "./dist/cli.cjs"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.41.0",
+    "express": "^4.19.2",
+    "zod": "^3.24.2"
+  },
+  "peerDependencies": {
+    "pg": "^8.12.0",
+    "mysql2": "^3.10.2",
+    "better-sqlite3": "^11.5.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/better-sqlite3": "^7.6.9",
+    "@types/node": "^20.16.5",
+    "@types/pg": "^8.11.8",
+    "@types/supertest": "^2.0.16",
+    "@vitest/coverage-v8": "^1.6.0",
+    "better-sqlite3": "^11.5.0",
+    "supertest": "^6.3.4",
+    "typescript": "^5.5.4",
+    "vitest": "^1.6.0"
+  }
+}

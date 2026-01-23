@@ -1,0 +1,31 @@
+{
+  "name": "heat-tracker",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "workspaces": [
+    "packages/*",
+    "examples/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r dev",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm test:unit && pnpm test:e2e",
+    "test:unit": "pnpm -r test",
+    "test:coverage": "pnpm -r test:coverage",
+    "test:e2e": "playwright test",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "changeset publish"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.27.7",
+    "@playwright/test": "^1.51.0",
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.19.2",
+    "tsup": "^8.3.6",
+    "typescript": "^5.5.4",
+    "vitest": "^1.6.0"
+  }
+}
