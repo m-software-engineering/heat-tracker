@@ -1,6 +1,6 @@
 {
   "name": "@m-software-engineering/heat-collector",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Collector server for heat-tracker sessions and events",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -12,7 +12,9 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --clean",
     "dev": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --watch",
