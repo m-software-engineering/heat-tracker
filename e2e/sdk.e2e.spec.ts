@@ -26,7 +26,7 @@ const startCollector = async () => {
     <button id="btn">Click</button>
     <script>window.__INGEST_URL__ = window.location.origin + "/ingest";</script>
     <script type="module">
-      import { init } from "/sdk/index.js";
+      import { init } from "/sdk/index.mjs";
       window.__tracker__ = init({ endpoint: window.__INGEST_URL__, projectKey: "dev-project-key" });
     </script>
   </body>
