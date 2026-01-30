@@ -26,7 +26,7 @@ const startCollector = async () => {
     <button id="btn">Click</button>
     <script>window.__INGEST_URL__ = window.location.origin + "/ingest";</script>
     <script type="module">
-      import { init } from "/sdk/index.mjs";
+      import { init } from "/sdk/index.js";
       window.__tracker__ = init({ endpoint: window.__INGEST_URL__, projectKey: "dev-project-key" });
     </script>
   </body>
@@ -55,6 +55,10 @@ test("SDK captures click and collector aggregates", async ({ page }) => {
 
   try {
     await page.goto(collector.url);
+    await page.waitForFunction(() => {
+      const tracker = (window as any).__tracker__;
+      return tracker && typeof tracker.flush === "function";
+    });
     await page.click("#btn");
     await page.evaluate(async () => {
       await (window as any).__tracker__.flush();

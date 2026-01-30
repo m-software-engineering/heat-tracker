@@ -14,7 +14,7 @@
     "test": "pnpm test:unit && pnpm test:e2e",
     "test:unit": "pnpm -r test",
     "test:coverage": "pnpm -r test:coverage",
-    "test:e2e": "playwright test",
+    "test:e2e": "pnpm -C packages/heat-sdk build && playwright test",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish"
