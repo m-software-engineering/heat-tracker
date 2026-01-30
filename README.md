@@ -30,7 +30,7 @@ import { init } from "@m-software-engineering/heat-sdk";
 
 const tracker = init({
   endpoint: "http://localhost:4000/ingest",
-  projectKey: "dev-project-key"
+  projectKey: "dev-project-key",
 });
 
 tracker.identify("user-123", { plan: "pro" });
@@ -46,7 +46,7 @@ const app = express();
 const collector = await createCollector({
   db: { dialect: "sqlite", file: "./heat.db" },
   auth: { mode: "projectKey" },
-  autoMigrate: true
+  autoMigrate: true,
 });
 
 app.use(collector.router);
@@ -68,17 +68,3 @@ HEAT_DIALECT=pg DATABASE_URL=postgres://... heat-collector-migrate
 - Do Not Track respected by default.
 - Input/keyboard capture is off by default.
 - Sensitive input types are blocked even if capture is enabled.
-
-## Mock Screens (for docs)
-
-**Mock 1 - Heatmap View**
-
-"Modern web analytics dashboard, left sidebar (Projects, Heatmaps, Sessions, Settings), top bar with date range picker and dropdown 'Event: Click'. Main panel shows an ecommerce page screenshot with a heatmap overlay (red/yellow hotspots) concentrated on a 'Buy' button and navigation menu. Right panel shows metrics (Total events, Unique sessions, Top elements). Clean SaaS style, light mode."
-
-**Mock 2 - Session Explorer**
-
-"Dark mode dashboard with sessions table (Session ID, User, First Path, Duration, Events). Clicking a row opens a session detail panel with a vertical timeline of events (click, scroll, input focus) and a small viewport preview. Minimal, technical, clean UI."
-
-**Mock 3 - Privacy Settings**
-
-"Settings screen with sections Auth (Project Key / JWT), Privacy (block selectors, allow selectors, DNT), Capture toggles (click/move/scroll/pageview/inputs/keyboard). Professional UI, card layout, switches, light mode."
