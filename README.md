@@ -1,5 +1,7 @@
 # heat-tracker
 
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-heat--tracker-blue)](https://deepwiki.com/m-software-engineering/heat-tracker)
+
 Full heatmap tracking stack: a browser SDK + Node collector + SQL persistence + reference dashboards.
 
 ## Packages
