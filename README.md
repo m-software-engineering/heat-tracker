@@ -1,6 +1,8 @@
 # heat-tracker
 
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/m-software-engineering/heat-tracker)
+[![npm heat-sdk](https://img.shields.io/npm/v/%40m-software-engineering%2Fheat-sdk)](https://www.npmjs.com/package/@m-software-engineering/heat-sdk)
+[![npm heat-collector](https://img.shields.io/npm/v/%40m-software-engineering%2Fheat-collector)](https://www.npmjs.com/package/@m-software-engineering/heat-collector)
 
 Full heatmap tracking stack: a browser SDK + Node collector + SQL persistence + reference dashboards.
 
