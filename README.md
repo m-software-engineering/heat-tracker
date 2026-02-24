@@ -4,37 +4,40 @@
 [![npm heat-sdk](https://img.shields.io/npm/v/%40m-software-engineering%2Fheat-sdk)](https://www.npmjs.com/package/@m-software-engineering/heat-sdk)
 [![npm heat-collector](https://img.shields.io/npm/v/%40m-software-engineering%2Fheat-collector)](https://www.npmjs.com/package/@m-software-engineering/heat-collector)
 
-Stack completo para heatmaps e replay analítico: SDK Web + coletor HTTP + persistência SQL/Mongo + dashboard de referência.
+End-to-end stack for product analytics heatmaps and session analysis: browser SDK + HTTP collector + SQL/Mongo persistence + dashboard reference app.
 
-## Arquitetura do monorepo
+## Monorepo structure
 
-- `packages/heat-sdk`: SDK browser que captura eventos (click, move, scroll, pageview, custom e, opcionalmente, input/keyboard).
-- `packages/heat-collector`: servidor Express compatível com autenticação por `projectKey`, JWT ou ambos.
-- `examples/express-collector`: exemplo mínimo de backend para ingest + query.
-- `examples/nextjs-dashboard`: dashboard de referência para renderização de heatmap.
+- `packages/heat-sdk`: Browser SDK that captures click/move/scroll/pageview/custom events (with optional input/keyboard capture).
+- `packages/heat-collector`: Express collector with project key and/or JWT authentication, ingestion, and query APIs.
+- `examples/express-collector`: Minimal backend example for ingestion and querying.
+- `examples/nextjs-dashboard`: Reference dashboard for heatmap and session exploration.
 
-## Fluxo de dados (fim a fim)
+## How it works
 
-1. O front inicializa `@m-software-engineering/heat-sdk` apontando para `/ingest`.
-2. O SDK cria lotes de eventos da sessão e envia ao collector.
-3. O collector valida payload, autentica, aplica hook opcional e persiste sessão/eventos.
-4. O dashboard consulta `/api/projects/:projectId/heatmap`, `/sessions` e `/api/sessions/:sessionId`.
+1. Your frontend initializes `@m-software-engineering/heat-sdk` and points it to `/ingest`.
+2. The SDK batches session events and sends them to the collector.
+3. The collector validates/authenticates payloads and persists projects, users, sessions, and events.
+4. The dashboard (or your own UI) reads analytics through query endpoints:
+   - `GET /api/projects/:projectId/heatmap`
+   - `GET /api/projects/:projectId/sessions`
+   - `GET /api/sessions/:sessionId`
 
-## Setup rápido (desenvolvimento)
+## Quick setup (local development)
 
-### 1) Banco e serviços auxiliares
+### 1) Start local infrastructure
 
 ```bash
 docker compose -f examples/docker-compose/docker-compose.yml up -d
 ```
 
-### 2) Collector de exemplo
+### 2) Run the collector example
 
 ```bash
 pnpm --filter ./examples/express-collector dev
 ```
 
-### 3) App frontend com SDK
+### 3) Initialize SDK in your frontend
 
 ```ts
 import { init } from "@m-software-engineering/heat-sdk";
@@ -48,7 +51,7 @@ tracker.identify("user-123", { plan: "pro" });
 tracker.track("cta_click", { source: "hero" });
 ```
 
-## Integração de backend (Express)
+## Collector integration (Express)
 
 ```ts
 import express from "express";
@@ -65,19 +68,19 @@ app.use(collector.router);
 app.listen(4000);
 ```
 
-## Migração em produção
+## Production migration command
 
 ```bash
 HEAT_DIALECT=pg DATABASE_URL=postgres://... heat-collector-migrate
 ```
 
-## Privacidade por padrão
+## Privacy defaults
 
-- Respeita `Do Not Track` por padrão.
-- Captura de teclado/input desabilitada por padrão.
-- Seletores sensíveis (`password`, OTP, cartão etc.) bloqueados por padrão.
+- Respects `Do Not Track` by default.
+- Input and keyboard capture are disabled by default.
+- Sensitive selectors (`password`, OTP, card fields, etc.) are blocked by default.
 
-## Scripts úteis
+## Useful scripts
 
 ```bash
 pnpm build

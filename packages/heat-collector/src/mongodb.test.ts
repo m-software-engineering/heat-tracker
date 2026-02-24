@@ -49,8 +49,12 @@ const matchFilter = (doc: any, filter: any) => {
 class FakeCollection {
   docs: any[] = [];
   indexes: any[] = [];
+  failCreateIndex = false;
 
   async createIndex(index: any, options?: any) {
+    if (this.failCreateIndex) {
+      throw Object.assign(new Error("not authorized"), { code: 13, codeName: "Unauthorized" });
+    }
     this.indexes.push({ index, options });
     return "ok";
   }
@@ -127,6 +131,17 @@ describe("mongodb support", () => {
     expect(ctx.dialect).toBe("mongodb");
     expect(db.collection("projects").indexes.length).toBeGreaterThan(0);
     expect(db.collection("events").indexes.length).toBeGreaterThan(0);
+  });
+
+  it("does not fail migration when mongodb user cannot create indexes", async () => {
+    const db = new FakeMongoDb();
+    db.collection("projects").failCreateIndex = true;
+    db.collection("users").failCreateIndex = true;
+    db.collection("sessions").failCreateIndex = true;
+    db.collection("events").failCreateIndex = true;
+
+    const ctx = await createDb({ dialect: "mongodb", db });
+    await expect(autoMigrate(ctx)).resolves.toBeUndefined();
   });
 
   it("ingests and serves data through mongodb backend", async () => {

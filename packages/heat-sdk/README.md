@@ -1,14 +1,14 @@
 # @m-software-engineering/heat-sdk
 
-SDK browser para capturar comportamento de navegação e enviar eventos ao heat-collector.
+Browser SDK for heat-tracker. It captures user behavior events in the client and sends batched payloads to heat-collector.
 
-## Instalação
+## Install
 
 ```bash
 npm install @m-software-engineering/heat-sdk
-# ou
+# or
 pnpm add @m-software-engineering/heat-sdk
-# ou
+# or
 yarn add @m-software-engineering/heat-sdk
 ```
 
@@ -26,37 +26,44 @@ tracker.track("signup", { plan: "pro" });
 await tracker.flush();
 ```
 
-## Eventos capturados
+## How it works
+
+1. `init(config)` starts a browser tracker with session metadata.
+2. Built-in listeners collect events such as clicks, movement, scrolling, and page views.
+3. Events are queued and flushed in batches to the collector endpoint.
+4. Optional methods (`identify`, `track`, `setAuthToken`) enrich and control payloads.
+
+## Captured event types
 
 - `click`
-- `move` (com throttle)
+- `move` (throttled)
 - `scroll`
 - `pageview`
 - `custom` (via `track`)
-- `input` (opcional)
-- `keyboard` (opcional)
+- `input` (optional)
+- `keyboard` (optional)
 
-## API principal
+## Main API
 
 ### `init(config)`
 
-Cria e inicia o tracker no browser.
+Creates and starts the tracker in the browser.
 
-Campos obrigatórios:
+Required fields:
 
-- `endpoint`: URL completa de ingestão (`.../ingest`)
-- `projectKey`: chave do projeto
+- `endpoint`: full ingestion URL (`.../ingest`)
+- `projectKey`: project key
 
-Campos opcionais:
+Optional fields:
 
-- `app`: nome/versão/ambiente
-- `session`: persistência (`tab` ou `browser`) e timeout de inatividade
-- `batch`: limites de lote e estratégia de fila
-- `sampling`: taxa de amostragem (0..1)
-- `privacy`: bloqueios e mascaramento por seletor
-- `capture`: granularidade dos capturadores
+- `app`: app name/version/environment
+- `session`: persistence (`tab` or `browser`) and idle timeout
+- `batch`: batch limits and queue strategy
+- `sampling`: sampling rate (0..1)
+- `privacy`: selector masking and blocking options
+- `capture`: capture-level controls
 
-### Métodos do tracker
+### Tracker methods
 
 - `identify(userId, traits?)`
 - `setAuthToken(jwt | null)`
@@ -64,7 +71,7 @@ Campos opcionais:
 - `flush()`
 - `shutdown()`
 
-## Exemplos de framework
+## Framework examples
 
 ### React
 
@@ -109,16 +116,16 @@ export class AppComponent implements OnInit, OnDestroy {
 }
 ```
 
-## Privacidade e segurança
+## Privacy and security defaults
 
-- Funciona apenas em ambiente browser (chamar no servidor lança erro).
-- `Do Not Track` é respeitado por padrão.
-- Captura de input/teclado vem desativada por padrão.
-- Campos sensíveis são bloqueados por seletores padrão.
+- Browser-only runtime (throws if called on the server).
+- Respects `Do Not Track` by default.
+- Input and keyboard capture are disabled by default.
+- Sensitive fields are blocked by default selector rules.
 
-## JWT no collector
+## JWT support with collector
 
-Se o collector usar `auth.mode = "jwt"` ou `"both"`, anexe token por sessão:
+If the collector uses `auth.mode = "jwt"` or `"both"`, attach a token per session:
 
 ```ts
 tracker.setAuthToken("<jwt>");

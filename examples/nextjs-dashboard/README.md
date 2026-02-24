@@ -1,11 +1,16 @@
 # Next.js Dashboard Example
 
-This is a reference dashboard that calls the collector query APIs and renders heatmaps via `heatmap.js`.
+Reference dashboard built with Next.js that consumes collector query APIs and renders heatmaps using `heatmap.js`.
 
-## Run
+## Quick setup
 
 ```bash
 pnpm --filter ./examples/nextjs-dashboard dev
 ```
 
-Set the Collector Base URL and Project ID in the UI (top controls).
+## How to use
+
+1. Start a collector instance.
+2. Open the dashboard.
+3. Configure Collector Base URL and Project ID in the top controls.
+4. Explore heatmap points and session timelines from collected data.

@@ -94,13 +94,13 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
 
 export const autoMigrate = async (ctx: DbContext) => {
   if (ctx.dialect === "mongodb") {
-    await ctx.db.collection("projects").createIndex({ key: 1 }, { unique: true });
-    await ctx.db.collection("users").createIndex({ projectId: 1, externalId: 1 }, { unique: true });
-    await ctx.db.collection("sessions").createIndex({ id: 1 }, { unique: true });
-    await ctx.db.collection("sessions").createIndex({ projectId: 1, startedAt: 1 });
-    await ctx.db.collection("events").createIndex({ id: 1 }, { unique: true });
-    await ctx.db.collection("events").createIndex({ projectId: 1, path: 1, ts: 1 });
-    await ctx.db.collection("events").createIndex({ sessionId: 1, ts: 1 });
+    await createMongoIndex(ctx.db.collection("projects"), { key: 1 }, { unique: true });
+    await createMongoIndex(ctx.db.collection("users"), { projectId: 1, externalId: 1 }, { unique: true });
+    await createMongoIndex(ctx.db.collection("sessions"), { id: 1 }, { unique: true });
+    await createMongoIndex(ctx.db.collection("sessions"), { projectId: 1, startedAt: 1 });
+    await createMongoIndex(ctx.db.collection("events"), { id: 1 }, { unique: true });
+    await createMongoIndex(ctx.db.collection("events"), { projectId: 1, path: 1, ts: 1 });
+    await createMongoIndex(ctx.db.collection("events"), { sessionId: 1, ts: 1 });
     return;
   }
 
@@ -109,6 +109,24 @@ export const autoMigrate = async (ctx: DbContext) => {
   await execute(ctx.db, statements.users);
   await execute(ctx.db, statements.sessions);
   await execute(ctx.db, statements.events);
+};
+
+const createMongoIndex = async (collection: any, index: any, options?: any) => {
+  try {
+    await collection.createIndex(index, options);
+  } catch (error: any) {
+    if (isMongoUnauthorizedError(error)) {
+      return;
+    }
+    throw error;
+  }
+};
+
+const isMongoUnauthorizedError = (error: any) => {
+  const code = Number(error?.code);
+  const codeName = String(error?.codeName || "").toLowerCase();
+  const message = String(error?.message || "").toLowerCase();
+  return code === 13 || codeName === "unauthorized" || message.includes("not authorized");
 };
 
 const execute = async (db: any, statement: any) => {
