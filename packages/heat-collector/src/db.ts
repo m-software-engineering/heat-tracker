@@ -20,6 +20,13 @@ export type DbAdapterConfig =
       connectionString?: string;
       client?: any;
       db?: any;
+    }
+  | {
+      dialect: "mongodb";
+      connectionString?: string;
+      database?: string;
+      client?: any;
+      db?: any;
     };
 
 export type DbContext = {
@@ -57,6 +64,26 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
     return { db, dialect: "mysql", schema };
   }
 
+  if (config.dialect === "mongodb") {
+    if (config.db) {
+      return { db: config.db, dialect: "mongodb", schema };
+    }
+
+    const { MongoClient } = await import("mongodb");
+    if (!config.client && !config.connectionString) {
+      throw new Error("MongoDB config requires connectionString or client");
+    }
+
+    const client = config.client ?? new MongoClient(config.connectionString || "");
+    if (!config.client) {
+      await client.connect();
+    }
+
+    const dbName = config.database || "heat_tracker";
+    const db = client.db(dbName);
+    return { db, dialect: "mongodb", schema };
+  }
+
   const { drizzle } = await import("drizzle-orm/better-sqlite3");
   const sqlite = await import("better-sqlite3");
   const file = config.file || config.connectionString || "./heat-tracker.db";
@@ -66,6 +93,17 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
 };
 
 export const autoMigrate = async (ctx: DbContext) => {
+  if (ctx.dialect === "mongodb") {
+    await ctx.db.collection("projects").createIndex({ key: 1 }, { unique: true });
+    await ctx.db.collection("users").createIndex({ projectId: 1, externalId: 1 }, { unique: true });
+    await ctx.db.collection("sessions").createIndex({ id: 1 }, { unique: true });
+    await ctx.db.collection("sessions").createIndex({ projectId: 1, startedAt: 1 });
+    await ctx.db.collection("events").createIndex({ id: 1 }, { unique: true });
+    await ctx.db.collection("events").createIndex({ projectId: 1, path: 1, ts: 1 });
+    await ctx.db.collection("events").createIndex({ sessionId: 1, ts: 1 });
+    return;
+  }
+
   const statements = buildCreateTableSql(ctx.dialect);
   await execute(ctx.db, statements.projects);
   await execute(ctx.db, statements.users);

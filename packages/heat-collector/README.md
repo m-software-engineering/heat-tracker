@@ -16,6 +16,7 @@ Database drivers are peer dependencies:
 - Postgres: `pg`
 - MySQL: `mysql2`
 - SQLite: `better-sqlite3`
+- MongoDB: `mongodb`
 
 ## Quick start (Express)
 
@@ -101,7 +102,9 @@ Headers:
 
 ```ts
 type CollectorConfig = {
-  db: { dialect: "pg" | "mysql" | "sqlite"; connectionString?: string; file?: string };
+  db:
+    | { dialect: "pg" | "mysql" | "sqlite"; connectionString?: string; file?: string }
+    | { dialect: "mongodb"; connectionString?: string; database?: string };
   auth:
     | { mode: "projectKey" }
     | { mode: "jwt"; jwksUrl: string; issuer: string; audience: string }

@@ -52,7 +52,7 @@ describe("heat-collector", () => {
       .expect(200);
 
     const db = new Database(dbFile);
-    const project = db.prepare("select id from projects where key = ?").get("dev-project-key");
+    const project = db.prepare("select id from projects where key = ?").get("dev-project-key") as any;
     expect(project).toBeTruthy();
 
     const heatmap = await request(app)
