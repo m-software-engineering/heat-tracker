@@ -2,10 +2,6 @@
   "name": "heat-tracker",
   "private": true,
   "packageManager": "pnpm@9.12.0",
-  "workspaces": [
-    "packages/*",
-    "examples/*"
-  ],
   "scripts": {
     "build": "pnpm -r build",
     "dev": "pnpm -r dev",
