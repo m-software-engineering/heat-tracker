@@ -1,5 +1,11 @@
 # @m-software-engineering/heat-collector
 
+## 0.3.2
+
+### Patch Changes
+
+- Publish a maintenance release aligned with monorepo consistency updates and workspace type-check improvements.
+
 ## 0.3.1
 
 ### Patch Changes

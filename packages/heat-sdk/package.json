@@ -1,15 +1,15 @@
 {
   "name": "@m-software-engineering/heat-sdk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Browser SDK for heat-tracker session events and heatmaps",
-  "main": "dist/index.cjs",
-  "module": "dist/index.js",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
     }
   },
   "sideEffects": false,

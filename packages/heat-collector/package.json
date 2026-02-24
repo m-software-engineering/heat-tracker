@@ -1,6 +1,6 @@
 {
   "name": "@m-software-engineering/heat-collector",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Collector server for heat-tracker sessions and events",
   "type": "module",
   "main": "dist/index.cjs",
