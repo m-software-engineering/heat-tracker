@@ -1,5 +1,12 @@
 # @m-software-engineering/heat-collector
 
+## 0.3.1
+
+### Patch Changes
+
+- Atualiza a documentação geral e dos pacotes, incluindo setup de integração com NestJS no collector.
+  Também corrige a versão reportada internamente pelo SDK para ficar alinhada ao pacote publicado.
+
 ## 0.3.0
 
 ### Minor Changes
