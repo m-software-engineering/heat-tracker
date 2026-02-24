@@ -1,18 +1,18 @@
 # @m-software-engineering/heat-collector
 
-Collector server do heat-tracker. Expõe rotas de ingestão e consulta, com persistência em Postgres, MySQL, SQLite ou MongoDB.
+Express collector service for heat-tracker. It provides ingestion and query APIs, supports SQL/MongoDB backends, and can authenticate by project key, JWT, or both.
 
-## Instalação
+## Install
 
 ```bash
 npm install @m-software-engineering/heat-collector
-# ou
+# or
 pnpm add @m-software-engineering/heat-collector
-# ou
+# or
 yarn add @m-software-engineering/heat-collector
 ```
 
-### Drivers de banco (peer dependencies)
+## Database drivers (peer dependencies)
 
 - Postgres: `pg`
 - MySQL: `mysql2`
@@ -39,9 +39,9 @@ app.listen(3000, () => {
 });
 ```
 
-## Setup NestJS (forma validada em produção)
+## Quick start (NestJS)
 
-> Relatos de integração mostraram que a forma mais estável é registrar o `collector.router` diretamente no `main.ts` após criar a app Nest.
+Register `collector.router` in `main.ts` after creating the Nest application:
 
 ```ts
 import { NestFactory } from "@nestjs/core";
@@ -68,16 +68,23 @@ async function bootstrap() {
 bootstrap();
 ```
 
+## How the collector works
+
+1. `POST /ingest` receives event batches from the SDK.
+2. The request is authenticated via `x-project-key`, JWT, or both.
+3. The collector upserts project/user/session data and stores events.
+4. Query APIs return aggregated points and session timelines for dashboards.
+
 ## Endpoints
 
-### Ingest
+### Ingestion
 
 `POST /ingest`
 
-Headers aceitos:
+Accepted headers:
 
-- `x-project-key`: chave do projeto (obrigatória em `projectKey`/`both`)
-- `authorization: Bearer <jwt>`: obrigatório em `jwt`, opcional em `both`
+- `x-project-key`: required for `projectKey` and `both` modes.
+- `authorization: Bearer <jwt>`: required for `jwt`, optional for `both`.
 
 ### Query APIs
 
@@ -86,7 +93,7 @@ Headers aceitos:
 - `GET /api/sessions/:sessionId`
 - `GET /api/metrics`
 
-## Configuração
+## Configuration
 
 ```ts
 type CollectorConfig = {
@@ -109,7 +116,11 @@ type CollectorConfig = {
 };
 ```
 
-## Migrations em produção
+## MongoDB permissions note
+
+When `autoMigrate` is enabled, the collector attempts to create indexes. If the MongoDB user does not have index-management permissions, the collector now continues without failing startup. For controlled production environments, you can still set `autoMigrate: false` and manage indexes externally.
+
+## Production migration command
 
 ```bash
 HEAT_DIALECT=pg DATABASE_URL=postgres://... heat-collector-migrate
