@@ -1,14 +1,14 @@
 # @m-software-engineering/heat-sdk
 
-Browser SDK for capturing session events and generating heatmaps with the heat-tracker collector.
+SDK browser para capturar comportamento de navegação e enviar eventos ao heat-collector.
 
-## Install
+## Instalação
 
 ```bash
 npm install @m-software-engineering/heat-sdk
-# or
+# ou
 pnpm add @m-software-engineering/heat-sdk
-# or
+# ou
 yarn add @m-software-engineering/heat-sdk
 ```
 
@@ -26,9 +26,47 @@ tracker.track("signup", { plan: "pro" });
 await tracker.flush();
 ```
 
-## Framework snippets
+## Eventos capturados
 
-### React (useEffect)
+- `click`
+- `move` (com throttle)
+- `scroll`
+- `pageview`
+- `custom` (via `track`)
+- `input` (opcional)
+- `keyboard` (opcional)
+
+## API principal
+
+### `init(config)`
+
+Cria e inicia o tracker no browser.
+
+Campos obrigatórios:
+
+- `endpoint`: URL completa de ingestão (`.../ingest`)
+- `projectKey`: chave do projeto
+
+Campos opcionais:
+
+- `app`: nome/versão/ambiente
+- `session`: persistência (`tab` ou `browser`) e timeout de inatividade
+- `batch`: limites de lote e estratégia de fila
+- `sampling`: taxa de amostragem (0..1)
+- `privacy`: bloqueios e mascaramento por seletor
+- `capture`: granularidade dos capturadores
+
+### Métodos do tracker
+
+- `identify(userId, traits?)`
+- `setAuthToken(jwt | null)`
+- `track(name, props?)`
+- `flush()`
+- `shutdown()`
+
+## Exemplos de framework
+
+### React
 
 ```tsx
 import { useEffect } from "react";
@@ -40,6 +78,7 @@ export function App() {
       endpoint: "https://collector.example.com/ingest",
       projectKey: "your-project-key"
     });
+
     return () => void tracker.shutdown();
   }, []);
 
@@ -47,7 +86,7 @@ export function App() {
 }
 ```
 
-### Angular (app.component.ts)
+### Angular
 
 ```ts
 import { Component, OnDestroy, OnInit } from "@angular/core";
@@ -70,28 +109,17 @@ export class AppComponent implements OnInit, OnDestroy {
 }
 ```
 
-## API
+## Privacidade e segurança
 
-### init(config)
+- Funciona apenas em ambiente browser (chamar no servidor lança erro).
+- `Do Not Track` é respeitado por padrão.
+- Captura de input/teclado vem desativada por padrão.
+- Campos sensíveis são bloqueados por seletores padrão.
 
-Creates a tracker instance.
+## JWT no collector
 
-Required:
-- `endpoint`: Full URL to the collector ingest endpoint (e.g. `/ingest`).
-- `projectKey`: The project key used by the collector.
+Se o collector usar `auth.mode = "jwt"` ou `"both"`, anexe token por sessão:
 
-Optional:
-- `app`, `session`, `batch`, `sampling`, `privacy`, `capture`
-
-### tracker methods
-
-- `identify(userId, traits?)`
-- `setAuthToken(jwt | null)`
-- `track(name, props?)`
-- `flush()`
-- `shutdown()`
-
-## Notes
-
-- This SDK is intended for browsers. Calling `init` on the server will throw.
-- When using JWT auth, call `setAuthToken` to attach the token to ingest requests.
+```ts
+tracker.setAuthToken("<jwt>");
+```

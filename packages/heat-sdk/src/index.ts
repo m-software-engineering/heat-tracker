@@ -192,7 +192,7 @@ const DEFAULT_CONFIG: ResolvedConfig = {
 };
 
 const SDK_NAME = "@m-software-engineering/heat-sdk";
-const SDK_VERSION = "0.1.0";
+const SDK_VERSION = "0.2.0";
 
 const safeNow = () => Date.now();
 
