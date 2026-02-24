@@ -81,6 +81,8 @@ const sanitizeEventMeta = (meta: any) => {
   return clone;
 };
 
+const isMongo = (ctx: DbContext) => ctx.dialect === "mongodb";
+
 export const createCollector = async (config: CollectorConfig): Promise<Collector> => {
   const logger = createLogger(config.logging?.level || "info");
   const metrics = createMetrics();
@@ -234,6 +236,39 @@ const ensureProjectAndUser = async (
   jwtSub?: string
 ): Promise<{ projectId: string; userId?: string }> => {
   const now = Date.now();
+
+  if (isMongo(ctx)) {
+    const projects = ctx.db.collection("projects");
+    const users = ctx.db.collection("users");
+
+    let project = await projects.findOne({ key: projectKey });
+    if (!project) {
+      const projectId = crypto.randomUUID();
+      await projects.insertOne({ id: projectId, key: projectKey, name: "Default", createdAt: now });
+      project = { id: projectId };
+    }
+
+    const externalId = jwtSub ?? payload.user?.id;
+    if (!externalId) {
+      return { projectId: project.id };
+    }
+
+    let user = await users.findOne({ projectId: project.id, externalId });
+    if (!user) {
+      const userId = crypto.randomUUID();
+      await users.insertOne({
+        id: userId,
+        projectId: project.id,
+        externalId,
+        traitsJson: payload.user?.traits ? JSON.stringify(payload.user.traits) : null,
+        createdAt: now
+      });
+      user = { id: userId };
+    }
+
+    return { projectId: project.id, userId: user.id };
+  }
+
   const { projects, users } = ctx.schema as any;
 
   const existing = await ctx.db
@@ -284,9 +319,41 @@ const ensureProjectAndUser = async (
 };
 
 const upsertSession = async (ctx: DbContext, projectId: string, userId: string | undefined, payload: any, req: Request) => {
-  const { sessions } = ctx.schema as any;
   const now = Date.now();
   const sessionId = payload.session.id;
+
+  if (isMongo(ctx)) {
+    const sessions = ctx.db.collection("sessions");
+    const existing = await sessions.findOne({ id: sessionId });
+
+    if (!existing) {
+      await sessions.insertOne({
+        id: sessionId,
+        projectId,
+        userId: userId ?? null,
+        startedAt: payload.session.startedAt ?? now,
+        lastSeenAt: payload.session.lastSeenAt ?? now,
+        firstPath: payload.events[0]?.path ?? payload.session.firstPath ?? "",
+        userAgent: req.header("user-agent") || payload.events[0]?.device?.ua || null,
+        deviceJson: payload.events[0]?.device ? JSON.stringify(payload.events[0].device) : null,
+        ipHash: hashIp(req.ip || "")
+      });
+      return;
+    }
+
+    await sessions.updateOne(
+      { id: sessionId },
+      {
+        $set: {
+          lastSeenAt: payload.session.lastSeenAt ?? now,
+          userId: userId ?? existing.userId
+        }
+      }
+    );
+    return;
+  }
+
+  const { sessions } = ctx.schema as any;
   const existing = await ctx.db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);
 
   if (existing.length === 0) {
@@ -319,7 +386,6 @@ const hashIp = (ip: string) => {
 };
 
 const insertEvents = async (ctx: DbContext, projectId: string, userId: string | undefined, payload: any) => {
-  const { events } = ctx.schema as any;
   const rows: any[] = [];
 
   for (const event of payload.events) {
@@ -377,6 +443,13 @@ const insertEvents = async (ctx: DbContext, projectId: string, userId: string | 
   }
 
   if (rows.length === 0) return;
+
+  if (isMongo(ctx)) {
+    await ctx.db.collection("events").insertMany(rows, { ordered: true });
+    return;
+  }
+
+  const { events } = ctx.schema as any;
   await ctx.db.insert(events).values(rows);
 };
 
@@ -388,6 +461,12 @@ const queryEvents = async (
   from: number,
   to: number
 ) => {
+  if (isMongo(ctx)) {
+    const filter: any = { projectId, type, ts: { $gte: from, $lte: to } };
+    if (path) filter.path = path;
+    return ctx.db.collection("events").find(filter).toArray();
+  }
+
   const { events } = ctx.schema as any;
   const filters = [eq(events.projectId, projectId), eq(events.type, type), gte(events.ts, from), lte(events.ts, to)];
   if (path) filters.push(eq(events.path, path));
@@ -460,6 +539,42 @@ const listSessions = async (
   from?: number,
   to?: number
 ) => {
+  if (isMongo(ctx)) {
+    const sessionFilter: any = { projectId };
+    if (query.userId) sessionFilter.userId = query.userId;
+    if (from) {
+      sessionFilter.startedAt = { ...(sessionFilter.startedAt || {}), $gte: from };
+    }
+    if (to) {
+      sessionFilter.lastSeenAt = { ...(sessionFilter.lastSeenAt || {}), $lte: to };
+    }
+
+    const sessions = await ctx.db
+      .collection("sessions")
+      .find(sessionFilter)
+      .sort({ startedAt: 1 })
+      .skip(query.offset)
+      .limit(query.limit)
+      .toArray();
+
+    const rows = await Promise.all(
+      sessions.map(async (session: any) => ({
+        sessionId: session.id,
+        userId: session.userId,
+        startedAt: session.startedAt,
+        lastSeenAt: session.lastSeenAt,
+        firstPath: session.firstPath,
+        eventCount: await ctx.db.collection("events").countDocuments({ sessionId: session.id })
+      }))
+    );
+
+    if (query.path) {
+      return rows.filter((row: any) => row.firstPath === query.path);
+    }
+
+    return rows;
+  }
+
   const { sessions, events } = ctx.schema as any;
   const filters = [eq(sessions.projectId, projectId)];
   if (query.userId) filters.push(eq(sessions.userId, query.userId));
@@ -496,6 +611,26 @@ const getSessionDetail = async (
   sessionId: string,
   query: { limit: number; offset: number; type?: string }
 ) => {
+  if (isMongo(ctx)) {
+    const session = await ctx.db.collection("sessions").findOne({ id: sessionId });
+    if (!session) {
+      return { session: null, events: [] };
+    }
+
+    const filter: any = { sessionId };
+    if (query.type) filter.type = query.type;
+
+    const events = await ctx.db
+      .collection("events")
+      .find(filter)
+      .sort({ ts: 1 })
+      .skip(query.offset)
+      .limit(query.limit)
+      .toArray();
+
+    return { session, events };
+  }
+
   const { sessions, events } = ctx.schema as any;
 
   const sessionRows = await ctx.db.select().from(sessions).where(eq(sessions.id, sessionId)).limit(1);

@@ -3,16 +3,25 @@ import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnyMySqlTable } from "drizzle-orm/mysql-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
 
-export type Dialect = "pg" | "mysql" | "sqlite";
+export type Dialect = "pg" | "mysql" | "sqlite" | "mongodb";
 
 export type Schema = {
-  projects: AnyPgTable | AnyMySqlTable | AnySQLiteTable;
-  users: AnyPgTable | AnyMySqlTable | AnySQLiteTable;
-  sessions: AnyPgTable | AnyMySqlTable | AnySQLiteTable;
-  events: AnyPgTable | AnyMySqlTable | AnySQLiteTable;
+  projects: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
+  users: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
+  sessions: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
+  events: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
 };
 
 export const createSchema = (dialect: Dialect): Schema => {
+  if (dialect === "mongodb") {
+    return {
+      projects: "projects",
+      users: "users",
+      sessions: "sessions",
+      events: "events"
+    };
+  }
+
   if (dialect === "pg") {
     const { pgTable, text, bigint, integer, index } = require("drizzle-orm/pg-core");
 
