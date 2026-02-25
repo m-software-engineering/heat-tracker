@@ -1,5 +1,13 @@
 # @m-software-engineering/heat-sdk
 
+## 0.2.3
+
+### Patch Changes
+
+- Fix `shutdown()` to flush queued events before stopping, preventing event loss when applications close the tracker quickly.
+- Restore patched `history.pushState` and `history.replaceState` methods during shutdown to avoid leaking SDK wrappers across tracker lifecycles.
+- Update internal SDK payload version metadata to `0.2.3` so collector metadata remains aligned with the published package version.
+
 ## 0.2.2
 
 ### Patch Changes

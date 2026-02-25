@@ -192,7 +192,7 @@ const DEFAULT_CONFIG: ResolvedConfig = {
 };
 
 const SDK_NAME = "@m-software-engineering/heat-sdk";
-const SDK_VERSION = "0.2.2";
+const SDK_VERSION = "0.2.3";
 
 const safeNow = () => Date.now();
 
@@ -352,6 +352,8 @@ class TrackerImpl implements Tracker {
   private lastMoveCapture = 0;
   private lastScrollCapture = 0;
   private currentPath = getPath();
+  private originalHistoryPushState?: History["pushState"];
+  private originalHistoryReplaceState?: History["replaceState"];
 
   constructor(config: ResolvedConfig) {
     this.config = config;
@@ -398,6 +400,7 @@ class TrackerImpl implements Tracker {
   }
 
   async shutdown() {
+    await this.flush();
     this.stopped = true;
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
@@ -406,7 +409,6 @@ class TrackerImpl implements Tracker {
       clearTimeout(this.retryTimer);
     }
     this.detachListeners();
-    await this.flush();
   }
 
   private enqueue(event: AnyEvent) {
@@ -569,19 +571,34 @@ class TrackerImpl implements Tracker {
     window.removeEventListener("blur", this.handleInputBlur, true);
     window.removeEventListener("change", this.handleInputChange, true);
     window.removeEventListener("keydown", this.handleKeyboard, true);
+    this.restoreHistory();
   }
 
   private patchHistory() {
-    const originalPush = history.pushState;
-    const originalReplace = history.replaceState;
+    if (!this.originalHistoryPushState) {
+      this.originalHistoryPushState = history.pushState;
+    }
+    if (!this.originalHistoryReplaceState) {
+      this.originalHistoryReplaceState = history.replaceState;
+    }
+
     history.pushState = (...args) => {
-      originalPush.apply(history, args as any);
+      this.originalHistoryPushState?.apply(history, args as any);
       this.handleNavigation();
     };
     history.replaceState = (...args) => {
-      originalReplace.apply(history, args as any);
+      this.originalHistoryReplaceState?.apply(history, args as any);
       this.handleNavigation();
     };
+  }
+
+  private restoreHistory() {
+    if (this.originalHistoryPushState) {
+      history.pushState = this.originalHistoryPushState;
+    }
+    if (this.originalHistoryReplaceState) {
+      history.replaceState = this.originalHistoryReplaceState;
+    }
   }
 
   private handleNavigation = () => {
