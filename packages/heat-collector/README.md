@@ -120,6 +120,33 @@ type CollectorConfig = {
 
 When `autoMigrate` is enabled, the collector attempts to create indexes. If the MongoDB user does not have index-management permissions, the collector now continues without failing startup. For controlled production environments, you can still set `autoMigrate: false` and manage indexes externally.
 
+### Troubleshooting `not authorized on <db> to execute command { find: "projects" }`
+
+This error usually means the collector is querying a different database than the one your MongoDB user can access.
+
+Use one of these options:
+
+1. Put the database directly in the connection string path:
+
+```ts
+db: {
+  dialect: "mongodb",
+  connectionString: "mongodb://user:password@host:27017/heat_tracker?authSource=admin"
+}
+```
+
+2. Or explicitly set `database` in the collector config:
+
+```ts
+db: {
+  dialect: "mongodb",
+  connectionString: "mongodb://user:password@host:27017/?authSource=admin",
+  database: "heat_tracker"
+}
+```
+
+The collector now prefers `db.database` when provided, otherwise it uses the database from the MongoDB connection string.
+
 ## Production migration command
 
 ```bash

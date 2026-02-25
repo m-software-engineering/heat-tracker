@@ -79,8 +79,8 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
       await client.connect();
     }
 
-    const dbName = config.database || "heat_tracker";
-    const db = client.db(dbName);
+    const dbName = resolveMongoDatabaseName(config, client);
+    const db = dbName ? client.db(dbName) : client.db();
     return { db, dialect: "mongodb", schema };
   }
 
@@ -90,6 +90,47 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
   const client = config.client ?? new sqlite.default(file);
   const db = drizzle({ client });
   return { db, dialect: "sqlite", schema };
+};
+
+const resolveMongoDatabaseName = (
+  config: Extract<DbAdapterConfig, { dialect: "mongodb" }>,
+  client: any
+) => {
+  if (config.database) {
+    return config.database;
+  }
+
+  const fromConnectionString = parseMongoDatabaseFromConnectionString(config.connectionString);
+  if (fromConnectionString) {
+    return fromConnectionString;
+  }
+
+  const fromClientOptions = client?.options?.dbName;
+  if (typeof fromClientOptions === "string" && fromClientOptions.trim() !== "") {
+    return fromClientOptions;
+  }
+
+  return "heat_tracker";
+};
+
+const parseMongoDatabaseFromConnectionString = (connectionString?: string) => {
+  if (!connectionString) {
+    return undefined;
+  }
+
+  try {
+    const withoutProtocol = connectionString.replace(/^mongodb(\+srv)?:\/\//, "");
+    const firstSlash = withoutProtocol.indexOf("/");
+    if (firstSlash < 0) {
+      return undefined;
+    }
+    const afterSlash = withoutProtocol.slice(firstSlash + 1);
+    const [path] = afterSlash.split("?", 1);
+    const name = path.trim();
+    return name || undefined;
+  } catch {
+    return undefined;
+  }
 };
 
 export const autoMigrate = async (ctx: DbContext) => {

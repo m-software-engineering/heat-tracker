@@ -144,6 +144,25 @@ describe("mongodb support", () => {
     await expect(autoMigrate(ctx)).resolves.toBeUndefined();
   });
 
+
+  it("uses database from mongodb connection string when database is not explicitly configured", async () => {
+    const calls: Array<string | undefined> = [];
+    const client = {
+      db(name?: string) {
+        calls.push(name);
+        return new FakeMongoDb();
+      }
+    };
+
+    await createDb({
+      dialect: "mongodb",
+      connectionString: "mongodb://user:secret@localhost:27017/customer_analytics?authSource=admin",
+      client
+    });
+
+    expect(calls[0]).toBe("customer_analytics");
+  });
+
   it("ingests and serves data through mongodb backend", async () => {
     const db = new FakeMongoDb();
     const collector = await createCollector({
