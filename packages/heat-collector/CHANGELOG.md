@@ -1,5 +1,11 @@
 # @m-software-engineering/heat-collector
 
+## 0.3.3
+
+### Patch Changes
+
+- Publish a patch version bump to align release metadata with the latest monorepo bugfix deployment.
+
 ## 0.3.2
 
 ### Patch Changes

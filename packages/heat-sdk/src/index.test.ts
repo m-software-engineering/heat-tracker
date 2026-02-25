@@ -83,4 +83,39 @@ describe("heat-sdk", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     await tracker.shutdown();
   });
+
+  it("flushes queued events during shutdown", async () => {
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key"
+    });
+
+    const btn = document.getElementById("btn") as HTMLButtonElement;
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 20 }));
+
+    await tracker.shutdown();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const clickEvent = body.events.find((event: any) => event.type === "click");
+    expect(clickEvent).toBeDefined();
+  });
+
+  it("restores history methods on shutdown", async () => {
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key"
+    });
+
+    expect(history.pushState).not.toBe(originalPushState);
+    expect(history.replaceState).not.toBe(originalReplaceState);
+
+    await tracker.shutdown();
+
+    expect(history.pushState).toBe(originalPushState);
+    expect(history.replaceState).toBe(originalReplaceState);
+  });
 });
