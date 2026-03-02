@@ -1145,21 +1145,36 @@ const listSessions = async (
 
   const where = and(...filters);
 
-  const rows = await ctx.db
+  const sessionRows = await ctx.db
     .select({
       sessionId: sessions.id,
       userId: sessions.userId,
       startedAt: sessions.startedAt,
       lastSeenAt: sessions.lastSeenAt,
-      firstPath: sessions.firstPath,
-      eventCount: sql<number>`count(${events.id})`
+      firstPath: sessions.firstPath
     })
     .from(sessions)
-    .leftJoin(events, eq(events.sessionId, sessions.id))
     .where(where)
-    .groupBy(sessions.id)
+    .orderBy(sessions.startedAt)
     .limit(query.limit)
     .offset(query.offset);
+
+  const rows = await Promise.all(
+    sessionRows.map(async (sessionRow: any) => {
+      const countResult = await ctx.db
+        .select({ count: sql<number>`count(${events.id})` })
+        .from(events)
+        .where(eq(events.sessionId, sessionRow.sessionId));
+
+      const countValue = countResult[0]?.count;
+      const eventCount = typeof countValue === "number" ? countValue : Number(countValue || 0);
+
+      return {
+        ...sessionRow,
+        eventCount
+      };
+    })
+  );
 
   if (query.path) {
     return rows.filter((row: any) => row.firstPath === query.path);
