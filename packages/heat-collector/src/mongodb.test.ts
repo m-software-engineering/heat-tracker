@@ -122,6 +122,27 @@ const buildPayload = () => {
   };
 };
 
+const buildPageviewOnlyPayload = () => {
+  const ts = Date.now();
+  return {
+    sdk: { name: "test", version: "0" },
+    session: { id: "mongo-session-pageview", startedAt: ts, lastSeenAt: ts },
+    events: [
+      {
+        eventId: "pageview-1",
+        sessionId: "mongo-session-pageview",
+        ts,
+        path: "/home",
+        viewport: { w: 1440, h: 723, dpr: 2 },
+        device: { ua: "test", platform: "mac", language: "en" },
+        type: "pageview",
+        to: "/home",
+        meta: { viewportBucket: "1400x700" }
+      }
+    ]
+  };
+};
+
 describe("mongodb support", () => {
   it("creates mongodb adapter with injected db and migrates indexes", async () => {
     const db = new FakeMongoDb();
@@ -192,5 +213,51 @@ describe("mongodb support", () => {
     const detail = await request(app).get("/api/sessions/mongo-session-1").query({ limit: 10 }).expect(200);
     expect(detail.body.session.id).toBe("mongo-session-1");
     expect(detail.body.events.length).toBe(1);
+  });
+
+  it("returns heatmap diagnostics when events are non-plottable", async () => {
+    const db = new FakeMongoDb();
+    const collector = await createCollector({
+      db: { dialect: "mongodb", db },
+      auth: { mode: "projectKey" },
+      autoMigrate: true
+    });
+
+    const app = express();
+    app.use(collector.router);
+
+    await request(app).post("/ingest").set("x-project-key", "mongo-pageview-only").send(buildPageviewOnlyPayload()).expect(200);
+
+    const project = await db.collection("projects").findOne({ key: "mongo-pageview-only" });
+    expect(project?.id).toBeTruthy();
+
+    const heatmap = await request(app).get(`/api/projects/${project.id}/heatmap`).expect(200);
+    expect(heatmap.body.points.length).toBe(0);
+    expect(heatmap.body.meta.total).toBe(1);
+    expect(heatmap.body.meta.plotted).toBe(0);
+    expect(heatmap.body.meta.ignored).toBe(1);
+    expect(heatmap.body.meta.warning).toMatch(/non.*plottable|plottable/i);
+  });
+
+  it("lists raw events through the project events endpoint", async () => {
+    const db = new FakeMongoDb();
+    const collector = await createCollector({
+      db: { dialect: "mongodb", db },
+      auth: { mode: "projectKey" },
+      autoMigrate: true
+    });
+
+    const app = express();
+    app.use(collector.router);
+
+    await request(app).post("/ingest").set("x-project-key", "mongo-events-endpoint").send(buildPayload()).expect(200);
+
+    const project = await db.collection("projects").findOne({ key: "mongo-events-endpoint" });
+    expect(project?.id).toBeTruthy();
+
+    const events = await request(app).get(`/api/projects/${project.id}/events`).query({ limit: 10 }).expect(200);
+    expect(events.body.events.length).toBe(1);
+    expect(events.body.meta.count).toBe(1);
+    expect(events.body.meta.requestedType).toBe("all");
   });
 });

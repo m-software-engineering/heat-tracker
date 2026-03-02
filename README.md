@@ -20,6 +20,7 @@ End-to-end stack for product analytics heatmaps and session analysis: browser SD
 3. The collector validates/authenticates payloads and persists projects, users, sessions, and events.
 4. The dashboard (or your own UI) reads analytics through query endpoints:
    - `GET /api/projects/:projectId/heatmap`
+   - `GET /api/projects/:projectId/events`
    - `GET /api/projects/:projectId/sessions`
    - `GET /api/sessions/:sessionId`
 

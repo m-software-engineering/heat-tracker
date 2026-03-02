@@ -75,6 +75,17 @@ describe("heat-collector", () => {
       .expect(200);
 
     expect(detail.body.events.length).toBe(1);
+
+    const events = await request(app)
+      .get(`/api/projects/${project.id}/events`)
+      .query({ limit: 10 })
+      .expect(200);
+
+    expect(events.body.events.length).toBe(1);
+    expect(events.body.meta.count).toBe(1);
+
+    const metrics = await request(app).get("/api/metrics").expect(200);
+    expect(metrics.body.metrics.ingestCount).toBeGreaterThanOrEqual(1);
   });
 
   it("rejects invalid payloads", async () => {
@@ -110,5 +121,18 @@ describe("heat-collector", () => {
       .set("x-project-key", "rate-limit-key")
       .send(buildPayload())
       .expect(429);
+  });
+
+  it("returns structured query errors and request id headers", async () => {
+    const { app } = await createApp();
+
+    const res = await request(app)
+      .get("/api/projects/project-id/heatmap")
+      .query({ resolution: 1 })
+      .expect(400);
+
+    expect(res.body.code).toBe("invalid_query");
+    expect(res.body.requestId).toBeTruthy();
+    expect(res.headers["x-request-id"]).toBeTruthy();
   });
 });

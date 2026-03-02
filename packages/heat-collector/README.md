@@ -89,9 +89,41 @@ Accepted headers:
 ### Query APIs
 
 - `GET /api/projects/:projectId/heatmap`
+- `GET /api/projects/:projectId/events`
 - `GET /api/projects/:projectId/sessions`
 - `GET /api/sessions/:sessionId`
 - `GET /api/metrics`
+
+### Response headers and error payloads
+
+All endpoints now include:
+
+- `X-Request-Id`: request correlation id for logs/troubleshooting.
+- `X-Heat-Collector`: static collector identifier.
+
+Query endpoints also send:
+
+- `Cache-Control: no-store`
+- `X-Total-Count` or endpoint-specific count headers.
+
+Error payload format is consistent across routes:
+
+```json
+{
+  "error": "invalid query",
+  "code": "invalid_query",
+  "message": "Invalid heatmap query parameters.",
+  "requestId": "..."
+}
+```
+
+Validation failures include a `details` object.
+
+### Heatmap query behavior notes
+
+- `type` now accepts: `all`, `click`, `move`, `scroll`, `pageview`, `custom`, `input`, `keyboard`.
+- If `type` is omitted, the collector first tries `click` (backward compatible) and automatically falls back to `all` when click has no matches.
+- Heatmap points are only plotted from `click`, `move`, and `scroll`; other event types still appear in heatmap metadata (`total`, `typeBreakdown`, `warning`) for better debugging.
 
 ## Configuration
 

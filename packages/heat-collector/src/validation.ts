@@ -115,9 +115,18 @@ export const heatmapQuerySchema = z.object({
   path: z.string().optional(),
   from: z.string().optional(),
   to: z.string().optional(),
-  type: z.enum(["click", "move", "scroll"]).optional(),
-  resolution: z.coerce.number().int().optional().default(128),
+  type: z.enum(["all", "click", "move", "scroll", "pageview", "custom", "input", "keyboard"]).optional(),
+  resolution: z.coerce.number().int().min(8).max(1024).optional().default(128),
   viewportBucket: z.string().optional()
+});
+
+export const eventsQuerySchema = z.object({
+  path: z.string().optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  type: z.enum(["all", "click", "move", "scroll", "pageview", "custom", "input", "keyboard"]).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional().default(200),
+  offset: z.coerce.number().int().min(0).optional().default(0)
 });
 
 export const sessionsQuerySchema = z.object({
