@@ -10,6 +10,8 @@ describe("heat-sdk", () => {
       <button id="btn">Click</button>
       <input id="input" type="text" />
     `;
+    localStorage.clear();
+    sessionStorage.clear();
     fetchMock = vi.fn().mockResolvedValue({ ok: true });
     (globalThis as any).fetch = fetchMock;
     Object.defineProperty(Navigator.prototype, "doNotTrack", {
@@ -117,5 +119,28 @@ describe("heat-sdk", () => {
 
     expect(history.pushState).toBe(originalPushState);
     expect(history.replaceState).toBe(originalReplaceState);
+  });
+
+  it("clears persisted queue after successful flush", async () => {
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key",
+      batch: {
+        storage: "localStorage",
+        maxEvents: 50,
+        flushIntervalMs: 60_000,
+        maxQueueBytes: 1_000_000
+      }
+    });
+
+    const btn = document.getElementById("btn") as HTMLButtonElement;
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 20 }));
+
+    expect(localStorage.getItem("@m-software-engineering/heat-sdk:queue")).toBeTruthy();
+
+    await tracker.flush();
+
+    expect(localStorage.getItem("@m-software-engineering/heat-sdk:queue")).toBeNull();
+    await tracker.shutdown();
   });
 });

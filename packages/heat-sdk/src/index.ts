@@ -192,7 +192,7 @@ const DEFAULT_CONFIG: ResolvedConfig = {
 };
 
 const SDK_NAME = "@m-software-engineering/heat-sdk";
-const SDK_VERSION = "0.2.3";
+const SDK_VERSION = "0.2.4";
 
 const safeNow = () => Date.now();
 
@@ -413,8 +413,8 @@ class TrackerImpl implements Tracker {
 
   private enqueue(event: AnyEvent) {
     this.queue.push(event);
-    this.persistQueue();
     this.trimQueue();
+    this.persistQueue();
     if (this.queue.length >= this.config.batch.maxEvents) {
       void this.flush();
     }
@@ -484,6 +484,7 @@ class TrackerImpl implements Tracker {
         throw new Error(`Ingest failed: ${res.status}`);
       }
       this.backoffMs = 0;
+      this.persistQueue();
     } catch {
       this.queue = [...batch, ...this.queue];
       this.persistQueue();
@@ -761,7 +762,12 @@ class TrackerImpl implements Tracker {
   private persistQueue() {
     if (this.config.batch.storage !== "localStorage") return;
     try {
-      localStorage.setItem(`${SDK_NAME}:queue`, JSON.stringify(this.queue));
+      const key = this.queueStorageKey();
+      if (this.queue.length === 0) {
+        localStorage.removeItem(key);
+        return;
+      }
+      localStorage.setItem(key, JSON.stringify(this.queue));
     } catch {
       // ignore
     }
@@ -770,15 +776,22 @@ class TrackerImpl implements Tracker {
   private restoreQueue() {
     if (this.config.batch.storage !== "localStorage") return;
     try {
-      const raw = localStorage.getItem(`${SDK_NAME}:queue`);
+      const key = this.queueStorageKey();
+      const raw = localStorage.getItem(key);
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         this.queue = parsed as AnyEvent[];
+      } else {
+        localStorage.removeItem(key);
       }
     } catch {
       // ignore
     }
+  }
+
+  private queueStorageKey() {
+    return `${SDK_NAME}:queue`;
   }
 }
 

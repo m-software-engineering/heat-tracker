@@ -1,5 +1,13 @@
 # @m-software-engineering/heat-sdk
 
+## 0.2.4
+
+### Patch Changes
+
+- Fix localStorage queue persistence so successfully delivered events are removed from storage, preventing replay of already-sent batches after page reloads.
+- Ensure persisted queue snapshots stay aligned with in-memory queue trimming when `maxQueueBytes` is enforced.
+- Update internal SDK payload version metadata to `0.2.4` to keep collector metadata aligned with the published package version.
+
 ## 0.2.3
 
 ### Patch Changes
