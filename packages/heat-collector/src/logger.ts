@@ -11,14 +11,33 @@ export const createLogger = (level: LogLevel = "info") => {
   const threshold = LEVELS[level] ?? 20;
   const log = (lvl: LogLevel, message: string, context?: Record<string, any>) => {
     if (LEVELS[lvl] < threshold) return;
+
+    const normalized = context
+      ? Object.fromEntries(
+          Object.entries(context).map(([key, value]) => [key, normalizeLogValue(value)])
+        )
+      : undefined;
+
     const payload = {
       level: lvl,
       msg: message,
       ts: new Date().toISOString(),
-      ...context
+      ...normalized
     };
+    const line = JSON.stringify(payload);
+
+    if (lvl === "error") {
+      // eslint-disable-next-line no-console
+      console.error(line);
+      return;
+    }
+    if (lvl === "warn") {
+      // eslint-disable-next-line no-console
+      console.warn(line);
+      return;
+    }
     // eslint-disable-next-line no-console
-    console.log(JSON.stringify(payload));
+    console.log(line);
   };
 
   return {
@@ -30,3 +49,19 @@ export const createLogger = (level: LogLevel = "info") => {
 };
 
 export type Logger = ReturnType<typeof createLogger>;
+
+const normalizeLogValue = (value: any) => {
+  if (value instanceof Error) {
+    return {
+      name: value.name,
+      message: value.message,
+      stack: value.stack
+    };
+  }
+
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+
+  return value;
+};
