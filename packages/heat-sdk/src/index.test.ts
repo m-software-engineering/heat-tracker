@@ -44,6 +44,26 @@ describe("heat-sdk", () => {
     expect(clickEvent).toBeDefined();
   });
 
+  it("captures click coordinates with scroll offset", async () => {
+    Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
+    Object.defineProperty(window, "scrollX", { value: 25, configurable: true });
+
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key"
+    });
+
+    const btn = document.getElementById("btn") as HTMLButtonElement;
+    btn.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 20 }));
+
+    await tracker.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const clickEvent = body.events.find((event: any) => event.type === "click");
+    expect(clickEvent.x).toBe(35);
+    expect(clickEvent.y).toBe(320);
+  });
+
   it("masks input values when enabled", async () => {
     const tracker = init({
       endpoint: "http://localhost:4000/ingest",

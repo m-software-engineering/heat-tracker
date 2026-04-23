@@ -299,6 +299,15 @@ const computeScrollDepth = () => {
   return { scrollTop, pct: Math.max(0, Math.min(100, pct)) };
 };
 
+const eventPagePoint = (event: MouseEvent) => {
+  const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
+  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  return {
+    x: event.clientX + scrollX,
+    y: event.clientY + scrollY
+  };
+};
+
 const ensureConfig = (config: InitConfig): ResolvedConfig => {
   return {
     ...DEFAULT_CONFIG,
@@ -624,12 +633,13 @@ class TrackerImpl implements Tracker {
   private handleClick = (event: MouseEvent) => {
     const target = event.target as Element | null;
     if (!this.shouldCapture(target)) return;
+    const point = eventPagePoint(event);
     const base = this.baseEvent();
     const evt: ClickEvent = {
       ...base,
       type: "click",
-      x: event.clientX,
-      y: event.clientY,
+      x: point.x,
+      y: point.y,
       selector: elementSelector(target),
       button: event.button
     };
@@ -642,7 +652,8 @@ class TrackerImpl implements Tracker {
     this.lastMoveCapture = now;
     if (this.moveBaseTs === 0) this.moveBaseTs = now;
     const tsOffset = now - this.moveBaseTs;
-    this.movePoints.push({ x: event.clientX, y: event.clientY, tsOffset });
+    const point = eventPagePoint(event);
+    this.movePoints.push({ x: point.x, y: point.y, tsOffset });
   };
 
   private handleScroll = () => {
