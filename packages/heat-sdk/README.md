@@ -33,6 +33,12 @@ await tracker.flush();
 3. Events are queued and flushed in batches to the collector endpoint.
 4. Optional methods (`identify`, `track`, `setAuthToken`) enrich and control payloads.
 
+## Coordinate model
+
+- `click` and `move` coordinates are recorded in page/document space (`client + scroll offset`) instead of only viewport space.
+- This makes heatmaps stable on long pages, nested layouts, and after user scrolling.
+- `scroll` events continue to report depth as a percentage.
+
 ## Captured event types
 
 - `click`
