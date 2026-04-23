@@ -135,4 +135,66 @@ describe("heat-collector", () => {
     expect(res.body.requestId).toBeTruthy();
     expect(res.headers["x-request-id"]).toBeTruthy();
   });
+
+  it("keeps heatmap y points when click coordinates exceed viewport height", async () => {
+    const { app, dbFile } = await createApp();
+    const payload = buildPayload();
+    payload.events[0].y = 1500;
+
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", "dev-project-key")
+      .send(payload)
+      .expect(200);
+
+    const db = new Database(dbFile);
+    const project = db.prepare("select id from projects where key = ?").get("dev-project-key") as any;
+
+    const heatmap = await request(app)
+      .get(`/api/projects/${project.id}/heatmap`)
+      .query({ path: "/", type: "click", resolution: 64 })
+      .expect(200);
+
+    expect(heatmap.body.meta.renderHeight).toBe(1500);
+    expect(heatmap.body.points[0].y).toBeGreaterThan(800);
+  });
+
+  it("maps scroll depth to heatmap using full height", async () => {
+    const { app, dbFile } = await createApp();
+    const ts = Date.now();
+    const payload = {
+      sdk: { name: "test", version: "0" },
+      session: { id: "session-2", startedAt: ts, lastSeenAt: ts },
+      events: [
+        {
+          eventId: "event-scroll-1",
+          sessionId: "session-2",
+          ts,
+          path: "/",
+          viewport: { w: 1200, h: 800, dpr: 2 },
+          device: { ua: "test", platform: "mac", language: "en" },
+          type: "scroll",
+          scrollY: 0,
+          scrollDepthPct: 50
+        }
+      ]
+    };
+
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", "dev-project-key")
+      .send(payload)
+      .expect(200);
+
+    const db = new Database(dbFile);
+    const project = db.prepare("select id from projects where key = ?").get("dev-project-key") as any;
+
+    const heatmap = await request(app)
+      .get(`/api/projects/${project.id}/heatmap`)
+      .query({ path: "/", type: "scroll", resolution: 64 })
+      .expect(200);
+
+    expect(heatmap.body.points[0].y).toBeGreaterThan(300);
+    expect(heatmap.body.points[0].y).toBeLessThan(500);
+  });
 });

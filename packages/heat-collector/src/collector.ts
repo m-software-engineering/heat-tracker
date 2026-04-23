@@ -905,7 +905,7 @@ const insertEvents = async (ctx: DbContext, projectId: string, userId: string | 
     if (event.type === "scroll") {
       rows.push({
         ...base,
-        scrollDepth: Math.round(event.scrollDepthPct * 100)
+        scrollDepth: Math.round(event.scrollDepthPct)
       });
       continue;
     }
@@ -1037,17 +1037,31 @@ const buildHeatmap = (
   const preferredBucket = viewportBucket || Object.entries(bucketCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
   const viewport = parseViewportBucket(preferredBucket) || { w: 1280, h: 720 };
 
+  let maxObservedY = viewport.h;
+  for (const row of rows) {
+    if (row.type === "scroll" && row.scrollDepth != null) {
+      continue;
+    }
+    const y = Number(row.y);
+    if (Number.isFinite(y)) {
+      maxObservedY = Math.max(maxObservedY, Math.round(y));
+    }
+  }
+
   const bucketWidth = viewport.w / resolution;
-  const bucketHeight = viewport.h / resolution;
+  const renderHeight = Math.max(viewport.h, maxObservedY);
+  const bucketHeight = renderHeight / resolution;
 
   for (const row of rows) {
     let x = Number(row.x);
     let y = Number(row.y);
 
     if (row.type === "scroll" && row.scrollDepth != null) {
-      const pct = Number(row.scrollDepth) / 100;
+      const rawDepth = Number(row.scrollDepth);
+      const normalizedDepth = rawDepth > 100 ? rawDepth / 100 : rawDepth;
+      const pct = normalizedDepth / 100;
       x = 0;
-      y = Math.round((pct / 100) * viewport.h);
+      y = Math.round(pct * renderHeight);
     }
 
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
@@ -1081,6 +1095,7 @@ const buildHeatmap = (
     meta: {
       resolution,
       viewport,
+      renderHeight,
       total: rows.length,
       plotted,
       ignored,
