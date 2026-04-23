@@ -1,5 +1,13 @@
 # @m-software-engineering/heat-sdk
 
+## 0.2.5
+
+### Patch Changes
+
+- Capture click and move coordinates in page/document space (including scroll offsets) so heatmaps remain accurate after scrolling.
+- Keep move/click coordinate semantics aligned with collector rendering updates for long-page and below-the-fold interactions.
+- Update internal SDK payload version metadata to `0.2.5` to keep collector metadata aligned with the published package version.
+
 ## 0.2.4
 
 ### Patch Changes

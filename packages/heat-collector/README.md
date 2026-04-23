@@ -124,6 +124,8 @@ Validation failures include a `details` object.
 - `type` now accepts: `all`, `click`, `move`, `scroll`, `pageview`, `custom`, `input`, `keyboard`.
 - If `type` is omitted, the collector first tries `click` (backward compatible) and automatically falls back to `all` when click has no matches.
 - Heatmap points are only plotted from `click`, `move`, and `scroll`; other event types still appear in heatmap metadata (`total`, `typeBreakdown`, `warning`) for better debugging.
+- The heatmap renderer adapts to deeper page interactions by expanding `meta.renderHeight` beyond the base viewport when events are observed below the fold.
+- Scroll events are projected vertically from scroll depth percentage into the active render height, so scroll hotspots line up better with long-page behavior.
 
 ## Configuration
 

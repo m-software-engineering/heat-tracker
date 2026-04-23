@@ -75,6 +75,13 @@ app.listen(4000);
 HEAT_DIALECT=pg DATABASE_URL=postgres://... heat-collector-migrate
 ```
 
+
+## Recent behavior updates
+
+- Heatmap coordinates are now captured in page/document space (client position + scroll offsets), so clicks and move trails remain accurate on long or scrolled pages.
+- Heatmap rendering now scales Y projection using observed event depth, which reduces vertical compression when users interact below the initial viewport.
+- If `type` is omitted in heatmap queries, the collector keeps backward compatibility (`click` first) and transparently falls back to `all` when needed.
+
 ## Privacy defaults
 
 - Respects `Do Not Track` by default.

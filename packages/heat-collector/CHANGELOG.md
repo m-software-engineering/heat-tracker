@@ -1,5 +1,13 @@
 # @m-software-engineering/heat-collector
 
+## 0.3.5
+
+### Patch Changes
+
+- Improve heatmap Y-axis projection by scaling render height with observed interaction depth, reducing below-the-fold compression.
+- Project scroll heatmap points using normalized scroll depth over the active render height for more consistent long-page hotspots.
+- Document and align heatmap diagnostics with the latest SDK coordinate capture behavior.
+
 ## 0.3.4
 
 ### Patch Changes
