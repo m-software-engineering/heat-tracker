@@ -33,6 +33,7 @@ External dependencies:
 
 Data contract and flow:
 - SDK sends `POST /ingest` with `x-project-key`, optional `Authorization: Bearer ...`, and payload containing session/user/events.
+- Current route code requires `x-project-key` before JWT handling in every auth mode; JWT is required only in `jwt` mode and optional in `both` mode.
 - Collector validates with `ingestSchema` (`src/validation.ts`) before persistence.
 - Event semantics expected from SDK:
   - `click`: uses `x/y`
@@ -68,20 +69,20 @@ Boundary model:
 
 ```mermaid
 flowchart TD
-  A[POST /ingest] --> B[Header checks + rate limit]
-  B --> C[JWT verify when enabled]
-  C --> D[Zod ingestSchema validation]
-  D --> E[Optional hook onBeforeInsert]
-  E --> F[ensureProjectAndUser]
-  F --> G[upsertSession]
-  G --> H[insertEvents]
-  H --> I[200 response with requestId]
+  ingest["POST /ingest"] --> headers["Project key check and rate limit"]
+  headers --> jwt["JWT verification when required or supplied"]
+  jwt --> validation["Zod ingestSchema validation"]
+  validation --> hook["Optional onBeforeInsert hook"]
+  hook --> projectUser["ensureProjectAndUser"]
+  projectUser --> session["upsertSession"]
+  session --> events["insertEvents"]
+  events --> response["200 response with requestId"]
 ```
 
 Event persistence behavior:
 - `move` payload points are flattened to multiple event rows.
 - `scroll` stores depth as integer.
-- input events with non-masked leaked content are dropped as a safety guard.
+- input events whose `masked` field contains non-mask characters are dropped as a safety guard.
 - metadata JSON stores viewport/device/meta (sanitized to remove text/value/content fields).
 
 Query flow (heatmap):
@@ -146,6 +147,7 @@ When adding new event types:
 - **High file complexity**: `collector.ts` is doing too many responsibilities.
 - **Process-local rate limiting** (`Map`) is not horizontally scalable.
 - **Potential SQL N+1 in session listing** due to per-session event count query.
+- **Session path filtering happens after pagination**, so a filtered page can contain fewer than `limit` rows even when more matching sessions exist later.
 - **In-memory JWT/JWKS cache only**; multi-instance systems may fetch keys independently.
 - **`any`-heavy DB abstractions** reduce type safety in persistence code.
 - **No formal linting** (`lint` script placeholder) increases risk of drift/style inconsistency.

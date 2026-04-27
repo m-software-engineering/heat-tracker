@@ -2,7 +2,7 @@
 
 ## 1) Purpose
 
-`heat-tracker` is an end-to-end product analytics stack that captures browser interaction events in a client SDK, ingests them through an HTTP collector, stores them in SQL/Mongo backends, and exposes query APIs for heatmaps/session analysis and dashboards.
+`heat-tracker` is an end-to-end product analytics stack that captures browser interaction events in a client SDK, ingests them through an HTTP collector, stores them in SQLite, Postgres, MySQL, or MongoDB, and exposes query APIs for heatmaps/session analysis and dashboards.
 
 Primary goals observed in code:
 - Browser-side event capture with privacy-aware defaults (`packages/heat-sdk`).
@@ -17,7 +17,7 @@ Primary goals observed in code:
 | `packages/heat-collector` | Express collector package (`@m-software-engineering/heat-collector`). |
 | `examples/express-collector` | Minimal app that mounts collector router. |
 | `examples/nextjs-dashboard` | Reference dashboard consuming collector APIs. |
-| `examples/docker-compose` | Local infra bootstrap (DB containers). |
+| `examples/docker-compose` | Local MySQL/Postgres bootstrap for SQL adapter testing. |
 | `e2e` | Playwright E2E validating SDK + collector integration. |
 | `package.json` | Workspace-level build/test/lint/typecheck commands. |
 | `pnpm-workspace.yaml` | Declares workspace packages under `packages/*` and `examples/*`. |
@@ -30,17 +30,17 @@ Discovered package roots for architecture docs:
 
 ```mermaid
 flowchart LR
-  Browser[Browser App]
-  SDK[@m-software-engineering/heat-sdk]
-  Collector[@m-software-engineering/heat-collector\nExpress Router]
-  DB[(SQLite / Postgres / MySQL / MongoDB)]
-  Dashboard[Dashboard / API Client]
+  browser["Browser App"]
+  sdk["@m-software-engineering/heat-sdk"]
+  collector["@m-software-engineering/heat-collector<br/>Express Router"]
+  db[(SQLite / Postgres / MySQL / MongoDB)]
+  dashboard["Dashboard / API Client"]
 
-  Browser --> SDK
-  SDK -->|POST /ingest| Collector
-  Collector --> DB
-  Dashboard -->|GET /api/...| Collector
-  Collector --> Dashboard
+  browser --> sdk
+  sdk -->|POST /ingest| collector
+  collector --> db
+  dashboard -->|GET /api/projects/:projectId/...<br/>GET /api/sessions/:sessionId| collector
+  collector -->|JSON responses| dashboard
 ```
 
 Component responsibilities:
@@ -66,13 +66,13 @@ sequenceDiagram
   U->>S: Interactions (click/move/scroll/page/input/keyboard)
   S->>S: Queue + batch + metadata enrich
   S->>C: POST /ingest (x-project-key, optional Bearer JWT)
-  C->>C: Auth + rate limit + Zod validation
+  C->>C: Project key check + rate limit + optional JWT + Zod validation
   C->>D: Upsert project/user/session + insert event rows
   C-->>S: 200 OK / error
   Note over S: Backoff and retry on failure
 
   participant Q as Dashboard/API client
-  Q->>C: GET /api/projects/:id/heatmap|events|sessions
+  Q->>C: GET project heatmap, events, sessions, or session detail
   C->>D: Query/filter/aggregate
   C-->>Q: JSON results + metadata headers
 ```
@@ -107,6 +107,7 @@ Concrete, source-based concerns:
 - **Large single-module collector**: `packages/heat-collector/src/collector.ts` combines routing, auth, persistence orchestration, querying, and heatmap aggregation in one file, increasing change risk and cognitive load.
 - **In-memory rate limit store** (`rateBuckets` map in process memory): not distributed-safe; resets on restart.
 - **Potential N+1 session counting**: `listSessions` computes event counts per session via repeated queries.
+- **Session path filtering after pagination**: `listSessions` applies the optional `path` filter after loading the limited page, which can produce sparse pages when many sessions have different first paths.
 - **Dynamic `require` in schema module**: mixed module-loading style (`require(...)` inside TypeScript ESM context) may be brittle in some toolchains.
 - **No real linting**: both packages set `lint` script to echo placeholder, so style/static issues can slip through.
 - **Contract duplication**: SDK event definitions and collector validation/event handling are maintained separately, creating drift risk.
