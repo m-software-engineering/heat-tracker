@@ -1,5 +1,14 @@
 # @m-software-engineering/heat-collector
 
+## 0.3.6
+
+### Patch Changes
+
+- Assign request IDs before JSON parsing and return structured `invalid_json` / `payload_too_large` responses for parser errors.
+- Scope rate-limit buckets to each collector instance and prune expired buckets to avoid cross-instance leakage in embedded hosts.
+- Revalidate `hooks.onBeforeInsert` output before persistence so invalid hook transforms return structured client errors.
+- Apply session `path` filtering before pagination in both SQL and MongoDB session queries.
+
 ## 0.3.5
 
 ### Patch Changes

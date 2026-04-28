@@ -1,5 +1,14 @@
 # @m-software-engineering/heat-sdk
 
+## 0.2.6
+
+### Patch Changes
+
+- Normalize invalid `batch.maxEvents` values to the default so auto-flush cannot get stuck on empty batches.
+- Drain all queued batches during `flush()` and `shutdown()`, including queues larger than `maxEvents`.
+- Isolate session and localStorage queue keys by project key and endpoint so multiple trackers can safely share a page.
+- Update internal SDK payload version metadata to `0.2.6` to keep collector metadata aligned with the published package version.
+
 ## 0.2.5
 
 ### Patch Changes
