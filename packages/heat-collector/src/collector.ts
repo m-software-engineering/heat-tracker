@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from "express";
+import express, { type NextFunction, type Request, type Response } from "express";
 import crypto from "crypto";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { autoMigrate, createDb, type DbAdapterConfig, type DbContext } from "./db";
@@ -60,15 +60,24 @@ const DEFAULT_LIMIT = { windowMs: 10000, max: 120 };
 const HEAT_COLLECTOR_HEADER_VALUE = "heat-collector";
 const HEATMAP_PLOTTABLE_TYPES = new Set<EventType>(["click", "move", "scroll"]);
 
-const rateBuckets = new Map<string, RateBucket>();
-
-const consumeRateLimit = (key: string, windowMs: number, max: number): RateLimitResult => {
+const consumeRateLimit = (
+  buckets: Map<string, RateBucket>,
+  key: string,
+  windowMs: number,
+  max: number
+): RateLimitResult => {
   const now = Date.now();
-  const existing = rateBuckets.get(key);
+  for (const [bucketKey, bucket] of buckets) {
+    if (now > bucket.resetAt) {
+      buckets.delete(bucketKey);
+    }
+  }
+
+  const existing = buckets.get(key);
 
   if (!existing || now > existing.resetAt) {
     const resetAt = now + windowMs;
-    rateBuckets.set(key, { count: 1, resetAt });
+    buckets.set(key, { count: 1, resetAt });
     return { limited: false, remaining: Math.max(0, max - 1), resetAt, limit: max };
   }
 
@@ -212,8 +221,7 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
   const maxBody = config.ingestion?.maxBodyBytes || 1_000_000;
   const limiter = config.ingestion?.rateLimit || DEFAULT_LIMIT;
-
-  router.use(express.json({ limit: maxBody }));
+  const rateBuckets = new Map<string, RateBucket>();
 
   router.use((req, res, next) => {
     const rid = requestId();
@@ -251,6 +259,39 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     next();
   });
 
+  router.use(express.json({ limit: maxBody }));
+
+  router.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    if (!err) {
+      next();
+      return;
+    }
+
+    const status = Number(err.status || err.statusCode);
+    if (err.type === "entity.too.large" || status === 413) {
+      sendError(logger, req, res, {
+        status: 413,
+        code: "payload_too_large",
+        error: "payload too large",
+        message: "Request body exceeded the configured ingestion size limit.",
+        context: { limit: maxBody }
+      });
+      return;
+    }
+
+    if (err.type === "entity.parse.failed" || err instanceof SyntaxError) {
+      sendError(logger, req, res, {
+        status: 400,
+        code: "invalid_json",
+        error: "invalid json",
+        message: "Request body must be valid JSON."
+      });
+      return;
+    }
+
+    next(err);
+  });
+
   ingestRouter.post("/ingest", async (req, res) => {
     const started = Date.now();
     const rid = resolveRequestId(req);
@@ -267,7 +308,7 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       });
     }
 
-    const limitStatus = consumeRateLimit(`${projectKey}:${ip}`, limiter.windowMs, limiter.max);
+    const limitStatus = consumeRateLimit(rateBuckets, `${projectKey}:${ip}`, limiter.windowMs, limiter.max);
     res.setHeader("X-RateLimit-Limit", String(limitStatus.limit));
     res.setHeader("X-RateLimit-Remaining", String(limitStatus.remaining));
     res.setHeader("X-RateLimit-Reset", String(Math.ceil(limitStatus.resetAt / 1000)));
@@ -331,6 +372,19 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     try {
       if (config.hooks?.onBeforeInsert) {
         payload = await config.hooks.onBeforeInsert(payload);
+        const hookResult = ingestSchema.safeParse(payload);
+        if (!hookResult.success) {
+          metrics.rejectedEventCount += 1;
+          return sendError(logger, req, res, {
+            status: 400,
+            code: "invalid_hook_payload",
+            error: "invalid hook payload",
+            message: "onBeforeInsert must return a valid ingestion payload.",
+            details: hookResult.error.flatten(),
+            context: { projectKey }
+          });
+        }
+        payload = hookResult.data;
       }
 
       const { projectId, userId } = await ensureProjectAndUser(dbContext, projectKey, payload, jwtSub);
@@ -1125,6 +1179,7 @@ const listSessions = async (
     if (to !== undefined) {
       sessionFilter.lastSeenAt = { ...(sessionFilter.lastSeenAt || {}), $lte: to };
     }
+    if (query.path) sessionFilter.firstPath = query.path;
 
     const sessions = await ctx.db
       .collection("sessions")
@@ -1145,16 +1200,13 @@ const listSessions = async (
       }))
     );
 
-    if (query.path) {
-      return rows.filter((row: any) => row.firstPath === query.path);
-    }
-
     return rows;
   }
 
   const { sessions, events } = ctx.schema as any;
   const filters = [eq(sessions.projectId, projectId)];
   if (query.userId) filters.push(eq(sessions.userId, query.userId));
+  if (query.path) filters.push(eq(sessions.firstPath, query.path));
   if (from !== undefined) filters.push(gte(sessions.startedAt, from));
   if (to !== undefined) filters.push(lte(sessions.lastSeenAt, to));
 
@@ -1190,10 +1242,6 @@ const listSessions = async (
       };
     })
   );
-
-  if (query.path) {
-    return rows.filter((row: any) => row.firstPath === query.path);
-  }
 
   return rows;
 };

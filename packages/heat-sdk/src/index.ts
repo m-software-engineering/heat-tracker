@@ -194,6 +194,87 @@ const DEFAULT_CONFIG: ResolvedConfig = {
 const SDK_NAME = "@m-software-engineering/heat-sdk";
 const SDK_VERSION = "0.2.5";
 
+type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+const createMemoryStorage = (): StorageLike => {
+  const items = new Map<string, string>();
+  return {
+    getItem: (key) => items.get(key) ?? null,
+    setItem: (key, value) => {
+      items.set(key, value);
+    },
+    removeItem: (key) => {
+      items.delete(key);
+    }
+  };
+};
+
+const getBrowserStorage = (name: "localStorage" | "sessionStorage"): StorageLike => {
+  try {
+    return window[name];
+  } catch {
+    return createMemoryStorage();
+  }
+};
+
+const stableHash = (input: string) => {
+  let hash = 5381;
+  for (let i = 0; i < input.length; i += 1) {
+    hash = (hash * 33) ^ input.charCodeAt(i);
+  }
+  return (hash >>> 0).toString(36);
+};
+
+type HistoryListener = () => void;
+
+const historyPatch = {
+  listeners: new Set<HistoryListener>(),
+  originalPushState: undefined as History["pushState"] | undefined,
+  originalReplaceState: undefined as History["replaceState"] | undefined
+};
+
+const notifyHistoryListeners = () => {
+  for (const listener of Array.from(historyPatch.listeners)) {
+    listener();
+  }
+};
+
+const ensureHistoryPatched = () => {
+  if (historyPatch.originalPushState && historyPatch.originalReplaceState) return;
+
+  historyPatch.originalPushState = history.pushState;
+  historyPatch.originalReplaceState = history.replaceState;
+
+  history.pushState = function patchedPushState(this: History, ...args: Parameters<History["pushState"]>) {
+    historyPatch.originalPushState?.apply(this, args as any);
+    notifyHistoryListeners();
+  } as History["pushState"];
+
+  history.replaceState = function patchedReplaceState(this: History, ...args: Parameters<History["replaceState"]>) {
+    historyPatch.originalReplaceState?.apply(this, args as any);
+    notifyHistoryListeners();
+  } as History["replaceState"];
+};
+
+const addHistoryListener = (listener: HistoryListener) => {
+  ensureHistoryPatched();
+  historyPatch.listeners.add(listener);
+};
+
+const removeHistoryListener = (listener: HistoryListener) => {
+  historyPatch.listeners.delete(listener);
+  if (historyPatch.listeners.size > 0) return;
+
+  if (historyPatch.originalPushState) {
+    history.pushState = historyPatch.originalPushState;
+  }
+  if (historyPatch.originalReplaceState) {
+    history.replaceState = historyPatch.originalReplaceState;
+  }
+  historyPatch.originalPushState = undefined;
+  historyPatch.originalReplaceState = undefined;
+};
+
 const safeNow = () => Date.now();
 
 const randomId = () => {
@@ -308,13 +389,23 @@ const eventPagePoint = (event: MouseEvent) => {
   };
 };
 
+const normalizeMaxEvents = (value: number | undefined) => {
+  if (value === undefined) return DEFAULT_CONFIG.batch.maxEvents;
+  if (!Number.isFinite(value) || value < 1) return DEFAULT_CONFIG.batch.maxEvents;
+  return value;
+};
+
 const ensureConfig = (config: InitConfig): ResolvedConfig => {
   return {
     ...DEFAULT_CONFIG,
     ...config,
     app: { ...DEFAULT_CONFIG.app, ...config.app },
     session: { ...DEFAULT_CONFIG.session, ...config.session },
-    batch: { ...DEFAULT_CONFIG.batch, ...config.batch },
+    batch: {
+      ...DEFAULT_CONFIG.batch,
+      ...config.batch,
+      maxEvents: normalizeMaxEvents(config.batch?.maxEvents)
+    },
     privacy: {
       ...DEFAULT_CONFIG.privacy,
       ...config.privacy,
@@ -358,14 +449,17 @@ class TrackerImpl implements Tracker {
   private retryTimer?: number;
   private backoffMs = 0;
   private stopped = false;
+  private flushing?: Promise<void>;
   private lastMoveCapture = 0;
   private lastScrollCapture = 0;
   private currentPath = getPath();
-  private originalHistoryPushState?: History["pushState"];
-  private originalHistoryReplaceState?: History["replaceState"];
+  private sessionStore: StorageLike;
+  private queueStore: StorageLike;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
+    this.sessionStore = getBrowserStorage(this.config.session.persist === "browser" ? "localStorage" : "sessionStorage");
+    this.queueStore = getBrowserStorage("localStorage");
     const session = this.loadSession();
     this.sessionId = session.id;
     this.sessionStartedAt = session.startedAt;
@@ -404,8 +498,17 @@ class TrackerImpl implements Tracker {
 
   async flush() {
     if (this.stopped) return;
-    this.enqueueMoveEvent();
-    await this.sendBatch();
+    if (this.flushing) {
+      await this.flushing;
+      return;
+    }
+
+    this.flushing = this.flushInternal();
+    try {
+      await this.flushing;
+    } finally {
+      this.flushing = undefined;
+    }
   }
 
   async shutdown() {
@@ -420,11 +523,20 @@ class TrackerImpl implements Tracker {
     this.detachListeners();
   }
 
-  private enqueue(event: AnyEvent) {
+  private async flushInternal() {
+    this.enqueueMoveEvent();
+
+    while (this.queue.length > 0) {
+      const sent = await this.sendBatch();
+      if (!sent) return;
+    }
+  }
+
+  private enqueue(event: AnyEvent, autoFlush = true) {
     this.queue.push(event);
     this.trimQueue();
     this.persistQueue();
-    if (this.queue.length >= this.config.batch.maxEvents) {
+    if (autoFlush && this.queue.length >= this.config.batch.maxEvents) {
       void this.flush();
     }
   }
@@ -457,12 +569,12 @@ class TrackerImpl implements Tracker {
     };
     this.movePoints = [];
     this.moveBaseTs = 0;
-    this.enqueue(evt);
+    this.enqueue(evt, false);
   }
 
   private async sendBatch() {
-    if (this.queue.length === 0) return;
-    if (this.backoffMs > 0 && this.retryTimer) return;
+    if (this.queue.length === 0) return true;
+    if (this.backoffMs > 0 && this.retryTimer) return false;
 
     const batch = this.queue.splice(0, this.config.batch.maxEvents);
     const payload = {
@@ -494,10 +606,12 @@ class TrackerImpl implements Tracker {
       }
       this.backoffMs = 0;
       this.persistQueue();
+      return true;
     } catch {
       this.queue = [...batch, ...this.queue];
       this.persistQueue();
       this.scheduleRetry();
+      return false;
     }
   }
 
@@ -585,30 +699,11 @@ class TrackerImpl implements Tracker {
   }
 
   private patchHistory() {
-    if (!this.originalHistoryPushState) {
-      this.originalHistoryPushState = history.pushState;
-    }
-    if (!this.originalHistoryReplaceState) {
-      this.originalHistoryReplaceState = history.replaceState;
-    }
-
-    history.pushState = (...args) => {
-      this.originalHistoryPushState?.apply(history, args as any);
-      this.handleNavigation();
-    };
-    history.replaceState = (...args) => {
-      this.originalHistoryReplaceState?.apply(history, args as any);
-      this.handleNavigation();
-    };
+    addHistoryListener(this.handleNavigation);
   }
 
   private restoreHistory() {
-    if (this.originalHistoryPushState) {
-      history.pushState = this.originalHistoryPushState;
-    }
-    if (this.originalHistoryReplaceState) {
-      history.replaceState = this.originalHistoryReplaceState;
-    }
+    removeHistoryListener(this.handleNavigation);
   }
 
   private handleNavigation = () => {
@@ -647,6 +742,8 @@ class TrackerImpl implements Tracker {
   };
 
   private handleMove = (event: MouseEvent) => {
+    const target = event.target as Element | null;
+    if (!this.shouldCapture(target)) return;
     const now = safeNow();
     if (now - this.lastMoveCapture < this.config.capture.move.throttleMs) return;
     this.lastMoveCapture = now;
@@ -688,6 +785,9 @@ class TrackerImpl implements Tracker {
     const config = this.config.capture.inputs;
     if (!config?.enabled || config.mode === "off") return;
     if (!target || !(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+    if (config.mode === "allowlist" && (!config.allowSelectors?.length || !matchesAny(target, config.allowSelectors))) {
+      return;
+    }
     if (!this.shouldCapture(target, config.allowSelectors)) return;
     if (isSensitiveInput(target)) return;
 
@@ -714,6 +814,9 @@ class TrackerImpl implements Tracker {
     const target = event.target as Element | null;
     const config = this.config.capture.keyboard;
     if (!config?.enabled || config.mode === "off") return;
+    if (config.mode === "allowlist" && (!config.allowSelectors?.length || !target || !matchesAny(target, config.allowSelectors))) {
+      return;
+    }
     if (!this.shouldCapture(target, config.allowSelectors)) return;
     if (isSensitiveInput(target)) return;
 
@@ -727,7 +830,7 @@ class TrackerImpl implements Tracker {
   };
 
   private loadSession() {
-    const store = this.storage();
+    const store = this.sessionStore;
     const key = this.sessionStorageKey();
     let stored: { id: string; startedAt: number; lastSeenAt: number } | null = null;
     try {
@@ -752,7 +855,7 @@ class TrackerImpl implements Tracker {
   }
 
   private persistSession() {
-    const store = this.storage();
+    const store = this.sessionStore;
     const key = this.sessionStorageKey();
     const session = { id: this.sessionId, startedAt: this.sessionStartedAt, lastSeenAt: this.lastSeenAt };
     try {
@@ -762,12 +865,8 @@ class TrackerImpl implements Tracker {
     }
   }
 
-  private storage() {
-    return this.config.session.persist === "browser" ? localStorage : sessionStorage;
-  }
-
   private sessionStorageKey() {
-    return `${SDK_NAME}:session`;
+    return `${SDK_NAME}:${this.storageNamespace()}:session`;
   }
 
   private persistQueue() {
@@ -775,10 +874,10 @@ class TrackerImpl implements Tracker {
     try {
       const key = this.queueStorageKey();
       if (this.queue.length === 0) {
-        localStorage.removeItem(key);
+        this.queueStore.removeItem(key);
         return;
       }
-      localStorage.setItem(key, JSON.stringify(this.queue));
+      this.queueStore.setItem(key, JSON.stringify(this.queue));
     } catch {
       // ignore
     }
@@ -788,13 +887,13 @@ class TrackerImpl implements Tracker {
     if (this.config.batch.storage !== "localStorage") return;
     try {
       const key = this.queueStorageKey();
-      const raw = localStorage.getItem(key);
+      const raw = this.queueStore.getItem(key);
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         this.queue = parsed as AnyEvent[];
       } else {
-        localStorage.removeItem(key);
+        this.queueStore.removeItem(key);
       }
     } catch {
       // ignore
@@ -802,7 +901,11 @@ class TrackerImpl implements Tracker {
   }
 
   private queueStorageKey() {
-    return `${SDK_NAME}:queue`;
+    return `${SDK_NAME}:${this.storageNamespace()}:queue`;
+  }
+
+  private storageNamespace() {
+    return stableHash(`${this.config.projectKey}|${this.config.endpoint}`);
   }
 }
 

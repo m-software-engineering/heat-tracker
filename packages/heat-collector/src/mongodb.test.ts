@@ -122,6 +122,24 @@ const buildPayload = () => {
   };
 };
 
+const buildSessionPayload = (sessionId: string, path: string, ts: number) => ({
+  sdk: { name: "test", version: "0" },
+  session: { id: sessionId, startedAt: ts, lastSeenAt: ts },
+  events: [
+    {
+      eventId: `${sessionId}-event`,
+      sessionId,
+      ts,
+      path,
+      viewport: { w: 1200, h: 800, dpr: 2 },
+      device: { ua: "test", platform: "mac", language: "en" },
+      type: "click",
+      x: 100,
+      y: 200
+    }
+  ]
+});
+
 const buildPageviewOnlyPayload = () => {
   const ts = Date.now();
   return {
@@ -259,5 +277,48 @@ describe("mongodb support", () => {
     expect(events.body.events.length).toBe(1);
     expect(events.body.meta.count).toBe(1);
     expect(events.body.meta.requestedType).toBe("all");
+  });
+
+  it("filters mongodb sessions by path before applying pagination", async () => {
+    const db = new FakeMongoDb();
+    const collector = await createCollector({
+      db: { dialect: "mongodb", db },
+      auth: { mode: "projectKey" },
+      autoMigrate: true
+    });
+
+    const app = express();
+    app.use(collector.router);
+    const baseTs = Date.now();
+
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", "mongo-sessions")
+      .send(buildSessionPayload("mongo-session-a", "/a", baseTs))
+      .expect(200);
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", "mongo-sessions")
+      .send(buildSessionPayload("mongo-session-b", "/b", baseTs + 1))
+      .expect(200);
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", "mongo-sessions")
+      .send(buildSessionPayload("mongo-session-c", "/b", baseTs + 2))
+      .expect(200);
+
+    const project = await db.collection("projects").findOne({ key: "mongo-sessions" });
+    expect(project?.id).toBeTruthy();
+
+    const sessions = await request(app)
+      .get(`/api/projects/${project.id}/sessions`)
+      .query({ path: "/b", limit: 2, offset: 0 })
+      .expect(200);
+
+    expect(sessions.body.sessions.map((session: any) => session.sessionId)).toEqual([
+      "mongo-session-b",
+      "mongo-session-c"
+    ]);
+    expect(sessions.body.meta.count).toBe(2);
   });
 });

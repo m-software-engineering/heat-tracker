@@ -33,6 +33,20 @@ const startCollector = async () => {
 </html>`);
   });
 
+  app.get("/micro", (_req, res) => {
+    res.type("html").send(`<!doctype html>
+<html>
+  <head><meta charset="utf-8" /></head>
+  <body>
+    <script>window.__INGEST_URL__ = window.location.origin + "/ingest";</script>
+    <script type="module">
+      import { init } from "/sdk/index.mjs";
+      window.__heatTrackerInit__ = init;
+    </script>
+  </body>
+</html>`);
+  });
+
   app.use("/sdk", express.static(sdkDir));
   app.use(collector.router);
 
@@ -75,6 +89,55 @@ test("SDK captures click and collector aggregates", async ({ page }) => {
     const data = await response.json();
 
     expect(data.points.length).toBeGreaterThan(0);
+  } finally {
+    await collector.close();
+  }
+});
+
+test("SDK localStorage queues stay isolated for micro frontend trackers", async ({ page }) => {
+  const collector = await startCollector();
+
+  try {
+    await page.goto(`${collector.url}/micro`);
+    await page.waitForFunction(() => typeof (window as any).__heatTrackerInit__ === "function");
+
+    await page.evaluate(async () => {
+      const init = (window as any).__heatTrackerInit__;
+      const endpoint = (window as any).__INGEST_URL__;
+      const baseConfig = {
+        endpoint,
+        capture: {
+          click: false,
+          move: { enabled: false, throttleMs: 80 },
+          scroll: false,
+          pageview: false
+        },
+        batch: {
+          storage: "localStorage",
+          flushIntervalMs: 60_000
+        }
+      };
+
+      const trackerA = init({ ...baseConfig, projectKey: "micro-project-a" });
+      trackerA.track("micro-a");
+
+      const trackerB = init({ ...baseConfig, projectKey: "micro-project-b" });
+      await trackerB.flush();
+      await trackerA.flush();
+      await trackerA.shutdown();
+      await trackerB.shutdown();
+    });
+
+    const db = new Database(collector.dbFile);
+    const countForProject = (key: string) =>
+      (
+        db
+          .prepare("select count(*) as count from events e join projects p on p.id = e.project_id where p.key = ?")
+          .get(key) as { count: number }
+      ).count;
+
+    expect(countForProject("micro-project-a")).toBe(1);
+    expect(countForProject("micro-project-b")).toBe(0);
   } finally {
     await collector.close();
   }
