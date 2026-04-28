@@ -44,8 +44,8 @@ flowchart LR
 ```
 
 Component responsibilities:
-- **SDK**: capture click/move/scroll/pageview/custom (+ optional input/keyboard), batch, retry/backoff, flush, and send payloads.
-- **Collector**: validate payload/query schemas, enforce auth/rate limits, write project/user/session/event rows, expose query endpoints and metrics.
+- **SDK**: capture click/move/scroll/pageview/custom (+ optional input/keyboard), apply privacy gates, namespace session/queue storage per project+endpoint, batch, retry/backoff, flush, and send payloads.
+- **Collector**: assign request IDs before body parsing, validate payload/query schemas, enforce ingest auth/rate limits, write project/user/session/event rows, expose query endpoints and metrics.
 - **Storage**: adapter pattern for SQL dialects and MongoDB.
 
 ## 4) Package relationships
@@ -64,9 +64,9 @@ sequenceDiagram
   participant D as DB
 
   U->>S: Interactions (click/move/scroll/page/input/keyboard)
-  S->>S: Queue + batch + metadata enrich
+  S->>S: Privacy gates + namespaced queue + metadata enrich
   S->>C: POST /ingest (x-project-key, optional Bearer JWT)
-  C->>C: Project key check + rate limit + optional JWT + Zod validation
+  C->>C: Request ID + JSON parse + project key + rate limit + optional JWT + Zod validation
   C->>D: Upsert project/user/session + insert event rows
   C-->>S: 200 OK / error
   Note over S: Backoff and retry on failure
@@ -97,18 +97,19 @@ Package-level highlights:
 - **Router composition**: collector returns `router`, `ingestRouter`, `apiRouter` for embedding flexibility.
 - **Adapter-based persistence**: `createDb` and dialect-specific schema/migration paths.
 - **Runtime schema validation**: ingestion and query validation via Zod.
+- **Hook safety**: `hooks.onBeforeInsert` output is revalidated before persistence.
 - **Operational metadata**: request IDs, structured logs, consistent error payloads, no-store headers.
-- **Privacy-by-default capture**: SDK DNT respect + sensitive selector/input guards.
-- **Resilience**: SDK queue persistence option + exponential backoff; collector rate limiting.
+- **Privacy-by-default capture**: SDK DNT respect, sensitive selector/input guards, allowlist modes that capture nothing without selectors, and private-target move filtering.
+- **Resilience**: SDK storage fallback, namespaced queue persistence, multi-batch flush/shutdown draining, exponential backoff, and per-collector-instance rate limiting with bucket pruning.
 
 ## 8) Anti-patterns and risks
 
 Concrete, source-based concerns:
 - **Large single-module collector**: `packages/heat-collector/src/collector.ts` combines routing, auth, persistence orchestration, querying, and heatmap aggregation in one file, increasing change risk and cognitive load.
-- **In-memory rate limit store** (`rateBuckets` map in process memory): not distributed-safe; resets on restart.
+- **In-memory rate limit store**: buckets are scoped per collector instance and pruned, but are still process-local, not distributed-safe, and reset on restart.
 - **Potential N+1 session counting**: `listSessions` computes event counts per session via repeated queries.
-- **Session path filtering after pagination**: `listSessions` applies the optional `path` filter after loading the limited page, which can produce sparse pages when many sessions have different first paths.
 - **Dynamic `require` in schema module**: mixed module-loading style (`require(...)` inside TypeScript ESM context) may be brittle in some toolchains.
+- **Unauthenticated query APIs by default**: project heatmap/events/sessions routes preserve existing compatibility and should be protected by the host app when needed.
 - **No real linting**: both packages set `lint` script to echo placeholder, so style/static issues can slip through.
 - **Contract duplication**: SDK event definitions and collector validation/event handling are maintained separately, creating drift risk.
 
@@ -120,11 +121,12 @@ Before changing behavior:
    - `packages/heat-sdk/src/index.ts`
    - `packages/heat-collector/src/validation.ts`
    - `packages/heat-collector/src/collector.ts`
-3. For DB-impacting changes, inspect:
+3. For SDK lifecycle, privacy, or micro-frontend changes, inspect storage namespace, storage fallback, multi-batch flush/shutdown, and shared History API patching.
+4. For DB-impacting changes, inspect:
    - `packages/heat-collector/src/schema.ts`
    - `packages/heat-collector/src/db.ts`
    - collector tests + mongodb tests.
-4. Run minimum validation:
+5. Run minimum validation:
    - unit tests for touched package(s), then root `pnpm test` when feasible.
 
 Safe extension points:
@@ -142,3 +144,4 @@ Risky zones:
 1. Should event contract types be extracted to a shared package to reduce drift?
 2. Should rate limiting move to pluggable/distributed storage for multi-instance deployments?
 3. Are there formal retention policies/PII guarantees beyond current defaults and best-effort masking?
+4. Should query APIs gain optional non-breaking authentication middleware for deployments that expose them outside trusted networks?

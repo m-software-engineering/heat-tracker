@@ -25,11 +25,14 @@
 - Preserve user changes; never revert work you did not make unless explicitly asked.
 - Avoid editing generated output such as `dist`, coverage, caches, or local database files.
 - Keep public APIs, package exports, endpoint shapes, payload formats, and response headers backward compatible unless the task explicitly changes them.
+- Preserve current reliability/privacy guarantees: SDK storage namespacing, safe storage fallback, privacy allowlist behavior, private move filtering, multi-batch flush/shutdown draining, and shared History API restoration.
+- Preserve current collector guarantees: request IDs before JSON parser errors, structured malformed/oversized JSON responses, per-instance rate-limit buckets, hook-output revalidation, and path filtering before session pagination.
 - For event or ingestion payload changes, keep these files aligned:
   - `packages/heat-sdk/src/index.ts`
   - `packages/heat-collector/src/validation.ts`
   - `packages/heat-collector/src/collector.ts`
 - If public behavior changes, update relevant README, changelog, architecture, package tests, and e2e coverage as appropriate.
+- Do not add query API authentication or other breaking security hardening unless the task explicitly calls for a compatibility break; document such risks instead.
 
 ## Verification
 - For package-only work, start with the touched package's tests, typecheck, and build.

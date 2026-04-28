@@ -17,7 +17,7 @@ Returned runtime components:
 Startup lifecycle:
 1. `createDb(config.db)` resolves adapter + schema.
 2. `autoMigrate` runs by default (`autoMigrate ?? true`).
-3. Middleware stack sets JSON body limit, request IDs, security headers, and request logging.
+3. Middleware stack assigns request IDs/security headers before JSON parsing, then returns structured errors for malformed or oversized JSON bodies.
 4. Routes handle ingest/query flows.
 
 Shutdown behavior:
@@ -35,6 +35,7 @@ Data contract and flow:
 - SDK sends `POST /ingest` with `x-project-key`, optional `Authorization: Bearer ...`, and payload containing session/user/events.
 - Current route code requires `x-project-key` before JWT handling in every auth mode; JWT is required only in `jwt` mode and optional in `both` mode.
 - Collector validates with `ingestSchema` (`src/validation.ts`) before persistence.
+- `hooks.onBeforeInsert` can transform a valid payload, but its return value is revalidated with `ingestSchema` before any DB write.
 - Event semantics expected from SDK:
   - `click`: uses `x/y`
   - `move`: expands `points[]` into row-per-point events
@@ -46,6 +47,7 @@ Dependency direction:
 
 Error propagation:
 - Ingest/query failures return structured JSON payloads with `requestId` and stable error codes.
+- Malformed JSON returns `400 invalid_json`; bodies over `ingestion.maxBodyBytes` return `413 payload_too_large`.
 - SDK is expected to retry failed ingestion requests.
 
 ## 4) Internal architecture
@@ -69,10 +71,12 @@ Boundary model:
 
 ```mermaid
 flowchart TD
-  ingest["POST /ingest"] --> headers["Project key check and rate limit"]
+  ingest["POST /ingest"] --> requestContext["Request ID + response headers"]
+  requestContext --> json["JSON body parse or structured parse/size error"]
+  json --> headers["Project key check and per-instance rate limit"]
   headers --> jwt["JWT verification when required or supplied"]
   jwt --> validation["Zod ingestSchema validation"]
-  validation --> hook["Optional onBeforeInsert hook"]
+  validation --> hook["Optional onBeforeInsert hook + revalidation"]
   hook --> projectUser["ensureProjectAndUser"]
   projectUser --> session["upsertSession"]
   session --> events["insertEvents"]
@@ -90,6 +94,11 @@ Query flow (heatmap):
 2. Query rows by project/type/path/range.
 3. Default behavior when `type` omitted: request `click`, fallback to `all` when no click rows.
 4. Aggregate into resolution buckets and return metadata including plotted/ignored counts.
+
+Query flow (sessions):
+1. Validate pagination/user/path/time query parameters.
+2. Apply project/user/path/time filters before `limit`/`offset` in both SQL and MongoDB paths.
+3. Load per-session event counts and return session metadata.
 
 ## 6) Configuration and environment
 
@@ -110,6 +119,10 @@ Security/ops headers:
 - `X-Request-Id`, `X-Heat-Collector`, `X-Content-Type-Options` on responses.
 - rate-limit headers on ingest.
 
+Rate limiting:
+- Buckets are scoped to each `createCollector` instance and pruned when expired.
+- Limits remain process-local and are not shared across server instances.
+
 Secrets handling:
 - JWT key material fetched from JWKS endpoint at runtime (cached in-memory).
 - DB credentials expected in env/connection strings provided by host app.
@@ -119,6 +132,7 @@ Secrets handling:
 Discovered tests:
 - `src/collector.test.ts`: SQLite integration tests via Express + supertest.
 - `src/mongodb.test.ts`: fake Mongo implementation tests migration + API behavior.
+- Current reliability coverage includes malformed/oversized JSON, per-instance rate limit isolation, hook-output revalidation, and session path filtering before pagination for SQL and MongoDB.
 
 Workspace integration coverage:
 - `e2e/sdk.e2e.spec.ts` validates SDK-built artifact + collector ingestion/query roundtrip.
@@ -145,10 +159,10 @@ When adding new event types:
 ## 9) Anti-patterns and risks
 
 - **High file complexity**: `collector.ts` is doing too many responsibilities.
-- **Process-local rate limiting** (`Map`) is not horizontally scalable.
+- **Process-local rate limiting** (`Map`) is scoped per collector and pruned, but is not horizontally scalable.
 - **Potential SQL N+1 in session listing** due to per-session event count query.
-- **Session path filtering happens after pagination**, so a filtered page can contain fewer than `limit` rows even when more matching sessions exist later.
 - **In-memory JWT/JWKS cache only**; multi-instance systems may fetch keys independently.
+- **Unauthenticated query APIs by default**: query routes preserve existing compatibility and rely on host-level protection when exposed outside trusted contexts.
 - **`any`-heavy DB abstractions** reduce type safety in persistence code.
 - **No formal linting** (`lint` script placeholder) increases risk of drift/style inconsistency.
 
@@ -158,6 +172,8 @@ Before modifications:
 - Inspect `collector.ts`, `validation.ts`, `db.ts`, and `schema.ts` together.
 - Confirm SQL and Mongo paths are both covered for behavior changes.
 - Check whether response header/error contract is externally relied upon.
+- For ingest middleware changes, preserve request correlation before JSON parser errors and structured malformed/oversized-body responses.
+- For hook or query changes, preserve hook-output revalidation and SQL/Mongo session path filtering before pagination.
 
 After modifications:
 - Run `pnpm -C packages/heat-collector test`.

@@ -24,15 +24,19 @@ Primary consumers appear to be browser applications and framework integrations (
 ## 3) Internal architecture
 
 Core structure in `src/index.ts`:
-- **Config layer**: `DEFAULT_CONFIG` + `ensureConfig` for resolved defaults.
+- **Config layer**: `DEFAULT_CONFIG` + `ensureConfig` for resolved defaults and guardrails such as finite positive `batch.maxEvents`.
 - **Event model**: discriminated event types (`click`, `move`, `scroll`, `pageview`, `custom`, `input`, `keyboard`).
 - **Runtime engine**: `TrackerImpl` class managing lifecycle, listeners, queue, and transport.
 - **Persistence**:
   - Session identity in `sessionStorage` or `localStorage` (configurable `session.persist`).
-  - Queue persistence optional via `batch.storage = "localStorage"`.
+  - Session and queue keys are namespaced by a stable hash of `projectKey|endpoint`, which prevents same-page trackers from replaying one project's data through another.
+  - Queue persistence is optional via `batch.storage = "localStorage"`.
+  - Storage access falls back to in-memory storage when browser storage is unavailable or blocked.
 - **Transport**:
   - `fetch` POST to endpoint with `x-project-key` and optional Bearer token.
   - Retry with exponential backoff + jitter on failure.
+- **Navigation capture**:
+  - A shared History API patch manager fans out navigation notifications to all active pageview trackers and restores methods when the last tracker shuts down.
 
 Boundaries:
 - Browser globals required (`window`, DOM, history, storage, navigator).
@@ -47,6 +51,7 @@ TypeScript types act as the main abstraction set (no TS interfaces implemented b
 
 Operational helpers:
 - `eventPagePoint`, `computeScrollDepth`, `elementSelector`, `classifyKey` encapsulate capture semantics.
+- `getBrowserStorage`, `stableHash`, and the storage key helpers encapsulate storage fallback and per-project/per-endpoint namespacing.
 - `createNoopTracker` provides compliant fallback for DNT/sampling bypass.
 
 ## 5) Error handling and validation model
@@ -58,9 +63,12 @@ Operational helpers:
   - Extensive `try/catch` around storage and JSON operations to avoid app breakage.
 - Network failure handling:
   - Failed sends requeue events and schedule retries.
+  - `flush()` and `shutdown()` drain queued events across multiple `maxEvents` batches until the queue is empty or a send fails.
 - Privacy gating:
   - DNT returns noop tracker.
   - Sensitive selectors/inputs are filtered before enqueue.
+  - Input and keyboard `allowlist` modes capture nothing when no allow selectors are configured.
+  - Move capture applies the same blocked/private selector checks as click capture.
 
 ## 6) Testing strategy
 
@@ -71,7 +79,11 @@ Covered behaviors include:
 - scroll-offset coordinate correctness
 - input masking
 - DNT compliance
-- shutdown flush and history restoration
+- storage namespacing across same-page trackers
+- allowlist privacy behavior and blocked private move targets
+- storage fallback when `sessionStorage` is unavailable
+- multi-batch flush/shutdown behavior, including invalid `maxEvents` normalization
+- shutdown flush and shared history restoration
 - localStorage queue cleanup
 
 Recommended commands:
@@ -97,8 +109,9 @@ When adding event types:
 
 - **Single-file concentration**: almost all SDK logic is in `src/index.ts`, making targeted changes harder.
 - **Literal SDK version constant** (`SDK_VERSION`) can drift from `package.json` if not kept in sync.
-- **Global patching of History API** is correctly restored on shutdown, but fragile if app/framework patches history too.
+- **Global patching of History API** is reference-counted across SDK instances and restored on shutdown, but remains fragile if an app/framework replaces history methods after the SDK patches them.
 - **Best-effort queue byte sizing** via `JSON.stringify(queue).length` may differ from actual transport/storage byte counts.
+- **In-memory storage fallback** keeps init non-crashing when storage is blocked, but cannot persist across reloads.
 
 ## 9) Coding-agent checklist
 
@@ -107,7 +120,9 @@ Before changes:
 - Check collector contract expectations in:
   - `../heat-collector/src/validation.ts`
   - `../heat-collector/src/collector.ts`
-- Identify whether change touches privacy-sensitive paths (`isSensitiveInput`, selectors, DNT).
+- Identify whether change touches privacy-sensitive paths (`isSensitiveInput`, selectors, allowlist modes, move capture, DNT).
+- For queue/session work, preserve project+endpoint namespacing and browser-storage fallback behavior.
+- For navigation work, preserve multi-instance History API patch/restore semantics.
 
 After changes:
 - Run `pnpm -C packages/heat-sdk test`.
