@@ -10,6 +10,7 @@
 - If touching a package, also read that package's `ARCHITECTURE.md`.
 - Before coding, use `.agents/skills/andrej-karpathy-guidelines/SKILL.md`.
 - Apply that skill's rules: surface assumptions, choose the simplest working change, edit surgically, and verify with concrete checks.
+- After every change update the `ARCHITECTURE.md` file with the latest change to maintain it always updated.
 
 ## Repository Map
 - `packages/heat-sdk`: browser SDK for capture, batching, privacy gates, and ingestion transport.
