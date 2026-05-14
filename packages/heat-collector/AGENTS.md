@@ -9,6 +9,7 @@
 - Read the root `ARCHITECTURE.md` to understand SDK and collector interaction.
 - Before coding, use `../../.agents/skills/andrej-karpathy-guidelines/SKILL.md`.
 - Inspect the relevant route, validation, and storage paths before editing.
+- After every change update the `ARCHITECTURE.md` file with the latest change to maintain it always updated.
 
 ## Key Surfaces
 - `src/collector.ts` owns `createCollector`, routers, auth flow, rate limiting, ingestion, query shaping, heatmap aggregation, metrics, and persistence orchestration.
