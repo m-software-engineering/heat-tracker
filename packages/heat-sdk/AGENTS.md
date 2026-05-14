@@ -9,6 +9,7 @@
 - Read the root `ARCHITECTURE.md` to understand SDK and collector interaction.
 - Before coding, use `../../.agents/skills/andrej-karpathy-guidelines/SKILL.md`.
 - Read `src/index.ts` around the exact feature area before editing.
+- After every change update the `ARCHITECTURE.md` file with the latest change to maintain it always updated.
 
 ## Key Surfaces
 - `src/index.ts` contains the public API, event types, config defaults, capture engine, queue, storage, privacy gates, listener lifecycle, and fetch transport.
