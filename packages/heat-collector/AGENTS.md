@@ -1,10 +1,12 @@
 # heat-collector Agent Instructions
 
 ## Scope
+
 - This file applies to `packages/heat-collector`.
 - Follow the root `AGENTS.md` first; this file adds collector-specific rules.
 
 ## First Read
+
 - Read `packages/heat-collector/ARCHITECTURE.md` before changing collector behavior.
 - Read the root `ARCHITECTURE.md` to understand SDK and collector interaction.
 - Before coding, use `../../.agents/skills/andrej-karpathy-guidelines/SKILL.md`.
@@ -12,6 +14,7 @@
 - After every change update the `ARCHITECTURE.md` file with the latest change to maintain it always updated.
 
 ## Key Surfaces
+
 - `src/collector.ts` owns `createCollector`, routers, auth flow, rate limiting, ingestion, query shaping, heatmap aggregation, metrics, and persistence orchestration.
 - Ingest middleware assigns request IDs before JSON parsing and returns structured `invalid_json` / `payload_too_large` responses for parser errors.
 - Rate-limit buckets are scoped per collector instance and pruned when expired.
@@ -22,6 +25,7 @@
 - `src/collector.test.ts` and `src/mongodb.test.ts` cover SQLite and Mongo behavior.
 
 ## Implementation Rules
+
 - Preserve route shapes, auth modes, status codes, structured error payloads, request headers, rate-limit headers, no-store headers, metrics, and heatmap metadata unless the task explicitly changes them.
 - Keep SQL and MongoDB behavior in parity for ingestion, queries, migrations, and index behavior.
 - Keep session `path` filtering before pagination in both SQL and MongoDB paths.
@@ -35,6 +39,7 @@
 - Keep `heat-collector-migrate` behavior compatible with existing environment variables unless explicitly changed.
 
 ## Verification
+
 - Run `corepack pnpm -C packages/heat-collector test` for collector changes.
 - Run `corepack pnpm -C packages/heat-collector typecheck` for TypeScript/API changes.
 - Run `corepack pnpm -C packages/heat-collector build` before changes that affect exports, CLI, or package output.

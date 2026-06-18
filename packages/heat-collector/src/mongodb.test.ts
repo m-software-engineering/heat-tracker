@@ -183,7 +183,6 @@ describe("mongodb support", () => {
     await expect(autoMigrate(ctx)).resolves.toBeUndefined();
   });
 
-
   it("uses database from mongodb connection string when database is not explicitly configured", async () => {
     const calls: Array<string | undefined> = [];
     const client = {
@@ -244,7 +243,11 @@ describe("mongodb support", () => {
     const app = express();
     app.use(collector.router);
 
-    await request(app).post("/ingest").set("x-project-key", "mongo-pageview-only").send(buildPageviewOnlyPayload()).expect(200);
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", "mongo-pageview-only")
+      .send(buildPageviewOnlyPayload())
+      .expect(200);
 
     const project = await db.collection("projects").findOne({ key: "mongo-pageview-only" });
     expect(project?.id).toBeTruthy();

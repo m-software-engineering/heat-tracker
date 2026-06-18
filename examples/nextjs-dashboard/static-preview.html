@@ -4,9 +4,21 @@
     <meta charset="utf-8" />
     <title>Heatmap Preview</title>
     <style>
-      body { margin: 0; font-family: sans-serif; background: #f2f0eb; }
-      #container { position: relative; width: 100vw; height: 100vh; }
-      #background { position: absolute; inset: 0; background: linear-gradient(135deg,#fff4f1,#eef6ff); }
+      body {
+        margin: 0;
+        font-family: sans-serif;
+        background: #f2f0eb;
+      }
+      #container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+      #background {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, #fff4f1, #eef6ff);
+      }
     </style>
   </head>
   <body>
@@ -15,7 +27,7 @@
     </div>
     <script src="https://unpkg.com/heatmap.js@2.0.5/build/heatmap.min.js"></script>
     <script>
-      const container = document.getElementById('container');
+      const container = document.getElementById("container");
       const hm = h337.create({ container, radius: 40, maxOpacity: 0.6 });
       hm.setData({
         max: 5,

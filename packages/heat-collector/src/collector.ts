@@ -13,10 +13,7 @@ import {
 } from "./validation";
 import { verifyJwt, type JwtConfig } from "./jwt";
 
-export type AuthConfig =
-  | { mode: "projectKey" }
-  | ({ mode: "jwt" } & JwtConfig)
-  | ({ mode: "both" } & JwtConfig);
+export type AuthConfig = { mode: "projectKey" } | ({ mode: "jwt" } & JwtConfig) | ({ mode: "both" } & JwtConfig);
 
 export type CollectorConfig = {
   db: DbAdapterConfig;
@@ -796,11 +793,7 @@ const ensureProjectAndUser = async (
 
   const { projects, users } = ctx.schema as any;
 
-  const existing = await ctx.db
-    .select()
-    .from(projects)
-    .where(eq(projects.key, projectKey))
-    .limit(1);
+  const existing = await ctx.db.select().from(projects).where(eq(projects.key, projectKey)).limit(1);
 
   let projectId: string;
   if (existing.length === 0) {
@@ -843,7 +836,13 @@ const ensureProjectAndUser = async (
   return { projectId, userId };
 };
 
-const upsertSession = async (ctx: DbContext, projectId: string, userId: string | undefined, payload: any, req: Request) => {
+const upsertSession = async (
+  ctx: DbContext,
+  projectId: string,
+  userId: string | undefined,
+  payload: any,
+  req: Request
+) => {
   const now = Date.now();
   const sessionId = payload.session.id;
 
@@ -1029,13 +1028,7 @@ const listProjectEvents = async (
       };
     }
 
-    return ctx.db
-      .collection("events")
-      .find(filter)
-      .sort({ ts: 1 })
-      .skip(query.offset)
-      .limit(query.limit)
-      .toArray();
+    return ctx.db.collection("events").find(filter).sort({ ts: 1 }).skip(query.offset).limit(query.limit).toArray();
   }
 
   const { events } = ctx.schema as any;
@@ -1056,13 +1049,7 @@ const listProjectEvents = async (
 
   const where = and(...filters);
 
-  return ctx.db
-    .select()
-    .from(events)
-    .where(where)
-    .orderBy(events.ts)
-    .limit(query.limit)
-    .offset(query.offset);
+  return ctx.db.select().from(events).where(where).orderBy(events.ts).limit(query.limit).offset(query.offset);
 };
 
 const buildHeatmap = (

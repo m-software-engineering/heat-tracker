@@ -2,14 +2,20 @@
   "name": "@m-software-engineering/heat-sdk",
   "version": "0.2.6",
   "description": "Browser SDK for heat-tracker session events and heatmaps",
+  "type": "commonjs",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     }
   },
   "sideEffects": false,
@@ -20,9 +26,12 @@
     "build": "tsup src/index.ts --format esm,cjs --dts --clean",
     "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo 'no lint configured'",
+    "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "pack:check": "publint --pack npm && attw --pack . && api-extractor run --verbose",
+    "api:check": "api-extractor run --verbose",
+    "api:local": "api-extractor run --local --verbose"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^1.6.0",

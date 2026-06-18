@@ -143,5 +143,3 @@ export const sessionEventsQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).optional().default(0),
   type: z.string().optional()
 });
-
-export type IngestPayload = z.infer<typeof ingestSchema>;

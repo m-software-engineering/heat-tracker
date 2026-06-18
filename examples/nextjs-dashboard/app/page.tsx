@@ -34,7 +34,7 @@ export default function Page() {
         if (!cancelled) setStatus(err?.message || "Failed");
       }
     };
-    load();
+    void load();
     return () => {
       cancelled = true;
     };

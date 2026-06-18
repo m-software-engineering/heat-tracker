@@ -1,0 +1,22 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "project": ["*.{js,cjs,mjs,ts}", "e2e/**/*.ts"]
+    },
+    "packages/heat-sdk": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/heat-collector": {
+      "project": ["src/**/*.ts"]
+    },
+    "examples/express-collector": {
+      "project": ["src/**/*.ts"]
+    },
+    "examples/nextjs-dashboard": {
+      "entry": ["app/**/*.tsx", "components/**/*.tsx", "lib/**/*.ts"],
+      "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.ts"]
+    }
+  },
+  "ignoreExportsUsedInFile": true
+}

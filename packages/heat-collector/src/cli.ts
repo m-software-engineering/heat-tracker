@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { autoMigrate, createDb } from "./db";
 
 const dialect = (process.env.HEAT_DIALECT || "sqlite") as "sqlite" | "pg" | "mysql" | "mongodb";
