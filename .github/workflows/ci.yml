@@ -1,18 +1,19 @@
-name: CI/CD
+name: CI
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   verify:
@@ -70,41 +71,3 @@ jobs:
             playwright-report
             test-results
           retention-days: 30
-
-  release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: verify
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 9.12.0
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: pnpm-lock.yaml
-          registry-url: https://registry.npmjs.org
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build packages
-        run: pnpm build
-
-      - name: Publish with Changesets
-        uses: changesets/action@v1
-        with:
-          publish: pnpm release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
