@@ -104,7 +104,7 @@ Recommended commands:
 
 Harness notes:
 
-- Coverage thresholds are enforced in `vitest.config.ts` for SDK source files.
+- Coverage thresholds are enforced in `vitest.config.ts` for SDK source files, and Vitest emits `json-summary` coverage for GitHub Actions quality summaries.
 - Package validation uses `publint`, `attw --pack`, and API Extractor against the built `dist` output.
 - The package export map splits ESM and CommonJS type resolution to keep browser consumers and package checkers aligned.
 
