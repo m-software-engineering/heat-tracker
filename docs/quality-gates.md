@@ -31,4 +31,4 @@ When CI fails, attach the relevant machine-readable artifacts before handing wor
 - `test-results`
 - failing static-analysis logs from Semgrep, GitHub CodeQL default setup, Dependency Review, or OSV Scanner
 
-Run `corepack pnpm exec playwright install --with-deps` in CI before `pnpm verify`; local machines may need `corepack pnpm exec playwright install chromium` before running E2E. macOS local runs auto-detect Google Chrome when present; otherwise set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to an existing Chromium-compatible browser executable for local-only runs.
+Run `corepack pnpm exec playwright install --with-deps chromium` in CI before `pnpm verify`; local machines may need `corepack pnpm exec playwright install chromium` before running E2E. macOS local runs auto-detect Google Chrome when present; otherwise set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to an existing Chromium-compatible browser executable for local-only runs.

@@ -41,8 +41,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install Playwright browsers
-        run: pnpm exec playwright install --with-deps
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 10
 
       - name: Run deterministic verification
         run: pnpm verify
