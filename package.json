@@ -19,6 +19,7 @@
     "check:pkg": "corepack pnpm -r build && corepack pnpm -r --if-present pack:check",
     "api:check": "corepack pnpm -r --if-present api:check",
     "verify": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm build && corepack pnpm test:coverage && corepack pnpm test:e2e && corepack pnpm check:deps && corepack pnpm check:arch && corepack pnpm check:pkg",
+    "verify:non-e2e": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm build && corepack pnpm test:coverage && corepack pnpm check:deps && corepack pnpm check:arch && corepack pnpm check:pkg",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "release": "changeset publish"
