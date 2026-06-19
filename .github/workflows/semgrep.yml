@@ -18,7 +18,7 @@ jobs:
       image: semgrep/semgrep
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Run Semgrep CE
         run: semgrep scan --config auto --config p/typescript --config p/javascript --error
