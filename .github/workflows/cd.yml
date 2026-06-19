@@ -38,9 +38,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
+        id: build
         run: pnpm build
 
       - name: Publish with Changesets
+        id: changesets
         uses: changesets/action@v1
         with:
           publish: pnpm release
@@ -48,3 +50,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Write release summary
+        if: ${{ always() }}
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          CHANGESETS_OUTCOME: ${{ steps.changesets.outcome }}
+          CHANGESETS_HAS_CHANGESETS: ${{ steps.changesets.outputs.hasChangesets }}
+          CHANGESETS_PUBLISHED: ${{ steps.changesets.outputs.published }}
+          CHANGESETS_PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: node scripts/github-summary.mjs cd

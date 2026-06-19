@@ -48,6 +48,7 @@ jobs:
         timeout-minutes: 10
 
       - name: Run deterministic verification with E2E
+        id: verify_e2e
         if: matrix.node == 22
         run: pnpm verify
         env:
@@ -55,11 +56,41 @@ jobs:
           NODE_OPTIONS: "--enable-source-maps"
 
       - name: Run deterministic verification without E2E
+        id: verify_non_e2e
         if: matrix.node == 24
         run: pnpm verify:non-e2e
         env:
           CI: "true"
           NODE_OPTIONS: "--enable-source-maps"
+
+      - name: Write CI metadata
+        if: ${{ always() }}
+        env:
+          NODE_VERSION: ${{ matrix.node }}
+          VERIFY_E2E_OUTCOME: ${{ steps.verify_e2e.outcome }}
+          VERIFY_NON_E2E_OUTCOME: ${{ steps.verify_non_e2e.outcome }}
+        run: |
+          mkdir -p ci-metadata
+          if [ "$NODE_VERSION" = "22" ]; then
+            COMMAND="pnpm verify"
+            E2E="true"
+            OUTCOME="$VERIFY_E2E_OUTCOME"
+          else
+            COMMAND="pnpm verify:non-e2e"
+            E2E="false"
+            OUTCOME="$VERIFY_NON_E2E_OUTCOME"
+          fi
+          if [ -z "$OUTCOME" ]; then
+            OUTCOME="skipped"
+          fi
+          cat > "ci-metadata/node-${NODE_VERSION}.json" <<EOF
+          {
+            "node": "${NODE_VERSION}",
+            "command": "${COMMAND}",
+            "outcome": "${OUTCOME}",
+            "e2e": "${E2E}"
+          }
+          EOF
 
       - name: Upload reports
         if: ${{ !cancelled() }}
@@ -67,7 +98,29 @@ jobs:
         with:
           name: reports-node-${{ matrix.node }}
           path: |
+            ci-metadata
             packages/*/coverage
             playwright-report
             test-results
           retention-days: 30
+
+  summary:
+    name: Quality summary
+    runs-on: ubuntu-latest
+    needs: verify
+    if: ${{ always() }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download verification artifacts
+        uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: reports-node-*
+          path: .github-summary-artifacts
+
+      - name: Write quality summary
+        if: ${{ always() }}
+        env:
+          VERIFY_RESULT: ${{ needs.verify.result }}
+        run: node scripts/github-summary.mjs ci --artifacts .github-summary-artifacts

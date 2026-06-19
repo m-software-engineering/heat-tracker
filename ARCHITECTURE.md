@@ -102,7 +102,7 @@ Package-level highlights:
 - SDK and collector both use `tsup` for build and `vitest` for tests.
 - Collector CLI binary: `heat-collector-migrate` (runs `autoMigrate` with env-based dialect/connection).
 - The deterministic quality harness is centered on `pnpm verify`, which chains formatting, ESLint, TypeScript, builds, coverage, Playwright, Knip, dependency-cruiser, publint, Are The Types Wrong, and API Extractor.
-- GitHub Actions separates PR verification from release publishing: `ci.yml` runs full `pnpm verify` on Node 22 and `pnpm verify:non-e2e` on Node 24 for pull requests, while `cd.yml` runs the Changesets release flow only on pushes to `main` after merges. CI preinstalls Chromium only for the Node 22 browser job because the Playwright suite targets Chromium, and CodeQL remains handled by GitHub default setup so the repository does not upload duplicate advanced-setup CodeQL SARIF.
+- GitHub Actions separates PR verification from release publishing: `ci.yml` runs full `pnpm verify` on Node 22 and `pnpm verify:non-e2e` on Node 24 for pull requests, while `cd.yml` runs the Changesets release flow only on pushes to `main` after merges. CI preinstalls Chromium only for the Node 22 browser job because the Playwright suite targets Chromium, emits one aggregate Markdown quality summary from uploaded artifacts, and CodeQL remains handled by GitHub default setup so the repository does not upload duplicate advanced-setup CodeQL SARIF. CD emits a Markdown release summary from Changesets outputs and package manifests.
 
 ## 7) Patterns
 
