@@ -55,7 +55,7 @@ const startCollector = async () => {
   });
 
   const address = server.address();
-  const port = typeof address === "string" ? 0 : address?.port ?? 0;
+  const port = typeof address === "string" ? 0 : (address?.port ?? 0);
 
   return {
     url: `http://localhost:${port}`,
@@ -83,9 +83,7 @@ test("SDK captures click and collector aggregates", async ({ page }) => {
       id: string;
     };
 
-    const response = await fetch(
-      `${collector.url}/api/projects/${project.id}/heatmap?path=/&type=click&resolution=64`
-    );
+    const response = await fetch(`${collector.url}/api/projects/${project.id}/heatmap?path=/&type=click&resolution=64`);
     const data = await response.json();
 
     expect(data.points.length).toBeGreaterThan(0);

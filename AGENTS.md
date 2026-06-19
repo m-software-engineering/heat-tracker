@@ -1,11 +1,13 @@
 # Coding Agent Instructions
 
 ## Scope
+
 - This file applies to the whole `heat-tracker` pnpm workspace.
 - Package-level `AGENTS.md` files add rules for their package subtrees.
 - Keep changes focused on the requested feature or fix.
 
 ## First Read
+
 - Before changing behavior, read `ARCHITECTURE.md`.
 - If touching a package, also read that package's `ARCHITECTURE.md`.
 - Before coding, use `.agents/skills/andrej-karpathy-guidelines/SKILL.md`.
@@ -13,6 +15,7 @@
 - After every change update the `ARCHITECTURE.md` file with the latest change to maintain it always updated.
 
 ## Repository Map
+
 - `packages/heat-sdk`: browser SDK for capture, batching, privacy gates, and ingestion transport.
 - `packages/heat-collector`: Express collector for auth, validation, persistence, query APIs, metrics, and migrations.
 - `examples/express-collector`: local collector host used for quick manual validation.
@@ -21,6 +24,7 @@
 - `e2e`: Playwright integration coverage for SDK and collector round trips.
 
 ## Change Rules
+
 - Prefer existing patterns, TypeScript style, package scripts, and local helper APIs.
 - Do not perform speculative refactors or unrelated cleanup.
 - Preserve user changes; never revert work you did not make unless explicitly asked.
@@ -36,6 +40,9 @@
 - Do not add query API authentication or other breaking security hardening unless the task explicitly calls for a compatibility break; document such risks instead.
 
 ## Verification
+
+- The required deterministic harness command is `corepack pnpm verify`.
+- No task is complete until `corepack pnpm verify` passes, unless the task is explicitly docs-only or the failure is unrelated and documented.
 - For package-only work, start with the touched package's tests, typecheck, and build.
 - Run `corepack pnpm typecheck` before broad TypeScript changes.
 - Run `corepack pnpm test` when behavior crosses package boundaries.

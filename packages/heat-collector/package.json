@@ -8,11 +8,17 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
     }
   },
+  "sideEffects": false,
   "files": [
     "dist"
   ],
@@ -20,9 +26,12 @@
     "build": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --clean",
     "dev": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "echo 'no lint configured'",
+    "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "pack:check": "publint --pack npm && attw --pack . && api-extractor run --verbose",
+    "api:check": "api-extractor run --verbose",
+    "api:local": "api-extractor run --local --verbose"
   },
   "bin": {
     "heat-collector-migrate": "./dist/cli.cjs"

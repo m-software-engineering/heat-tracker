@@ -5,24 +5,26 @@
 `heat-tracker` is an end-to-end product analytics stack that captures browser interaction events in a client SDK, ingests them through an HTTP collector, stores them in SQLite, Postgres, MySQL, or MongoDB, and exposes query APIs for heatmaps/session analysis and dashboards.
 
 Primary goals observed in code:
+
 - Browser-side event capture with privacy-aware defaults (`packages/heat-sdk`).
 - Backend ingestion, validation, auth, persistence, and analytics APIs (`packages/heat-collector`).
 - Runnable references for local stack + UI exploration (`examples/*`, `e2e/*`).
 
 ## 2) Monorepo map
 
-| Path | Role |
-|---|---|
-| `packages/heat-sdk` | Browser SDK package (`@m-software-engineering/heat-sdk`). |
-| `packages/heat-collector` | Express collector package (`@m-software-engineering/heat-collector`). |
-| `examples/express-collector` | Minimal app that mounts collector router. |
-| `examples/nextjs-dashboard` | Reference dashboard consuming collector APIs. |
-| `examples/docker-compose` | Local MySQL/Postgres bootstrap for SQL adapter testing. |
-| `e2e` | Playwright E2E validating SDK + collector integration. |
-| `package.json` | Workspace-level build/test/lint/typecheck commands. |
-| `pnpm-workspace.yaml` | Declares workspace packages under `packages/*` and `examples/*`. |
+| Path                         | Role                                                                  |
+| ---------------------------- | --------------------------------------------------------------------- |
+| `packages/heat-sdk`          | Browser SDK package (`@m-software-engineering/heat-sdk`).             |
+| `packages/heat-collector`    | Express collector package (`@m-software-engineering/heat-collector`). |
+| `examples/express-collector` | Minimal app that mounts collector router.                             |
+| `examples/nextjs-dashboard`  | Reference dashboard consuming collector APIs.                         |
+| `examples/docker-compose`    | Local MySQL/Postgres bootstrap for SQL adapter testing.               |
+| `e2e`                        | Playwright E2E validating SDK + collector integration.                |
+| `package.json`               | Workspace-level build/test/lint/typecheck commands.                   |
+| `pnpm-workspace.yaml`        | Declares workspace packages under `packages/*` and `examples/*`.      |
 
 Discovered package roots for architecture docs:
+
 - SDK: `packages/heat-sdk/ARCHITECTURE.md`
 - Collector: `packages/heat-collector/ARCHITECTURE.md`
 
@@ -44,6 +46,7 @@ flowchart LR
 ```
 
 Component responsibilities:
+
 - **SDK**: capture click/move/scroll/pageview/custom (+ optional input/keyboard), apply privacy gates, namespace session/queue storage per project+endpoint, batch, retry/backoff, flush, and send payloads.
 - **Collector**: assign request IDs before body parsing, validate payload/query schemas, enforce ingest auth/rate limits, write project/user/session/event rows, expose query endpoints and metrics.
 - **Storage**: adapter pattern for SQL dialects and MongoDB.
@@ -80,6 +83,9 @@ sequenceDiagram
 ## 6) Build and execution model
 
 Workspace-level commands:
+
+- `pnpm verify`
+- `pnpm format:check`
 - `pnpm build`
 - `pnpm dev`
 - `pnpm typecheck`
@@ -87,10 +93,16 @@ Workspace-level commands:
 - `pnpm test`
 - `pnpm test:coverage`
 - `pnpm test:e2e`
+- `pnpm check:deps`
+- `pnpm check:arch`
+- `pnpm check:pkg`
 
 Package-level highlights:
+
 - SDK and collector both use `tsup` for build and `vitest` for tests.
 - Collector CLI binary: `heat-collector-migrate` (runs `autoMigrate` with env-based dialect/connection).
+- The deterministic quality harness is centered on `pnpm verify`, which chains formatting, ESLint, TypeScript, builds, coverage, Playwright, Knip, dependency-cruiser, publint, Are The Types Wrong, and API Extractor.
+- GitHub Actions runs full `pnpm verify` on Node 22 and `pnpm verify:non-e2e` on Node 24 before the Changesets release job can publish; CI preinstalls Chromium only for the Node 22 browser job because the Playwright suite targets Chromium, and CodeQL remains handled by GitHub default setup so the repository does not upload duplicate advanced-setup CodeQL SARIF.
 
 ## 7) Patterns
 
@@ -105,17 +117,19 @@ Package-level highlights:
 ## 8) Anti-patterns and risks
 
 Concrete, source-based concerns:
+
 - **Large single-module collector**: `packages/heat-collector/src/collector.ts` combines routing, auth, persistence orchestration, querying, and heatmap aggregation in one file, increasing change risk and cognitive load.
 - **In-memory rate limit store**: buckets are scoped per collector instance and pruned, but are still process-local, not distributed-safe, and reset on restart.
 - **Potential N+1 session counting**: `listSessions` computes event counts per session via repeated queries.
 - **Dynamic `require` in schema module**: mixed module-loading style (`require(...)` inside TypeScript ESM context) may be brittle in some toolchains.
 - **Unauthenticated query APIs by default**: project heatmap/events/sessions routes preserve existing compatibility and should be protected by the host app when needed.
-- **No real linting**: both packages set `lint` script to echo placeholder, so style/static issues can slip through.
+- **Harness maintenance burden**: linting, dependency analysis, API reports, package checks, and security workflows now provide stronger coverage, but they need intentional updates when package exports, CI support windows, or generated artifacts change.
 - **Contract duplication**: SDK event definitions and collector validation/event handling are maintained separately, creating drift risk.
 
 ## 9) Coding-agent guidance
 
 Before changing behavior:
+
 1. Read package docs: `packages/heat-sdk/ARCHITECTURE.md` and `packages/heat-collector/ARCHITECTURE.md`.
 2. Verify payload contract alignment across:
    - `packages/heat-sdk/src/index.ts`
@@ -130,11 +144,13 @@ Before changing behavior:
    - unit tests for touched package(s), then root `pnpm test` when feasible.
 
 Safe extension points:
+
 - SDK: add event capture toggles/metadata in `InitConfig` + `TrackerImpl` handlers.
 - Collector: add endpoints in `apiRouter`; extend query schemas in `validation.ts`.
 - DB: extend `events.metaJson` usage for additive metadata with lower migration overhead.
 
 Risky zones:
+
 - `collector.ts` (cross-cutting logic density).
 - session lifecycle + queue persistence semantics in SDK.
 - auth/rate-limit/error-header behavior relied on by tests/clients.

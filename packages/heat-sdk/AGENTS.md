@@ -1,10 +1,12 @@
 # heat-sdk Agent Instructions
 
 ## Scope
+
 - This file applies to `packages/heat-sdk`.
 - Follow the root `AGENTS.md` first; this file adds SDK-specific rules.
 
 ## First Read
+
 - Read `packages/heat-sdk/ARCHITECTURE.md` before changing SDK behavior.
 - Read the root `ARCHITECTURE.md` to understand SDK and collector interaction.
 - Before coding, use `../../.agents/skills/andrej-karpathy-guidelines/SKILL.md`.
@@ -12,6 +14,7 @@
 - After every change update the `ARCHITECTURE.md` file with the latest change to maintain it always updated.
 
 ## Key Surfaces
+
 - `src/index.ts` contains the public API, event types, config defaults, capture engine, queue, storage, privacy gates, listener lifecycle, and fetch transport.
 - Storage/session behavior includes project+endpoint namespacing, browser-storage fallback, queue restore/persist, invalid `maxEvents` normalization, and multi-batch flush/shutdown draining.
 - Pageview behavior uses a shared History API patch manager so multiple SDK instances can coexist and restore safely.
@@ -22,6 +25,7 @@
   - `../heat-collector/src/collector.ts`
 
 ## Implementation Rules
+
 - Keep the SDK browser-only; `init` must still fail outside a browser environment.
 - Preserve privacy defaults: respect DNT, block sensitive selectors, keep input and keyboard capture disabled by default, and never send raw sensitive values.
 - Do not weaken `isSensitiveInput`, selector blocking, allowlist capture behavior, masked input behavior, private move filtering, or metadata sanitization without an explicit product decision.
@@ -32,6 +36,7 @@
 - Keep `SDK_VERSION` aligned with `package.json` when the package version changes.
 
 ## Verification
+
 - Run `corepack pnpm -C packages/heat-sdk test` for SDK changes.
 - Run `corepack pnpm -C packages/heat-sdk typecheck` for TypeScript/API changes.
 - Run `corepack pnpm -C packages/heat-sdk build` before changes that affect package output or exports.

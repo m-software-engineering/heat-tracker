@@ -9,10 +9,12 @@
 Entry point: `src/index.ts`.
 
 Exports:
+
 - `init(config: InitConfig): Tracker`
 - Types: `InitConfig`, `Tracker`, `AnyEvent`
 
 `Tracker` methods:
+
 - `identify(userId, traits?)`
 - `setAuthToken(jwt | null)`
 - `track(name, props?)`
@@ -24,6 +26,7 @@ Primary consumers appear to be browser applications and framework integrations (
 ## 3) Internal architecture
 
 Core structure in `src/index.ts`:
+
 - **Config layer**: `DEFAULT_CONFIG` + `ensureConfig` for resolved defaults and guardrails such as finite positive `batch.maxEvents`.
 - **Event model**: discriminated event types (`click`, `move`, `scroll`, `pageview`, `custom`, `input`, `keyboard`).
 - **Runtime engine**: `TrackerImpl` class managing lifecycle, listeners, queue, and transport.
@@ -39,17 +42,20 @@ Core structure in `src/index.ts`:
   - A shared History API patch manager fans out navigation notifications to all active pageview trackers and restores methods when the last tracker shuts down.
 
 Boundaries:
+
 - Browser globals required (`window`, DOM, history, storage, navigator).
 - No direct dependency on collector package; integration is contract-over-HTTP.
 
 ## 4) Core traits and abstractions
 
 TypeScript types act as the main abstraction set (no TS interfaces implemented by multiple classes besides API types):
+
 - `InitConfig` / `ResolvedConfig`: extension and behavior-control contract.
 - `Tracker`: stable consumer-facing runtime interface.
 - Event payload unions (`AnyEvent` and concrete event types): internal + transport contract.
 
 Operational helpers:
+
 - `eventPagePoint`, `computeScrollDepth`, `elementSelector`, `classifyKey` encapsulate capture semantics.
 - `getBrowserStorage`, `stableHash`, and the storage key helpers encapsulate storage fallback and per-project/per-endpoint namespacing.
 - `createNoopTracker` provides compliant fallback for DNT/sampling bypass.
@@ -75,6 +81,7 @@ Operational helpers:
 Discovered tests: `src/index.test.ts` (Vitest + jsdom).
 
 Covered behaviors include:
+
 - click capture and flush transport
 - scroll-offset coordinate correctness
 - input masking
@@ -87,20 +94,31 @@ Covered behaviors include:
 - localStorage queue cleanup
 
 Recommended commands:
+
 - `pnpm -C packages/heat-sdk test`
 - `pnpm -C packages/heat-sdk test:coverage`
 - `pnpm -C packages/heat-sdk typecheck`
 - `pnpm -C packages/heat-sdk build`
+- `pnpm -C packages/heat-sdk lint`
+- `pnpm -C packages/heat-sdk pack:check`
+
+Harness notes:
+
+- Coverage thresholds are enforced in `vitest.config.ts` for SDK source files.
+- Package validation uses `publint`, `attw --pack`, and API Extractor against the built `dist` output.
+- The package export map splits ESM and CommonJS type resolution to keep browser consumers and package checkers aligned.
 
 ## 7) Extension points
 
 Safe feature additions:
+
 1. Add config flag under `InitConfig.capture` or `privacy`.
 2. Implement dedicated handler in `TrackerImpl`.
 3. Ensure emitted event payload aligns with collector validation schema.
 4. Add tests in `src/index.test.ts` for capture + transport semantics.
 
 When adding event types:
+
 - Update `AnyEvent` union and enqueue logic.
 - Coordinate collector updates (`validation.ts`, insert/query/heatmap behavior).
 - Add backward-compatible behavior for existing consumers where possible.
@@ -116,6 +134,7 @@ When adding event types:
 ## 9) Coding-agent checklist
 
 Before changes:
+
 - Read `src/index.ts` end-to-end (config merge, listeners, transport, storage keys).
 - Check collector contract expectations in:
   - `../heat-collector/src/validation.ts`
@@ -125,6 +144,7 @@ Before changes:
 - For navigation work, preserve multi-instance History API patch/restore semantics.
 
 After changes:
+
 - Run `pnpm -C packages/heat-sdk test`.
 - If event contract changed, run collector tests too.
 - Verify no listener leaks (especially around `shutdown`).

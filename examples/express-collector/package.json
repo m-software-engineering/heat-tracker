@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "node --loader ts-node/esm src/server.ts",
     "typecheck": "corepack pnpm -C ../../packages/heat-collector build && tsc -p tsconfig.json --noEmit",
-    "lint": "echo 'no lint configured'"
+    "lint": "eslint . --max-warnings=0"
   },
   "dependencies": {
     "@m-software-engineering/heat-collector": "workspace:*",

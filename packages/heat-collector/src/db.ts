@@ -92,10 +92,7 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
   return { db, dialect: "sqlite", schema };
 };
 
-const resolveMongoDatabaseName = (
-  config: Extract<DbAdapterConfig, { dialect: "mongodb" }>,
-  client: any
-) => {
+const resolveMongoDatabaseName = (config: Extract<DbAdapterConfig, { dialect: "mongodb" }>, client: any) => {
   if (config.database) {
     return config.database;
   }

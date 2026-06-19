@@ -75,7 +75,6 @@ app.listen(4000);
 HEAT_DIALECT=pg DATABASE_URL=postgres://... heat-collector-migrate
 ```
 
-
 ## Recent behavior updates
 
 - Heatmap coordinates are now captured in page/document space (client position + scroll offsets), so clicks and move trails remain accurate on long or scrolled pages.
@@ -91,9 +90,14 @@ HEAT_DIALECT=pg DATABASE_URL=postgres://... heat-collector-migrate
 ## Useful scripts
 
 ```bash
+pnpm verify
+pnpm format:check
+pnpm lint
+pnpm typecheck
 pnpm build
 pnpm test
 pnpm test:coverage
-pnpm lint
-pnpm typecheck
+pnpm check:deps
+pnpm check:arch
+pnpm check:pkg
 ```

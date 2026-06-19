@@ -13,9 +13,7 @@ export const createLogger = (level: LogLevel = "info") => {
     if (LEVELS[lvl] < threshold) return;
 
     const normalized = context
-      ? Object.fromEntries(
-          Object.entries(context).map(([key, value]) => [key, normalizeLogValue(value)])
-        )
+      ? Object.fromEntries(Object.entries(context).map(([key, value]) => [key, normalizeLogValue(value)]))
       : undefined;
 
     const payload = {

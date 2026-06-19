@@ -6,6 +6,6 @@ coverage/
 playwright-report/
 test-results/
 temp/
-.DS_Store
-*.log
+**/etc/*.api.md
 *.db
+pnpm-lock.yaml

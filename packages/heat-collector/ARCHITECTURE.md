@@ -9,21 +9,25 @@
 Runtime composition is centered on `createCollector(config)` in `src/collector.ts`.
 
 Returned runtime components:
+
 - `router`: full router (ingest + api).
 - `ingestRouter`: ingestion endpoint(s).
 - `apiRouter`: query/metrics endpoint(s).
 - `metrics`: in-memory counters.
 
 Startup lifecycle:
+
 1. `createDb(config.db)` resolves adapter + schema.
 2. `autoMigrate` runs by default (`autoMigrate ?? true`).
 3. Middleware stack assigns request IDs/security headers before JSON parsing, then returns structured errors for malformed or oversized JSON bodies.
 4. Routes handle ingest/query flows.
 
 Shutdown behavior:
+
 - No explicit shutdown API exposed by collector. Lifecycle is managed by host app/server process.
 
 External dependencies:
+
 - Express runtime.
 - Drizzle ORM for SQL paths.
 - MongoDB native driver for mongo paths.
@@ -32,6 +36,7 @@ External dependencies:
 ## 3) Integration with `heat-sdk`
 
 Data contract and flow:
+
 - SDK sends `POST /ingest` with `x-project-key`, optional `Authorization: Bearer ...`, and payload containing session/user/events.
 - Current route code requires `x-project-key` before JWT handling in every auth mode; JWT is required only in `jwt` mode and optional in `both` mode.
 - Collector validates with `ingestSchema` (`src/validation.ts`) before persistence.
@@ -43,9 +48,11 @@ Data contract and flow:
   - others (`pageview/custom/input/keyboard`) store metadata and can be queried
 
 Dependency direction:
+
 - Collector does not import SDK package; integration is HTTP + schema compatibility.
 
 Error propagation:
+
 - Ingest/query failures return structured JSON payloads with `requestId` and stable error codes.
 - Malformed JSON returns `400 invalid_json`; bodies over `ingestion.maxBodyBytes` return `413 payload_too_large`.
 - SDK is expected to retry failed ingestion requests.
@@ -53,6 +60,7 @@ Error propagation:
 ## 4) Internal architecture
 
 Key modules:
+
 - `src/collector.ts`: route handlers, auth flow, persistence orchestration, heatmap/event/session query shaping.
 - `src/db.ts`: adapter factory + auto-migrations/index creation.
 - `src/schema.ts`: dialect-specific table schemas + CREATE TABLE statements.
@@ -63,6 +71,7 @@ Key modules:
 - `src/cli.ts`: `heat-collector-migrate` entry for migrations.
 
 Boundary model:
+
 - HTTP boundary (Express route layer).
 - Validation boundary (Zod parse + typed query payloads).
 - Storage boundary (DbContext abstraction with dialect switch).
@@ -84,18 +93,21 @@ flowchart TD
 ```
 
 Event persistence behavior:
+
 - `move` payload points are flattened to multiple event rows.
 - `scroll` stores depth as integer.
 - input events whose `masked` field contains non-mask characters are dropped as a safety guard.
 - metadata JSON stores viewport/device/meta (sanitized to remove text/value/content fields).
 
 Query flow (heatmap):
+
 1. Validate query + parse time range.
 2. Query rows by project/type/path/range.
 3. Default behavior when `type` omitted: request `click`, fallback to `all` when no click rows.
 4. Aggregate into resolution buckets and return metadata including plotted/ignored counts.
 
 Query flow (sessions):
+
 1. Validate pagination/user/path/time query parameters.
 2. Apply project/user/path/time filters before `limit`/`offset` in both SQL and MongoDB paths.
 3. Load per-session event counts and return session metadata.
@@ -103,6 +115,7 @@ Query flow (sessions):
 ## 6) Configuration and environment
 
 Config object (`CollectorConfig`):
+
 - `db`: dialect and connection settings.
 - `auth`: `projectKey`, `jwt`, or `both`.
 - `autoMigrate`, `ingestion.maxBodyBytes`, `ingestion.rateLimit`.
@@ -110,47 +123,64 @@ Config object (`CollectorConfig`):
 - `logging.level`.
 
 CLI/migration env usage in `src/cli.ts`:
+
 - `HEAT_DIALECT` (default `sqlite`)
 - `DATABASE_URL`
 - `SQLITE_FILE`
 - `MONGODB_DATABASE`
 
 Security/ops headers:
+
 - `X-Request-Id`, `X-Heat-Collector`, `X-Content-Type-Options` on responses.
 - rate-limit headers on ingest.
 
 Rate limiting:
+
 - Buckets are scoped to each `createCollector` instance and pruned when expired.
 - Limits remain process-local and are not shared across server instances.
 
 Secrets handling:
+
 - JWT key material fetched from JWKS endpoint at runtime (cached in-memory).
 - DB credentials expected in env/connection strings provided by host app.
 
 ## 7) Testing strategy
 
 Discovered tests:
+
 - `src/collector.test.ts`: SQLite integration tests via Express + supertest.
 - `src/mongodb.test.ts`: fake Mongo implementation tests migration + API behavior.
 - Current reliability coverage includes malformed/oversized JSON, per-instance rate limit isolation, hook-output revalidation, and session path filtering before pagination for SQL and MongoDB.
 
 Workspace integration coverage:
+
 - `e2e/sdk.e2e.spec.ts` validates SDK-built artifact + collector ingestion/query roundtrip.
 
 Recommended commands:
+
 - `pnpm -C packages/heat-collector test`
 - `pnpm -C packages/heat-collector test:coverage`
 - `pnpm -C packages/heat-collector typecheck`
 - `pnpm -C packages/heat-collector build`
+- `pnpm -C packages/heat-collector lint`
+- `pnpm -C packages/heat-collector pack:check`
+
+Harness notes:
+
+- Coverage thresholds are enforced in `vitest.config.ts` for collector source files.
+- Package validation uses `publint`, `attw --pack`, and API Extractor against the built `dist` output.
+- The package export map splits ESM and CommonJS type resolution, and the migration CLI entrypoint keeps a shebang so packed binaries are executable.
 
 ## 8) Extension points
 
 Safe paths:
+
 - Add API route in `apiRouter` + matching schema in `validation.ts`.
 - Add ingest pre-processing logic via `hooks.onBeforeInsert` for host-level customization.
 - Extend storage fields through `metaJson` for additive metadata without immediate schema churn.
 
 When adding new event types:
+
 1. Update `eventSchema` union.
 2. Update `insertEvents` handling.
 3. Decide plottable behavior in `buildHeatmap`.
@@ -164,11 +194,12 @@ When adding new event types:
 - **In-memory JWT/JWKS cache only**; multi-instance systems may fetch keys independently.
 - **Unauthenticated query APIs by default**: query routes preserve existing compatibility and rely on host-level protection when exposed outside trusted contexts.
 - **`any`-heavy DB abstractions** reduce type safety in persistence code.
-- **No formal linting** (`lint` script placeholder) increases risk of drift/style inconsistency.
+- **Harness maintenance burden**: package export maps, CLI packaging checks, API reports, and coverage thresholds now catch more regressions, but require deliberate updates when public APIs or packaging semantics change.
 
 ## 10) Coding-agent checklist
 
 Before modifications:
+
 - Inspect `collector.ts`, `validation.ts`, `db.ts`, and `schema.ts` together.
 - Confirm SQL and Mongo paths are both covered for behavior changes.
 - Check whether response header/error contract is externally relied upon.
@@ -176,6 +207,7 @@ Before modifications:
 - For hook or query changes, preserve hook-output revalidation and SQL/Mongo session path filtering before pagination.
 
 After modifications:
+
 - Run `pnpm -C packages/heat-collector test`.
 - If integration behavior changed, run root `pnpm test` (includes e2e).
 - Verify auth mode behavior (`projectKey` vs `jwt` vs `both`) if touching ingest auth path.

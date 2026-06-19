@@ -49,11 +49,7 @@ describe("heat-collector", () => {
   it("ingests events and serves heatmap + sessions", async () => {
     const { app, dbFile } = await createApp();
 
-    await request(app)
-      .post("/ingest")
-      .set("x-project-key", "dev-project-key")
-      .send(buildPayload())
-      .expect(200);
+    await request(app).post("/ingest").set("x-project-key", "dev-project-key").send(buildPayload()).expect(200);
 
     const db = new Database(dbFile);
     const project = db.prepare("select id from projects where key = ?").get("dev-project-key") as any;
@@ -66,24 +62,15 @@ describe("heat-collector", () => {
 
     expect(heatmap.body.points.length).toBeGreaterThan(0);
 
-    const sessions = await request(app)
-      .get(`/api/projects/${project.id}/sessions`)
-      .query({ limit: 10 })
-      .expect(200);
+    const sessions = await request(app).get(`/api/projects/${project.id}/sessions`).query({ limit: 10 }).expect(200);
 
     expect(sessions.body.sessions.length).toBe(1);
 
-    const detail = await request(app)
-      .get("/api/sessions/session-1")
-      .query({ limit: 10 })
-      .expect(200);
+    const detail = await request(app).get("/api/sessions/session-1").query({ limit: 10 }).expect(200);
 
     expect(detail.body.events.length).toBe(1);
 
-    const events = await request(app)
-      .get(`/api/projects/${project.id}/events`)
-      .query({ limit: 10 })
-      .expect(200);
+    const events = await request(app).get(`/api/projects/${project.id}/events`).query({ limit: 10 }).expect(200);
 
     expect(events.body.events.length).toBe(1);
     expect(events.body.meta.count).toBe(1);
@@ -95,11 +82,7 @@ describe("heat-collector", () => {
   it("rejects invalid payloads", async () => {
     const { app } = await createApp();
 
-    await request(app)
-      .post("/ingest")
-      .set("x-project-key", "dev-project-key")
-      .send({})
-      .expect(400);
+    await request(app).post("/ingest").set("x-project-key", "dev-project-key").send({}).expect(400);
   });
 
   it("returns structured errors for malformed json and oversized bodies", async () => {
@@ -144,17 +127,9 @@ describe("heat-collector", () => {
     const app = express();
     app.use(collector.router);
 
-    await request(app)
-      .post("/ingest")
-      .set("x-project-key", "rate-limit-key")
-      .send(buildPayload())
-      .expect(200);
+    await request(app).post("/ingest").set("x-project-key", "rate-limit-key").send(buildPayload()).expect(200);
 
-    await request(app)
-      .post("/ingest")
-      .set("x-project-key", "rate-limit-key")
-      .send(buildPayload())
-      .expect(429);
+    await request(app).post("/ingest").set("x-project-key", "rate-limit-key").send(buildPayload()).expect(429);
   });
 
   it("keeps rate limits isolated per collector instance", async () => {
@@ -207,10 +182,7 @@ describe("heat-collector", () => {
   it("returns structured query errors and request id headers", async () => {
     const { app } = await createApp();
 
-    const res = await request(app)
-      .get("/api/projects/project-id/heatmap")
-      .query({ resolution: 1 })
-      .expect(400);
+    const res = await request(app).get("/api/projects/project-id/heatmap").query({ resolution: 1 }).expect(400);
 
     expect(res.body.code).toBe("invalid_query");
     expect(res.body.requestId).toBeTruthy();
@@ -222,11 +194,7 @@ describe("heat-collector", () => {
     const payload = buildPayload();
     payload.events[0].y = 1500;
 
-    await request(app)
-      .post("/ingest")
-      .set("x-project-key", "dev-project-key")
-      .send(payload)
-      .expect(200);
+    await request(app).post("/ingest").set("x-project-key", "dev-project-key").send(payload).expect(200);
 
     const db = new Database(dbFile);
     const project = db.prepare("select id from projects where key = ?").get("dev-project-key") as any;
@@ -261,11 +229,7 @@ describe("heat-collector", () => {
       ]
     };
 
-    await request(app)
-      .post("/ingest")
-      .set("x-project-key", "dev-project-key")
-      .send(payload)
-      .expect(200);
+    await request(app).post("/ingest").set("x-project-key", "dev-project-key").send(payload).expect(200);
 
     const db = new Database(dbFile);
     const project = db.prepare("select id from projects where key = ?").get("dev-project-key") as any;

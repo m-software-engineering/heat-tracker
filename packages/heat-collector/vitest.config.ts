@@ -5,7 +5,15 @@ export default defineConfig({
     environment: "node",
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"]
+      reporter: ["text", "json", "lcov"],
+      include: ["src/**/*.ts"],
+      exclude: ["src/**/*.test.ts", "src/**/__fixtures__/**"],
+      thresholds: {
+        branches: 50,
+        functions: 80,
+        lines: 70,
+        statements: 70
+      }
     }
   }
 });

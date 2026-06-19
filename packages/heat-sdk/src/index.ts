@@ -153,11 +153,11 @@ const DEFAULT_BLOCK_SELECTORS = [
   "[data-private]",
   "input[type=password]",
   "input[type=hidden]",
-  "input[autocomplete=\"one-time-code\"]",
-  "input[autocomplete=\"current-password\"]",
-  "input[autocomplete=\"cc-number\"]",
-  "input[autocomplete=\"cc-csc\"]",
-  "input[autocomplete=\"cc-exp\"]"
+  'input[autocomplete="one-time-code"]',
+  'input[autocomplete="current-password"]',
+  'input[autocomplete="cc-number"]',
+  'input[autocomplete="cc-csc"]',
+  'input[autocomplete="cc-exp"]'
 ];
 
 const DEFAULT_CONFIG: ResolvedConfig = {
@@ -458,7 +458,9 @@ class TrackerImpl implements Tracker {
 
   constructor(config: ResolvedConfig) {
     this.config = config;
-    this.sessionStore = getBrowserStorage(this.config.session.persist === "browser" ? "localStorage" : "sessionStorage");
+    this.sessionStore = getBrowserStorage(
+      this.config.session.persist === "browser" ? "localStorage" : "sessionStorage"
+    );
     this.queueStore = getBrowserStorage("localStorage");
     const session = this.loadSession();
     this.sessionId = session.id;
@@ -814,7 +816,10 @@ class TrackerImpl implements Tracker {
     const target = event.target as Element | null;
     const config = this.config.capture.keyboard;
     if (!config?.enabled || config.mode === "off") return;
-    if (config.mode === "allowlist" && (!config.allowSelectors?.length || !target || !matchesAny(target, config.allowSelectors))) {
+    if (
+      config.mode === "allowlist" &&
+      (!config.allowSelectors?.length || !target || !matchesAny(target, config.allowSelectors))
+    ) {
       return;
     }
     if (!this.shouldCapture(target, config.allowSelectors)) return;
