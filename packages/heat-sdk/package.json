@@ -2,6 +2,14 @@
   "name": "@m-software-engineering/heat-sdk",
   "version": "0.2.6",
   "description": "Browser SDK for heat-tracker session events and heatmaps",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m-software-engineering/heat-tracker.git",
+    "directory": "packages/heat-sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "commonjs",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
