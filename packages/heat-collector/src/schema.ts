@@ -1,4 +1,7 @@
 import { sql } from "drizzle-orm";
+import * as mysqlCore from "drizzle-orm/mysql-core";
+import * as pgCore from "drizzle-orm/pg-core";
+import * as sqliteCore from "drizzle-orm/sqlite-core";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnyMySqlTable } from "drizzle-orm/mysql-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
@@ -12,6 +15,7 @@ export type Schema = {
   events: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
 };
 
+/** Creates the Drizzle table definitions for the configured storage dialect. */
 export const createSchema = (dialect: Dialect): Schema => {
   if (dialect === "mongodb") {
     return {
@@ -23,7 +27,7 @@ export const createSchema = (dialect: Dialect): Schema => {
   }
 
   if (dialect === "pg") {
-    const { pgTable, text, bigint, integer, index } = require("drizzle-orm/pg-core");
+    const { pgTable, text, bigint, integer, index } = pgCore;
 
     const projects = pgTable(
       "projects",
@@ -90,7 +94,7 @@ export const createSchema = (dialect: Dialect): Schema => {
   }
 
   if (dialect === "mysql") {
-    const { mysqlTable, text, bigint, int, index } = require("drizzle-orm/mysql-core");
+    const { mysqlTable, text, bigint, int, index } = mysqlCore;
 
     const projects = mysqlTable(
       "projects",
@@ -156,7 +160,7 @@ export const createSchema = (dialect: Dialect): Schema => {
     return { projects, users, sessions, events };
   }
 
-  const { sqliteTable, text, integer, index } = require("drizzle-orm/sqlite-core");
+  const { sqliteTable, text, integer, index } = sqliteCore;
 
   const projects = sqliteTable(
     "projects",
@@ -222,6 +226,7 @@ export const createSchema = (dialect: Dialect): Schema => {
   return { projects, users, sessions, events };
 };
 
+/** Builds the idempotent table-creation statements for a SQL dialect. */
 export const buildCreateTableSql = (dialect: Dialect) => {
   if (dialect === "sqlite") {
     return {

@@ -32,6 +32,7 @@ External dependencies:
 - Drizzle ORM for SQL paths.
 - MongoDB native driver for mongo paths.
 - Optional peer DB drivers depending on dialect.
+- Drizzle dialect-core schema modules use static ESM-compatible imports, while optional database drivers remain dynamically imported by the selected adapter.
 
 ## 3) Integration with `heat-sdk`
 
@@ -151,6 +152,7 @@ Discovered tests:
 - `src/collector.test.ts`: SQLite integration tests via Express + supertest.
 - `src/mongodb.test.ts`: fake Mongo implementation tests migration + API behavior.
 - Current reliability coverage includes malformed/oversized JSON, per-instance rate limit isolation, hook-output revalidation, and session path filtering before pagination for SQL and MongoDB.
+- A distribution smoke test builds the package and initializes in-memory SQLite collectors through both the ESM and CommonJS exports, covering package-loader compatibility that source-level Vitest tests cannot exercise.
 
 Workspace integration coverage:
 

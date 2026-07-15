@@ -1,5 +1,11 @@
 # @m-software-engineering/heat-collector
 
+## 0.3.7
+
+### Patch Changes
+
+- Fix SQLite collector startup from the ESM package entrypoint by using ESM-compatible Drizzle schema imports.
+
 ## 0.3.6
 
 ### Patch Changes

@@ -100,9 +100,11 @@ Workspace-level commands:
 Package-level highlights:
 
 - SDK and collector both use `tsup` for build and `vitest` for tests.
+- The collector validates both ESM and CommonJS distribution entrypoints against an in-memory SQLite database after its unit and coverage suites.
 - Collector CLI binary: `heat-collector-migrate` (runs `autoMigrate` with env-based dialect/connection).
 - The deterministic quality harness is centered on `pnpm verify`, which chains formatting, ESLint, TypeScript, builds, coverage, Playwright, Knip, dependency-cruiser, publint, Are The Types Wrong, and API Extractor.
 - GitHub Actions separates PR verification from release publishing: `ci.yml` runs full `pnpm verify` on Node 22 and `pnpm verify:non-e2e` on Node 24 for pull requests, while `cd.yml` runs the Changesets release flow only on pushes to `main` after merges. CI preinstalls Chromium only for the Node 22 browser job because the Playwright suite targets Chromium, emits one aggregate Markdown quality summary from uploaded artifacts, and CodeQL remains handled by GitHub default setup so the repository does not upload duplicate advanced-setup CodeQL SARIF. CD emits a Markdown release summary from Changesets outputs and package manifests.
+- Security workflows pin executable actions to immutable commits. Semgrep scans the full repository, pnpm applies minimum-release-age, exotic-subdependency, and trust-policy safeguards, and the scheduled OSV scan pins its scanner release because upstream does not publish a floating `v2` action ref. OSV findings are uploaded as SARIF even when vulnerabilities are present; upload or scanner infrastructure errors still fail the job, while vulnerability remediation is tracked in GitHub code scanning. The workspace uses pnpm 10.26.0, the first release that supports all three package-install safeguards, and explicitly allows install scripts only for `better-sqlite3`, `esbuild`, and `unrs-resolver`, which require native or platform-specific binaries.
 
 ## 7) Patterns
 
@@ -121,7 +123,7 @@ Concrete, source-based concerns:
 - **Large single-module collector**: `packages/heat-collector/src/collector.ts` combines routing, auth, persistence orchestration, querying, and heatmap aggregation in one file, increasing change risk and cognitive load.
 - **In-memory rate limit store**: buckets are scoped per collector instance and pruned, but are still process-local, not distributed-safe, and reset on restart.
 - **Potential N+1 session counting**: `listSessions` computes event counts per session via repeated queries.
-- **Dynamic `require` in schema module**: mixed module-loading style (`require(...)` inside TypeScript ESM context) may be brittle in some toolchains.
+- **Multi-dialect schema loading**: Drizzle dialect-core modules are imported statically so the published ESM entrypoint remains executable; optional database drivers are still loaded only for the configured adapter.
 - **Unauthenticated query APIs by default**: project heatmap/events/sessions routes preserve existing compatibility and should be protected by the host app when needed.
 - **Harness maintenance burden**: linting, dependency analysis, API reports, package checks, and security workflows now provide stronger coverage, but they need intentional updates when package exports, CI support windows, or generated artifacts change.
 - **Contract duplication**: SDK event definitions and collector validation/event handling are maintained separately, creating drift risk.
