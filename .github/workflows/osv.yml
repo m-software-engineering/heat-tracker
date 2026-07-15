@@ -20,14 +20,16 @@ jobs:
 
       - name: Run OSV Scanner
         uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
+        continue-on-error: true
         with:
           scan-args: |-
             --recursive
             --format sarif
-            --output osv-results.sarif
+            --output-file osv-results.sarif
             .
 
       - name: Upload SARIF
+        if: ${{ !cancelled() }}
         uses: github/codeql-action/upload-sarif@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
         with:
           sarif_file: osv-results.sarif
