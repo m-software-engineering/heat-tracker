@@ -2,6 +2,14 @@
   "name": "@m-software-engineering/heat-collector",
   "version": "0.3.7",
   "description": "Collector server for heat-tracker sessions and events",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m-software-engineering/heat-tracker.git",
+    "directory": "packages/heat-collector"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
