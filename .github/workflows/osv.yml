@@ -20,7 +20,6 @@ jobs:
 
       - name: Run OSV Scanner
         uses: google/osv-scanner-action/osv-scanner-action@8dc09193bb540e09b23da07ad7e30bd33bf87018 # v2.3.8
-        continue-on-error: true
         with:
           scan-args: |-
             --recursive

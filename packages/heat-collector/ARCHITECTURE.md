@@ -28,10 +28,10 @@ Shutdown behavior:
 
 External dependencies:
 
-- Express runtime.
-- Drizzle ORM for SQL paths.
+- Express runtime with a `4.22.2` minimum security floor.
+- Drizzle ORM for SQL paths with a `0.45.2` minimum security floor.
 - MongoDB native driver for mongo paths.
-- Optional peer DB drivers depending on dialect.
+- Optional peer DB drivers depending on dialect; the MySQL2 peer has a `3.23.1` minimum security floor.
 - Drizzle dialect-core schema modules use static ESM-compatible imports, while optional database drivers remain dynamically imported by the selected adapter.
 
 ## 3) Integration with `heat-sdk`

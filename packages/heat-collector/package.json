@@ -46,13 +46,13 @@
     "heat-collector-migrate": "./dist/cli.cjs"
   },
   "dependencies": {
-    "drizzle-orm": "^0.41.0",
-    "express": "^4.19.2",
+    "drizzle-orm": "^0.45.2",
+    "express": "^4.22.2",
     "zod": "^3.24.2"
   },
   "peerDependencies": {
     "pg": "^8.12.0",
-    "mysql2": "^3.10.2",
+    "mysql2": "^3.23.1",
     "better-sqlite3": "^11.5.0",
     "mongodb": "^6.10.0"
   },

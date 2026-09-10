@@ -10,7 +10,7 @@
   "dependencies": {
     "@m-software-engineering/heat-collector": "workspace:*",
     "better-sqlite3": "^11.5.0",
-    "express": "^4.19.2"
+    "express": "^4.22.2"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",
