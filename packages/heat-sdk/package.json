@@ -42,9 +42,9 @@
     "api:local": "api-extractor run --local --verbose"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^1.6.0",
+    "@vitest/coverage-v8": "4.1.11",
     "jsdom": "^24.0.0",
     "typescript": "^5.5.4",
-    "vitest": "^1.6.0"
+    "vitest": "4.1.11"
   }
 }

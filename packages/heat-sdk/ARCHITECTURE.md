@@ -91,6 +91,7 @@ Covered behaviors include:
 - storage fallback when `sessionStorage` is unavailable
 - multi-batch flush/shutdown behavior, including invalid `maxEvents` normalization
 - shutdown flush and shared history restoration
+- identified-user and bearer-auth payloads, click/pointer coordinates, History API navigation capture, and failed-batch retry
 - localStorage queue cleanup
 
 Recommended commands:
@@ -105,6 +106,7 @@ Recommended commands:
 Harness notes:
 
 - Coverage thresholds are enforced in `vitest.config.ts` for SDK source files, and Vitest emits `json-summary` coverage for GitHub Actions quality summaries.
+- The test harness uses the patched Vitest 4.1 line with its matching V8 coverage provider; the root workspace constrains Vitest's compatible Vite dependency to the patched 6.4 line.
 - Package validation uses `publint`, `attw --pack`, and API Extractor against the built `dist` output.
 - The package export map splits ESM and CommonJS type resolution to keep browser consumers and package checkers aligned.
 
