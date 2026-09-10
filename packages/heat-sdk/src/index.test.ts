@@ -68,6 +68,25 @@ describe("heat-sdk", () => {
     expect(clickEvent).toBeDefined();
   });
 
+  it("sends identified users with bearer authentication", async () => {
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key",
+      capture: { click: false, move: { enabled: false, throttleMs: 80 }, scroll: false, pageview: false }
+    });
+
+    tracker.identify("user-1", { plan: "pro" });
+    tracker.setAuthToken("test-token");
+    tracker.track("identified-event");
+    await tracker.flush();
+
+    expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe("Bearer test-token");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.user).toEqual({ id: "user-1", traits: { plan: "pro" } });
+
+    await tracker.shutdown();
+  });
+
   it("captures click coordinates with scroll offset", async () => {
     Object.defineProperty(window, "scrollY", { value: 300, configurable: true });
     Object.defineProperty(window, "scrollX", { value: 25, configurable: true });
@@ -87,6 +106,30 @@ describe("heat-sdk", () => {
     const clickEvent = body.events.find((event: any) => event.type === "click");
     expect(clickEvent.x).toBe(35);
     expect(clickEvent.y).toBe(320);
+  });
+
+  it("batches pointer movement points", async () => {
+    Object.defineProperty(window, "scrollX", { value: 0, configurable: true });
+    Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key",
+      capture: { click: false, move: { enabled: true, throttleMs: 0 }, scroll: false, pageview: false }
+    });
+
+    const btn = document.getElementById("btn") as HTMLButtonElement;
+    btn.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 15, clientY: 25 }));
+    await tracker.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.events).toMatchObject([
+      {
+        type: "move",
+        points: [{ x: 15, y: 25, tsOffset: 0 }]
+      }
+    ]);
+
+    await tracker.shutdown();
   });
 
   it("masks input values when enabled", async () => {
@@ -165,6 +208,54 @@ describe("heat-sdk", () => {
 
     expect(history.pushState).toBe(originalPushState);
     expect(history.replaceState).toBe(originalReplaceState);
+  });
+
+  it("captures pushState and replaceState navigation", async () => {
+    history.replaceState({}, "", "/");
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key",
+      capture: { click: false, move: { enabled: false, throttleMs: 80 }, scroll: false, pageview: true }
+    });
+
+    history.pushState({}, "", "/first");
+    history.replaceState({}, "", "/second");
+    await tracker.flush();
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.events.filter((event: any) => event.type === "pageview")).toMatchObject([
+      { to: "/" },
+      { from: "/", to: "/first" },
+      { from: "/first", to: "/second" }
+    ]);
+
+    await tracker.shutdown();
+    history.replaceState({}, "", "/");
+  });
+
+  it("retries a failed batch", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0);
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 500 }).mockResolvedValue({ ok: true });
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key",
+      capture: { click: false, move: { enabled: false, throttleMs: 80 }, scroll: false, pageview: false },
+      batch: { flushIntervalMs: 60_000 }
+    });
+
+    try {
+      tracker.track("retry-event");
+      await tracker.flush();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(JSON.parse(fetchMock.mock.calls[1][1].body).events[0].name).toBe("retry-event");
+    } finally {
+      await tracker.shutdown();
+      vi.useRealTimers();
+    }
   });
 
   it("clears persisted queue after successful flush", async () => {
