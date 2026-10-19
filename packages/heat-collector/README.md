@@ -106,18 +106,28 @@ Query endpoints also send:
 - `Cache-Control: no-store`
 - `X-Total-Count` or endpoint-specific count headers.
 
-Error payload format is consistent across routes:
+Error payload format is consistent across routes (full catalog: [docs/errors.md](../../docs/errors.md)):
 
 ```json
 {
-  "error": "invalid query",
+  "error": {
+    "code": "HEAT_E_QUERY_INVALID",
+    "message": "A query parameter is invalid.",
+    "cause": "resolution: received \"1\" (Number must be greater than or equal to 8)",
+    "fix": "Correct the parameters listed in details.fieldErrors.",
+    "docs": "https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md#heat_e_query_invalid",
+    "status": 400,
+    "requestId": "...",
+    "details": { "fieldErrors": { "resolution": "Number must be greater than or equal to 8" } }
+  },
   "code": "invalid_query",
-  "message": "Invalid heatmap query parameters.",
-  "requestId": "..."
+  "message": "A query parameter is invalid.",
+  "requestId": "...",
+  "details": { "fieldErrors": { "resolution": "Number must be greater than or equal to 8" } }
 }
 ```
 
-Validation failures include a `details` object.
+Top-level `code`, `message`, `requestId`, and `details` are deprecated and will be removed in the next minor version; read `error` instead.
 
 ### Heatmap query behavior notes
 

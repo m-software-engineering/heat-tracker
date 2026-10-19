@@ -66,10 +66,12 @@ Key modules:
 - `src/db.ts`: adapter factory + auto-migrations/index creation.
 - `src/schema.ts`: dialect-specific table schemas + CREATE TABLE statements.
 - `src/validation.ts`: Zod schemas for ingest and query validation.
-- `src/jwt.ts`: RS256 JWT verification and JWKS caching.
+- `src/http-errors.ts`: `sendError` (wire shape `{ error: HeatError }` + deprecated legacy fields, masked `projectKey`/truncated `ip` in logs, original error logged as `err` only), zod `fieldErrors` and `cause` builders.
+- `src/jwt.ts`: RS256 JWT verification and JWKS caching; every failure throws a `HeatTrackerError` with its own `HEAT_E_JWT_*`/`HEAT_E_JWKS_*` code (all HTTP 401).
 - `src/logger.ts`: structured logger with level filtering.
 - `src/metrics.ts`: in-memory metrics counters.
-- `src/cli.ts`: `heat-collector-migrate` entry for migrations.
+- `src/cli.ts`: `heat-collector-migrate` entry for migrations; validates `HEAT_DIALECT` and prints failures as one `formatHeatError` line.
+- `src/db.ts` setup errors use `HEAT_E_DB_*` codes from `heat-errors`.
 
 Boundary model:
 

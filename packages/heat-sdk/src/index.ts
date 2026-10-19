@@ -1,8 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { HeatTrackerError, SDK_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import { createErrorReporter, ingestHttpError, ingestNetworkError, type ReportError } from "./errors";
+
+export type { HeatError, HeatErrorCode } from "@m-software-engineering/heat-errors";
+export { HeatTrackerError, isHeatError } from "@m-software-engineering/heat-errors";
+
 export type InitConfig = {
   endpoint: string;
   projectKey: string;
+  /** Logs each error code once per page load with its fix and docs link. */
+  debug?: boolean;
+  /** Receives every SDK and collector error; the SDK is otherwise silent after init. */
+  onError?: (err: HeatError) => void;
   app?: { name?: string; version?: string; env?: string };
   session?: {
     idleTimeoutMs?: number;
@@ -67,6 +77,8 @@ type ResolvedCaptureConfig = {
 type ResolvedConfig = {
   endpoint: string;
   projectKey: string;
+  debug?: boolean;
+  onError?: InitConfig["onError"];
   app: { name?: string; version?: string; env?: string };
   session: { idleTimeoutMs: number; persist: "tab" | "browser" };
   batch: {
@@ -436,6 +448,7 @@ const ensureConfig = (config: InitConfig): ResolvedConfig => {
 
 class TrackerImpl implements Tracker {
   private config: ResolvedConfig;
+  private reportError: ReportError;
   private sessionId: string;
   private sessionStartedAt: number;
   private lastSeenAt: number;
@@ -458,6 +471,7 @@ class TrackerImpl implements Tracker {
 
   constructor(config: ResolvedConfig) {
     this.config = config;
+    this.reportError = createErrorReporter(config);
     this.sessionStore = getBrowserStorage(
       this.config.session.persist === "browser" ? "localStorage" : "sessionStorage"
     );
@@ -604,17 +618,24 @@ class TrackerImpl implements Tracker {
       });
 
       if (!res.ok) {
-        throw new Error(`Ingest failed: ${res.status}`);
+        this.reportError(await ingestHttpError(res));
+        this.requeue(batch);
+        return false;
       }
       this.backoffMs = 0;
       this.persistQueue();
       return true;
-    } catch {
-      this.queue = [...batch, ...this.queue];
-      this.persistQueue();
-      this.scheduleRetry();
+    } catch (err) {
+      this.reportError(ingestNetworkError(err));
+      this.requeue(batch);
       return false;
     }
+  }
+
+  private requeue(batch: AnyEvent[]) {
+    this.queue = [...batch, ...this.queue];
+    this.persistQueue();
+    this.scheduleRetry();
   }
 
   private scheduleRetry() {
@@ -924,11 +945,12 @@ const createNoopTracker = (): Tracker => ({
 
 export const init = (config: InitConfig): Tracker => {
   const resolved = ensureConfig(config);
-  if (!resolved.endpoint || !resolved.projectKey) {
-    throw new Error("heat-sdk: endpoint and projectKey are required");
+  const missing = (["endpoint", "projectKey"] as const).filter((key) => !resolved[key]);
+  if (missing.length > 0) {
+    throw new HeatTrackerError(SDK_ERRORS.HEAT_E_CONFIG_MISSING, `${missing.join(" and ")} is missing`);
   }
   if (typeof window === "undefined") {
-    throw new Error("heat-sdk: init must be called in a browser environment");
+    throw new HeatTrackerError(SDK_ERRORS.HEAT_E_NOT_BROWSER, 'typeof window is "undefined"');
   }
 
   if (resolved.privacy.respectDoNotTrack && navigator.doNotTrack === "1") {

@@ -16,6 +16,8 @@ Primary goals observed in code:
 | ---------------------------- | --------------------------------------------------------------------- |
 | `packages/heat-sdk`          | Browser SDK package (`@m-software-engineering/heat-sdk`).             |
 | `packages/heat-collector`    | Express collector package (`@m-software-engineering/heat-collector`). |
+| `packages/heat-errors`       | Zero-dependency `HEAT_E_*` error catalog shared by SDK and collector. |
+| `docs/errors.md`             | Error reference generated from the `heat-errors` catalog.             |
 | `examples/express-collector` | Minimal app that mounts collector router.                             |
 | `examples/nextjs-dashboard`  | Reference dashboard consuming collector APIs.                         |
 | `examples/docker-compose`    | Local MySQL/Postgres bootstrap for SQL adapter testing.               |
@@ -55,6 +57,7 @@ Component responsibilities:
 
 - Dependency direction: `heat-sdk` is independent and publishes payloads over HTTP; `heat-collector` consumes those payload contracts via runtime validation (Zod). There is no direct package import from collector to SDK.
 - Coupling boundary: the ingestion payload schema and event type semantics (`click`, `move`, `scroll`, etc.) are the primary contract.
+- Both packages use `@m-software-engineering/heat-errors` (zero runtime deps) for one error shape. The collector depends on it at runtime; the SDK bundles the entries it uses at build time (`tsup.noExternal`), so its browser ESM build stays dependency-free (≈ +1 KB min+gzip). Shape: `{ code: HEAT_E_*, message, cause, fix, docs, requestId?, status?, details? }`. The collector answers `{ error: HeatError }` and keeps deprecated top-level `code`/`message`/`requestId`/`details` for one minor version; the SDK passes collector errors to `onError`. The catalog is split per surface (`sdk`, `ingest`, `query`, `server`) so the SDK only pulls its own entries, and `docs/errors.md` is regenerated with `corepack pnpm -C packages/heat-errors docs:errors` (a unit test fails when it is stale).
 - Integration appears intentionally loose (HTTP + schema), but schema drift risk exists because event types are duplicated between packages rather than centrally shared.
 
 ## 5) Data/control flow

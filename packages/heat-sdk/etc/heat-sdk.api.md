@@ -15,6 +15,46 @@
 // @public (undocumented)
 export type AnyEvent = ClickEvent | MoveEvent | ScrollEvent | PageviewEvent | CustomEvent_2 | InputEventPayload | KeyboardEventPayload;
 
+// @public
+export type HeatError = {
+    code: HeatErrorCode;
+    message: string;
+    cause: string;
+    fix: string;
+    docs: string;
+    requestId?: string;
+    status?: number;
+    details?: Record<string, unknown>;
+};
+
+// @public
+export type HeatErrorCode = `HEAT_E_${string}`;
+
+// @public
+export class HeatTrackerError extends Error implements HeatError {
+    // Warning: (ae-forgotten-export) The symbol "HeatErrorDefinition" needs to be exported by the entry point index.d.ts
+    // Warning: (ae-forgotten-export) The symbol "HeatErrorExtras" needs to be exported by the entry point index.d.ts
+    constructor(definition: HeatErrorDefinition, cause: string, extras?: HeatErrorExtras);
+    // (undocumented)
+    readonly cause: string;
+    // (undocumented)
+    readonly code: HeatErrorCode;
+    // (undocumented)
+    readonly details?: Record<string, unknown>;
+    // (undocumented)
+    readonly docs: string;
+    // (undocumented)
+    readonly fix: string;
+    // (undocumented)
+    readonly original?: unknown;
+    // (undocumented)
+    readonly requestId?: string;
+    // (undocumented)
+    readonly status?: number;
+    // (undocumented)
+    toJSON(): HeatError;
+}
+
 // @public (undocumented)
 export const init: (config: InitConfig) => Tracker;
 
@@ -22,6 +62,8 @@ export const init: (config: InitConfig) => Tracker;
 export type InitConfig = {
     endpoint: string;
     projectKey: string;
+    debug?: boolean;
+    onError?: (err: HeatError) => void;
     app?: {
         name?: string;
         version?: string;
@@ -64,6 +106,9 @@ export type InitConfig = {
         };
     };
 };
+
+// @public (undocumented)
+export const isHeatError: (value: unknown) => value is HeatError;
 
 // @public (undocumented)
 export type Tracker = {

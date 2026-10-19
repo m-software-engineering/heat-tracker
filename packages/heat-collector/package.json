@@ -46,6 +46,7 @@
     "heat-collector-migrate": "./dist/cli.cjs"
   },
   "dependencies": {
+    "@m-software-engineering/heat-errors": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "express": "^4.22.2",
     "zod": "^3.24.2"

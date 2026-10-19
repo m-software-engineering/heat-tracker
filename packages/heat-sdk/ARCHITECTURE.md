@@ -62,9 +62,10 @@ Operational helpers:
 
 ## 5) Error handling and validation model
 
-- Hard validation at init:
-  - Throws if missing `endpoint` or `projectKey`.
-  - Throws if called outside browser.
+- Hard validation at init (throws `HeatTrackerError`):
+  - `HEAT_E_CONFIG_MISSING` naming the missing `endpoint`/`projectKey`.
+  - `HEAT_E_NOT_BROWSER` if called outside browser.
+- After init the SDK never throws into the host page. `src/errors.ts` reports ingest failures to `onError(err: HeatError)` (the collector's own `error` when present, else `HEAT_E_INGEST_HTTP`/`HEAT_E_INGEST_NETWORK`) and, with `debug: true`, logs each code once per page load. Silent otherwise.
 - Soft-fail model for storage/serialization/listener edge cases:
   - Extensive `try/catch` around storage and JSON operations to avoid app breakage.
 - Network failure handling:

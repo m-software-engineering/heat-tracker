@@ -149,6 +149,9 @@ importers:
 
   packages/heat-collector:
     dependencies:
+      '@m-software-engineering/heat-errors':
+        specifier: workspace:*
+        version: link:../heat-errors
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@11.10.0)(mysql2@3.24.3(@types/node@20.19.30))(pg@8.17.2)
@@ -199,8 +202,26 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(@types/node@20.19.30)(@vitest/coverage-v8@4.1.11)(jsdom@24.1.3)(vite@6.4.3(@types/node@20.19.30)(jiti@2.7.0)(yaml@2.9.0))
 
+  packages/heat-errors:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.16.5
+        version: 20.19.30
+      '@vitest/coverage-v8':
+        specifier: 4.1.11
+        version: 4.1.11(vitest@4.1.11)
+      typescript:
+        specifier: ^5.5.4
+        version: 5.9.3
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@20.19.30)(@vitest/coverage-v8@4.1.11)(jsdom@24.1.3)(vite@6.4.3(@types/node@20.19.30)(jiti@2.7.0)(yaml@2.9.0))
+
   packages/heat-sdk:
     devDependencies:
+      '@m-software-engineering/heat-errors':
+        specifier: workspace:*
+        version: link:../heat-errors
       '@vitest/coverage-v8':
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
