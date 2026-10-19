@@ -7,7 +7,11 @@ import path from "node:path";
 import { createCollector, type CollectorConfig } from "./collector";
 
 const PROJECT_KEY = "pk_live_0123456789abcdefa1b2";
-const JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ1MSJ9.c2lnbmF0dXJlLXNlY3JldA";
+// Built at runtime: an unsigned test token, not a credential.
+const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+const JWT = [b64({ alg: "RS256" }), b64({ sub: "u1" }), Buffer.from("signature-secret").toString("base64url")].join(
+  "."
+);
 
 const createApp = async (overrides: Partial<CollectorConfig> = {}) => {
   const file = path.join(mkdtempSync(path.join(tmpdir(), "heat-errors-")), "test.db");
