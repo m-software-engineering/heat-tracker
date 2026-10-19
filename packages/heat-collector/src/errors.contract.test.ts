@@ -5,6 +5,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createCollector, type CollectorConfig } from "./collector";
+import { resetLegacyWarningForTests } from "./http-errors";
 
 const PROJECT_KEY = "pk_live_0123456789abcdefa1b2";
 // Built at runtime: an unsigned test token, not a credential.
@@ -56,10 +57,28 @@ describe("collector error contract", () => {
       status: 401,
       requestId: res.headers["x-request-id"]
     });
-    // Legacy fields: kept for one minor version.
+    expect(typeof res.body.error).toBe("object"); // legacy `error` string removed
+    expect(res.headers.deprecation).toBe("true");
+    // Legacy fields: removed in the next major.
     expect(res.body.code).toBe("missing_project_key");
     expect(res.body.message).toBe(res.body.error.message);
     expect(res.body.requestId).toBe(res.headers["x-request-id"]);
+  });
+
+  it("logs the legacy-field deprecation warning once per process, naming the new fields", async () => {
+    resetLegacyWarningForTests();
+    const logs = captureLogs();
+    const app = await createApp();
+    await request(app).post("/ingest").send({}).expect(401);
+    await request(app).get("/api/projects/p/heatmap").query({ resolution: 1 }).expect(400);
+    const second = await createApp();
+    await request(second).post("/ingest").send({}).expect(401);
+
+    const warnings = logs.filter((line) => line.includes("deprecated top-level"));
+    expect(warnings).toHaveLength(1);
+    for (const field of ["error.code", "error.message", "error.requestId", "error.details"]) {
+      expect(warnings[0]).toContain(field);
+    }
   });
 
   it("names the query param, received value, and expected format", async () => {
@@ -119,9 +138,14 @@ describe("collector error contract", () => {
       .set("x-project-key", PROJECT_KEY)
       .set("authorization", `Bearer ${JWT}`)
       .send({})
-      .expect(401);
-    expect(jwt.body.error).toMatchObject({ code: "HEAT_E_JWKS_FETCH", cause: expect.stringContaining("HTTP 503") });
-    expect(jwt.body.code).toBe("invalid_jwt");
+      .expect(503);
+    expect(jwt.headers["retry-after"]).toBe("30");
+    expect(jwt.body.error).toMatchObject({
+      code: "HEAT_E_AUTH_JWKS_UNAVAILABLE",
+      status: 503,
+      cause: expect.stringContaining("HTTP 503")
+    });
+    expect(jwt.body.code).toBe("jwks_unavailable");
 
     const everything = [...logs, JSON.stringify(rate.body), JSON.stringify(jwt.body)].join("\n");
     expect(everything).toContain("pk_…a1b2");

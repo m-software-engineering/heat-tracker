@@ -52,7 +52,7 @@ describe("verifyJwt", () => {
   it("reports JWKS download failures", async () => {
     serveJwks({ ok: false, status: 503 });
     const err = await verifyJwt(sign(validClaims()), configFor()).catch((e) => e);
-    expect(err).toMatchObject({ code: "HEAT_E_JWKS_FETCH" });
+    expect(err).toMatchObject({ code: "HEAT_E_AUTH_JWKS_UNAVAILABLE", status: 503 });
     expect(err.cause).toContain("HTTP 503");
   });
 
@@ -61,7 +61,9 @@ describe("verifyJwt", () => {
       "fetch",
       vi.fn(async () => Promise.reject(new Error("ECONNREFUSED")))
     );
-    await expect(verifyJwt(sign(validClaims()), configFor())).rejects.toMatchObject({ code: "HEAT_E_JWKS_FETCH" });
+    await expect(verifyJwt(sign(validClaims()), configFor())).rejects.toMatchObject({
+      code: "HEAT_E_AUTH_JWKS_UNAVAILABLE"
+    });
   });
 
   it("reports a missing key", async () => {

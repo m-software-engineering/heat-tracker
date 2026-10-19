@@ -127,7 +127,18 @@ Error payload format is consistent across routes (full catalog: [docs/errors.md]
 }
 ```
 
-Top-level `code`, `message`, `requestId`, and `details` are deprecated and will be removed in the next minor version; read `error` instead.
+Top-level `code`, `message`, `requestId`, and `details` are deprecated and will be removed in the next major version; read `error.code`, `error.message`, `error.requestId`, and `error.details` instead. Error responses carry `Deprecation: true`, and the collector logs one deprecation warning per process.
+
+**Breaking:** the old top-level `error` string was removed; `error` is now the object.
+
+```js
+// before
+showToast(body.error); // "invalid jwt"
+// after
+showToast(body.error.message); // "The JWT has expired."
+```
+
+A JWKS download failure now returns HTTP 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with `Retry-After: 30` (it used to be 401 `invalid_jwt`).
 
 ### Heatmap query behavior notes
 

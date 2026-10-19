@@ -14,8 +14,10 @@ export type LocalErrorDefinition<C extends HeatErrorCode = HeatErrorCode> = {
  */
 export type HttpErrorDefinition<C extends HeatErrorCode = HeatErrorCode> = LocalErrorDefinition<C> & {
   readonly status: number;
-  /** Deprecated top-level `code` kept for one minor version. */
+  /** Deprecated top-level `code`; removed in the next major. */
   readonly legacyCode: string;
+  /** Sent as the Retry-After header (seconds) for transient failures. */
+  readonly retryAfterSeconds?: number;
 };
 
 export type HeatErrorDefinition<C extends HeatErrorCode = HeatErrorCode> =

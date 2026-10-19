@@ -25,6 +25,6 @@ export const SERVER_ERRORS = {
   HEAT_E_MIGRATION_FAILED: {
     code: "HEAT_E_MIGRATION_FAILED",
     message: "Database migrations did not complete.",
-    fix: "Check DATABASE_URL (or SQLITE_FILE) and that the database user can create tables."
+    fix: "Check DATABASE_URL (or SQLITE_FILE) and that the database user can create tables; rerun with --verbose for the driver message (password masked)."
   }
 } as const satisfies Record<string, LocalErrorDefinition>;

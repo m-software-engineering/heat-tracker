@@ -73,6 +73,7 @@ export class HeatTrackerError extends Error implements HeatError {
 export type HttpErrorDefinition<C extends HeatErrorCode = HeatErrorCode> = LocalErrorDefinition<C> & {
     readonly status: number;
     readonly legacyCode: string;
+    readonly retryAfterSeconds?: number;
 };
 
 // @public
@@ -133,12 +134,13 @@ export const INGEST_ERRORS: {
         readonly message: "No key in the JWKS matches the JWT kid.";
         readonly fix: "Publish the signing key in auth.jwksUrl or issue tokens with a kid that the JWKS lists.";
     };
-    readonly HEAT_E_JWKS_FETCH: {
-        readonly code: "HEAT_E_JWKS_FETCH";
-        readonly status: 401;
-        readonly legacyCode: "invalid_jwt";
-        readonly message: "The collector could not download the JWKS.";
-        readonly fix: "Check auth.jwksUrl and that the collector can reach it.";
+    readonly HEAT_E_AUTH_JWKS_UNAVAILABLE: {
+        readonly code: "HEAT_E_AUTH_JWKS_UNAVAILABLE";
+        readonly status: 503;
+        readonly legacyCode: "jwks_unavailable";
+        readonly retryAfterSeconds: 30;
+        readonly message: "The collector could not download the JWKS, so it cannot verify tokens right now.";
+        readonly fix: "Retry after the Retry-After header; if it persists, check auth.jwksUrl and that the collector can reach it.";
     };
     readonly HEAT_E_JWT_BAD_SIGNATURE: {
         readonly code: "HEAT_E_JWT_BAD_SIGNATURE";
@@ -323,7 +325,7 @@ export const SERVER_ERRORS: {
     readonly HEAT_E_MIGRATION_FAILED: {
         readonly code: "HEAT_E_MIGRATION_FAILED";
         readonly message: "Database migrations did not complete.";
-        readonly fix: "Check DATABASE_URL (or SQLITE_FILE) and that the database user can create tables.";
+        readonly fix: "Check DATABASE_URL (or SQLITE_FILE) and that the database user can create tables; rerun with --verbose for the driver message (password masked).";
     };
 };
 

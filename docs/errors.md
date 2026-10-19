@@ -18,7 +18,25 @@ type HeatError = {
 ```
 
 Collector responses wrap it as `{ "error": HeatError }`. The top-level `code`, `message`, `requestId`, and
-`details` fields are deprecated and will be removed in the next minor version; read `error` instead.
+`details` fields are deprecated and will be removed in the next major version; read `error` instead.
+Error responses carry `Deprecation: true` and the collector logs one deprecation warning per process.
+
+| Deprecated field | Read instead      |
+| ---------------- | ----------------- |
+| `code`           | `error.code`      |
+| `message`        | `error.message`   |
+| `requestId`      | `error.requestId` |
+| `details`        | `error.details`   |
+
+Breaking: the old top-level `error` string is gone; `error` is now the object.
+
+```js
+// before
+console.log(body.error); // "invalid jwt"
+// after
+console.log(body.error.message); // "The JWT has expired."
+```
+
 Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>": "<message>" }`).
 
 ## HEAT_E_CONFIG_MISSING
@@ -97,12 +115,13 @@ Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>":
 - Message: No key in the JWKS matches the JWT kid.
 - Fix: Publish the signing key in auth.jwksUrl or issue tokens with a kid that the JWKS lists.
 
-## HEAT_E_JWKS_FETCH
+## HEAT_E_AUTH_JWKS_UNAVAILABLE
 
-- HTTP status: 401
-- Legacy code: `invalid_jwt`
-- Message: The collector could not download the JWKS.
-- Fix: Check auth.jwksUrl and that the collector can reach it.
+- HTTP status: 503
+- Legacy code: `jwks_unavailable`
+- Retry-After: 30 seconds
+- Message: The collector could not download the JWKS, so it cannot verify tokens right now.
+- Fix: Retry after the Retry-After header; if it persists, check auth.jwksUrl and that the collector can reach it.
 
 ## HEAT_E_JWT_BAD_SIGNATURE
 
@@ -239,4 +258,4 @@ Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>":
 ## HEAT_E_MIGRATION_FAILED
 
 - Message: Database migrations did not complete.
-- Fix: Check DATABASE_URL (or SQLITE_FILE) and that the database user can create tables.
+- Fix: Check DATABASE_URL (or SQLITE_FILE) and that the database user can create tables; rerun with --verbose for the driver message (password masked).

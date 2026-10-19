@@ -58,12 +58,13 @@ export const INGEST_ERRORS = {
     message: "No key in the JWKS matches the JWT kid.",
     fix: "Publish the signing key in auth.jwksUrl or issue tokens with a kid that the JWKS lists."
   },
-  HEAT_E_JWKS_FETCH: {
-    code: "HEAT_E_JWKS_FETCH",
-    status: 401,
-    legacyCode: "invalid_jwt",
-    message: "The collector could not download the JWKS.",
-    fix: "Check auth.jwksUrl and that the collector can reach it."
+  HEAT_E_AUTH_JWKS_UNAVAILABLE: {
+    code: "HEAT_E_AUTH_JWKS_UNAVAILABLE",
+    status: 503,
+    legacyCode: "jwks_unavailable",
+    retryAfterSeconds: 30,
+    message: "The collector could not download the JWKS, so it cannot verify tokens right now.",
+    fix: "Retry after the Retry-After header; if it persists, check auth.jwksUrl and that the collector can reach it."
   },
   HEAT_E_JWT_BAD_SIGNATURE: {
     code: "HEAT_E_JWT_BAD_SIGNATURE",

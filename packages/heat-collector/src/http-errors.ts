@@ -20,6 +20,40 @@ type SendErrorOptions = {
   headers?: Record<string, string>;
 };
 
+/** Deprecated top-level fields and their replacements. Removed in the next major. */
+export const LEGACY_FIELDS = {
+  code: "error.code",
+  message: "error.message",
+  requestId: "error.requestId",
+  details: "error.details"
+} as const;
+
+let legacyWarningLogged = false;
+
+/**
+ * The collector cannot see which fields a client reads, so it warns once per process, on the
+ * first error response that carries the legacy fields. Clients also get a `Deprecation` header.
+ */
+const warnLegacyFieldsOnce = (logger: Logger) => {
+  if (legacyWarningLogged) return;
+  legacyWarningLogged = true;
+  logger.warn(
+    "Error responses still include deprecated top-level code, message, requestId, and details; " +
+      "read error.code, error.message, error.requestId, and error.details instead. Removed in the next major version.",
+    {
+      deprecated: Object.keys(LEGACY_FIELDS),
+      replacements: LEGACY_FIELDS,
+      removal: "next major version",
+      docs: "https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md"
+    }
+  );
+};
+
+/** Test-only: lets each test observe the once-per-process warning. */
+export const resetLegacyWarningForTests = () => {
+  legacyWarningLogged = false;
+};
+
 export const resolveRequestId = (req: Request) => (req as RequestWithContext).requestId || "unknown";
 
 const redactContext = (context: Record<string, unknown>) => ({
@@ -30,7 +64,7 @@ const redactContext = (context: Record<string, unknown>) => ({
 
 /**
  * Sends `{ error: HeatError }` plus the deprecated top-level `code`/`message`/`requestId`/`details`
- * fields (kept for one minor version) and logs the same error server-side.
+ * fields (removed in the next major) and logs the same error server-side.
  */
 export const sendError = (
   logger: Logger,
@@ -41,9 +75,16 @@ export const sendError = (
   options: SendErrorOptions = {}
 ) => {
   const rid = resolveRequestId(req);
-  for (const [key, value] of Object.entries(options.headers ?? {})) {
+  const headers = {
+    ...(definition.retryAfterSeconds !== undefined ? { "Retry-After": String(definition.retryAfterSeconds) } : {}),
+    ...options.headers,
+    Deprecation: "true",
+    Link: '<https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md>; rel="deprecation"'
+  };
+  for (const [key, value] of Object.entries(headers)) {
     res.setHeader(key, value);
   }
+  warnLegacyFieldsOnce(logger);
 
   const error = createHeatError(definition, cause, { requestId: rid, details: options.details });
   const level = options.logLevel || "warn";

@@ -23,13 +23,34 @@ export const renderErrorsMarkdown = () => {
     "```",
     "",
     'Collector responses wrap it as `{ "error": HeatError }`. The top-level `code`, `message`, `requestId`, and',
-    "`details` fields are deprecated and will be removed in the next minor version; read `error` instead.",
+    "`details` fields are deprecated and will be removed in the next major version; read `error` instead.",
+    "Error responses carry `Deprecation: true` and the collector logs one deprecation warning per process.",
+    "",
+    "| Deprecated field | Read instead      |",
+    "| ---------------- | ----------------- |",
+    "| `code`           | `error.code`      |",
+    "| `message`        | `error.message`   |",
+    "| `requestId`      | `error.requestId` |",
+    "| `details`        | `error.details`   |",
+    "",
+    "Breaking: the old top-level `error` string is gone; `error` is now the object.",
+    "",
+    "```js",
+    "// before",
+    'console.log(body.error); // "invalid jwt"',
+    "// after",
+    'console.log(body.error.message); // "The JWT has expired."',
+    "```",
+    "",
     'Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>": "<message>" }`).',
     ""
   ];
   for (const def of Object.values(getCatalog())) {
     lines.push(`## ${def.code}`, "");
-    if ("status" in def) lines.push(`- HTTP status: ${def.status}`, `- Legacy code: \`${def.legacyCode}\``);
+    if ("status" in def) {
+      lines.push(`- HTTP status: ${def.status}`, `- Legacy code: \`${def.legacyCode}\``);
+      if ("retryAfterSeconds" in def) lines.push(`- Retry-After: ${def.retryAfterSeconds} seconds`);
+    }
     lines.push(`- Message: ${def.message}`, `- Fix: ${def.fix}`, "");
   }
   return lines.join("\n");

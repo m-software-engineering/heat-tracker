@@ -61,12 +61,12 @@ const getJwk = async (jwksUrl: string, kid?: string): Promise<Jwk | null> => {
   try {
     res = await fetch(jwksUrl);
   } catch (err) {
-    throw new HeatTrackerError(INGEST_ERRORS.HEAT_E_JWKS_FETCH, `GET ${jwksUrl} failed: network error`, {
+    throw new HeatTrackerError(INGEST_ERRORS.HEAT_E_AUTH_JWKS_UNAVAILABLE, `GET ${jwksUrl} failed: network error`, {
       original: err
     });
   }
   if (!res.ok) {
-    fail("HEAT_E_JWKS_FETCH", `GET ${jwksUrl} returned HTTP ${res.status}`);
+    fail("HEAT_E_AUTH_JWKS_UNAVAILABLE", `GET ${jwksUrl} returned HTTP ${res.status}`);
   }
   const data = (await res.json()) as { keys: Jwk[] };
   const keys: Record<string, Jwk> = {};

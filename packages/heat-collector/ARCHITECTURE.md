@@ -66,11 +66,11 @@ Key modules:
 - `src/db.ts`: adapter factory + auto-migrations/index creation.
 - `src/schema.ts`: dialect-specific table schemas + CREATE TABLE statements.
 - `src/validation.ts`: Zod schemas for ingest and query validation.
-- `src/http-errors.ts`: `sendError` (wire shape `{ error: HeatError }` + deprecated legacy fields, masked `projectKey`/truncated `ip` in logs, original error logged as `err` only), zod `fieldErrors` and `cause` builders.
-- `src/jwt.ts`: RS256 JWT verification and JWKS caching; every failure throws a `HeatTrackerError` with its own `HEAT_E_JWT_*`/`HEAT_E_JWKS_*` code (all HTTP 401).
+- `src/http-errors.ts`: `sendError` (wire shape `{ error: HeatError }` + deprecated legacy fields, `Deprecation`/`Link` headers, once-per-process deprecation warning, catalog-driven `Retry-After`, masked `projectKey`/truncated `ip` in logs, original error logged as `err` only), zod `fieldErrors` and `cause` builders.
+- `src/jwt.ts`: RS256 JWT verification and JWKS caching; every failure throws a `HeatTrackerError` with its own `HEAT_E_JWT_*`/`HEAT_E_JWKS_*` code (HTTP 401), except JWKS download failure: `HEAT_E_AUTH_JWKS_UNAVAILABLE`, HTTP 503 with `Retry-After` taken from the catalog's `retryAfterSeconds`.
 - `src/logger.ts`: structured logger with level filtering.
 - `src/metrics.ts`: in-memory metrics counters.
-- `src/cli.ts`: `heat-collector-migrate` entry for migrations; validates `HEAT_DIALECT` and prints failures as one `formatHeatError` line.
+- `src/cli.ts`: `heat-collector-migrate` entry for migrations; validates `HEAT_DIALECT` and prints failures as one `formatHeatError` line. `src/cli-errors.ts` builds the `HEAT_E_MIGRATION_FAILED` cause: the innermost driver error class + code + `host:port`, never the connection string. The raw driver message is added only with `--verbose`, after `maskSecrets` removes the URL password (raw and decoded) and `password=` pairs.
 - `src/db.ts` setup errors use `HEAT_E_DB_*` codes from `heat-errors`.
 
 Boundary model:
