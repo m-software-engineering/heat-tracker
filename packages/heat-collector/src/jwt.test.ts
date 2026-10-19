@@ -73,6 +73,27 @@ describe("verifyJwt", () => {
     });
   });
 
+  it("rejects an unknown kid instead of falling back to the first key", async () => {
+    serveJwks();
+    const config = configFor();
+    const err = await verifyJwt(sign(validClaims(), privateKey, "rotated-away"), config).catch((e) => e);
+    expect(err).toMatchObject({ code: "HEAT_E_JWKS_KEY_NOT_FOUND", cause: 'no JWKS key for kid "rotated-away"' });
+    expect(err.internal).toEqual({ jwksUrl: config.jwksUrl });
+    // Cached path behaves the same.
+    await expect(verifyJwt(sign(validClaims(), privateKey, "rotated-away"), config)).rejects.toMatchObject({
+      code: "HEAT_E_JWKS_KEY_NOT_FOUND"
+    });
+  });
+
+  it("keeps the JWKS URL out of the client-facing cause", async () => {
+    serveJwks({ ok: false, status: 503 });
+    const config = configFor();
+    const err = await verifyJwt(sign(validClaims()), config).catch((e) => e);
+    expect(err.cause).toBe("JWKS returned HTTP 503");
+    expect(JSON.stringify(err)).not.toContain(config.jwksUrl);
+    expect(err.internal).toEqual({ jwksUrl: config.jwksUrl });
+  });
+
   it.each([
     ["HEAT_E_JWT_BAD_SIGNATURE", () => sign(validClaims(), other.privateKey), "does not verify"],
     ["HEAT_E_JWT_EXPIRED", () => sign({ ...validClaims(), exp: now() - 10 }), "is before now"],

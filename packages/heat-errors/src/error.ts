@@ -9,16 +9,20 @@ export type HeatErrorExtras = {
   requestId?: string;
   /** Original error. Kept in memory for server-side logs; never serialized. */
   original?: unknown;
+  /** Server-only context (URLs, ids) for logs; never serialized. */
+  internal?: Record<string, unknown>;
+  /** Replaces the catalog message when it must name a runtime value (still one sentence). */
+  message?: string;
 };
 
 /** Builds the plain `HeatError` object for a catalog entry. */
 export const createHeatError = (
   definition: HeatErrorDefinition,
   cause: string,
-  extras: Omit<HeatErrorExtras, "original"> = {}
+  extras: Omit<HeatErrorExtras, "original" | "internal"> = {}
 ): HeatError => ({
   code: definition.code,
-  message: definition.message,
+  message: extras.message ?? definition.message,
   cause,
   fix: definition.fix,
   docs: docsUrl(definition.code),
@@ -37,9 +41,10 @@ export class HeatTrackerError extends Error implements HeatError {
   readonly requestId?: string;
   readonly details?: Record<string, unknown>;
   readonly original?: unknown;
+  readonly internal?: Record<string, unknown>;
 
   constructor(definition: HeatErrorDefinition, cause: string, extras: HeatErrorExtras = {}) {
-    super(definition.message);
+    super(extras.message ?? definition.message);
     const plain = createHeatError(definition, cause, extras);
     this.name = "HeatTrackerError";
     this.code = plain.code;
@@ -50,6 +55,7 @@ export class HeatTrackerError extends Error implements HeatError {
     this.requestId = plain.requestId;
     this.details = plain.details;
     Object.defineProperty(this, "original", { value: extras.original, enumerable: false });
+    Object.defineProperty(this, "internal", { value: extras.internal, enumerable: false });
   }
 
   toJSON(): HeatError {

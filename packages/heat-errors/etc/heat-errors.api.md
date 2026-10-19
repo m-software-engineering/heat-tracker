@@ -10,7 +10,7 @@
 export type CatalogCode = keyof Catalog;
 
 // @public
-export const createHeatError: (definition: HeatErrorDefinition, cause: string, extras?: Omit<HeatErrorExtras, "original">) => HeatError;
+export const createHeatError: (definition: HeatErrorDefinition, cause: string, extras?: Omit<HeatErrorExtras, "original" | "internal">) => HeatError;
 
 // @public (undocumented)
 export const docsUrl: (code: HeatErrorCode) => string;
@@ -44,6 +44,8 @@ export type HeatErrorExtras = {
     details?: Record<string, unknown>;
     requestId?: string;
     original?: unknown;
+    internal?: Record<string, unknown>;
+    message?: string;
 };
 
 // @public
@@ -59,6 +61,8 @@ export class HeatTrackerError extends Error implements HeatError {
     readonly docs: string;
     // (undocumented)
     readonly fix: string;
+    // (undocumented)
+    readonly internal?: Record<string, unknown>;
     // (undocumented)
     readonly original?: unknown;
     // (undocumented)
@@ -91,6 +95,13 @@ export const INGEST_ERRORS: {
         readonly legacyCode: "invalid_json";
         readonly message: "The request body is not valid JSON.";
         readonly fix: "Send Content-Type: application/json with a JSON.stringify()-ed body.";
+    };
+    readonly HEAT_E_UNSUPPORTED_MEDIA_TYPE: {
+        readonly code: "HEAT_E_UNSUPPORTED_MEDIA_TYPE";
+        readonly status: 415;
+        readonly legacyCode: "unsupported_media_type";
+        readonly message: "The ingest body is not sent as JSON.";
+        readonly fix: "Send the header Content-Type: application/json with the request.";
     };
     readonly HEAT_E_PROJECT_KEY_MISSING: {
         readonly code: "HEAT_E_PROJECT_KEY_MISSING";
@@ -215,6 +226,13 @@ export const maskProjectKey: (key: string) => string;
 
 // @public
 export const QUERY_ERRORS: {
+    readonly HEAT_E_ROUTE_NOT_FOUND: {
+        readonly code: "HEAT_E_ROUTE_NOT_FOUND";
+        readonly status: 404;
+        readonly legacyCode: "not_found";
+        readonly message: "The collector has no route for this method and path.";
+        readonly fix: "Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics.";
+    };
     readonly HEAT_E_QUERY_INVALID: {
         readonly code: "HEAT_E_QUERY_INVALID";
         readonly status: 400;
@@ -280,7 +298,7 @@ export const renderErrorsMarkdown: () => string;
 export const SDK_ERRORS: {
     readonly HEAT_E_CONFIG_MISSING: {
         readonly code: "HEAT_E_CONFIG_MISSING";
-        readonly message: "init() was called without a required config key.";
+        readonly message: "init() is missing a required config key.";
         readonly fix: "Pass both keys: init({ endpoint: \"https://collector.example.com/ingest\", projectKey: \"pk_live_a1b2\" }).";
     };
     readonly HEAT_E_NOT_BROWSER: {

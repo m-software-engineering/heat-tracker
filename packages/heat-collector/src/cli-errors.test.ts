@@ -23,7 +23,9 @@ describe("migrationFailureCause", () => {
   });
 
   it("uses the first inner error code of an AggregateError", () => {
-    const err = new AggregateError([Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" })]);
+    const AggregateErrorCtor = (globalThis as unknown as { AggregateError: new (errors: unknown[]) => Error })
+      .AggregateError;
+    const err = new AggregateErrorCtor([Object.assign(new Error("connect ECONNREFUSED"), { code: "ECONNREFUSED" })]);
     expect(migrationFailureCause(err, { dialect: "mysql", connectionString: "mysql://u:p@localhost/db" })).toBe(
       "AggregateError ECONNREFUSED (mysql at localhost)"
     );

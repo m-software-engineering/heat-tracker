@@ -43,7 +43,20 @@ describe("heat-sdk errors", () => {
       thrown = err;
     }
     expect(isHeatError(thrown)).toBe(true);
-    expect(thrown).toMatchObject({ code: "HEAT_E_CONFIG_MISSING", cause: "projectKey is missing" });
+    expect(thrown).toMatchObject({
+      code: "HEAT_E_CONFIG_MISSING",
+      message: "init() is missing projectKey.",
+      cause: "projectKey is missing"
+    });
+  });
+
+  it("names every missing key with plural grammar", () => {
+    expect(() => init({ endpoint: "", projectKey: "" })).toThrow(
+      expect.objectContaining({
+        message: "init() is missing endpoint and projectKey.",
+        cause: "endpoint and projectKey are missing"
+      })
+    );
   });
 
   it("passes the collector HeatError to onError and keeps the batch for retry", async () => {

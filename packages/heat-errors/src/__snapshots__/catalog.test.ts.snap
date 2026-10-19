@@ -25,7 +25,9 @@ exports[`catalog > pins the HTTP status of every collector code 1`] = `
   "HEAT_E_QUERY_INVALID": 400,
   "HEAT_E_QUERY_TO": 400,
   "HEAT_E_RATE_LIMITED": 429,
+  "HEAT_E_ROUTE_NOT_FOUND": 404,
   "HEAT_E_SESSIONS_QUERY_FAILED": 500,
   "HEAT_E_SESSION_DETAIL_FAILED": 500,
+  "HEAT_E_UNSUPPORTED_MEDIA_TYPE": 415,
 }
 `;

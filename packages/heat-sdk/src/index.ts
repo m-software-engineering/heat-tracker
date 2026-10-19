@@ -947,7 +947,14 @@ export const init = (config: InitConfig): Tracker => {
   const resolved = ensureConfig(config);
   const missing = (["endpoint", "projectKey"] as const).filter((key) => !resolved[key]);
   if (missing.length > 0) {
-    throw new HeatTrackerError(SDK_ERRORS.HEAT_E_CONFIG_MISSING, `${missing.join(" and ")} is missing`);
+    const keys = missing.join(" and ");
+    throw new HeatTrackerError(
+      SDK_ERRORS.HEAT_E_CONFIG_MISSING,
+      `${keys} ${missing.length > 1 ? "are" : "is"} missing`,
+      {
+        message: `init() is missing ${keys}.`
+      }
+    );
   }
   if (typeof window === "undefined") {
     throw new HeatTrackerError(SDK_ERRORS.HEAT_E_NOT_BROWSER, 'typeof window is "undefined"');

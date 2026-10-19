@@ -16,6 +16,13 @@ export const INGEST_ERRORS = {
     message: "The request body is not valid JSON.",
     fix: "Send Content-Type: application/json with a JSON.stringify()-ed body."
   },
+  HEAT_E_UNSUPPORTED_MEDIA_TYPE: {
+    code: "HEAT_E_UNSUPPORTED_MEDIA_TYPE",
+    status: 415,
+    legacyCode: "unsupported_media_type",
+    message: "The ingest body is not sent as JSON.",
+    fix: "Send the header Content-Type: application/json with the request."
+  },
   HEAT_E_PROJECT_KEY_MISSING: {
     code: "HEAT_E_PROJECT_KEY_MISSING",
     status: 401,

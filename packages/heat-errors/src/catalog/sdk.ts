@@ -4,7 +4,8 @@ import type { LocalErrorDefinition } from "../types";
 export const SDK_ERRORS = {
   HEAT_E_CONFIG_MISSING: {
     code: "HEAT_E_CONFIG_MISSING",
-    message: "init() was called without a required config key.",
+    /** The SDK replaces this with one naming the missing key(s). */
+    message: "init() is missing a required config key.",
     fix: 'Pass both keys: init({ endpoint: "https://collector.example.com/ingest", projectKey: "pk_live_a1b2" }).'
   },
   HEAT_E_NOT_BROWSER: {

@@ -2,6 +2,13 @@ import type { HttpErrorDefinition } from "../types";
 
 /** Collector query API errors. */
 export const QUERY_ERRORS = {
+  HEAT_E_ROUTE_NOT_FOUND: {
+    code: "HEAT_E_ROUTE_NOT_FOUND",
+    status: 404,
+    legacyCode: "not_found",
+    message: "The collector has no route for this method and path.",
+    fix: "Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics."
+  },
   HEAT_E_QUERY_INVALID: {
     code: "HEAT_E_QUERY_INVALID",
     status: 400,

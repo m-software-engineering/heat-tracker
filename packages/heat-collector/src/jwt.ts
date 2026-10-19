@@ -49,24 +49,30 @@ const decodeJson = <T>(input: string): T => {
   return JSON.parse(decoded) as T;
 };
 
+/** A token with a kid must match that exact key; only kid-less tokens use the first key. */
+const pickKey = (keys: Record<string, Jwk>, kid?: string): Jwk | null =>
+  kid ? (keys[kid] ?? null) : (Object.values(keys)[0] ?? null);
+
 const getJwk = async (jwksUrl: string, kid?: string): Promise<Jwk | null> => {
   const entry = cache[jwksUrl];
   const now = Date.now();
   if (entry && now - entry.fetchedAt < 5 * 60 * 1000) {
-    if (kid && entry.keys[kid]) return entry.keys[kid];
-    return Object.values(entry.keys)[0] || null;
+    return pickKey(entry.keys, kid);
   }
 
   let res: Response;
   try {
     res = await fetch(jwksUrl);
   } catch (err) {
-    throw new HeatTrackerError(INGEST_ERRORS.HEAT_E_AUTH_JWKS_UNAVAILABLE, `GET ${jwksUrl} failed: network error`, {
-      original: err
+    throw new HeatTrackerError(INGEST_ERRORS.HEAT_E_AUTH_JWKS_UNAVAILABLE, "JWKS request failed: network error", {
+      original: err,
+      internal: { jwksUrl }
     });
   }
   if (!res.ok) {
-    fail("HEAT_E_AUTH_JWKS_UNAVAILABLE", `GET ${jwksUrl} returned HTTP ${res.status}`);
+    throw new HeatTrackerError(INGEST_ERRORS.HEAT_E_AUTH_JWKS_UNAVAILABLE, `JWKS returned HTTP ${res.status}`, {
+      internal: { jwksUrl }
+    });
   }
   const data = (await res.json()) as { keys: Jwk[] };
   const keys: Record<string, Jwk> = {};
@@ -74,8 +80,7 @@ const getJwk = async (jwksUrl: string, kid?: string): Promise<Jwk | null> => {
     if (key.kid) keys[key.kid] = key;
   }
   cache[jwksUrl] = { fetchedAt: now, keys };
-  if (kid && keys[kid]) return keys[kid];
-  return Object.values(keys)[0] || null;
+  return pickKey(keys, kid);
 };
 
 export const verifyJwt = async (token: string, config: JwtConfig): Promise<JwtPayload> => {
@@ -99,9 +104,10 @@ export const verifyJwt = async (token: string, config: JwtConfig): Promise<JwtPa
 
   const jwk = await getJwk(config.jwksUrl, header.kid);
   if (!jwk) {
-    return fail(
-      "HEAT_E_JWKS_KEY_NOT_FOUND",
-      `no key for kid ${JSON.stringify(header.kid ?? null)} at ${config.jwksUrl}`
+    throw new HeatTrackerError(
+      INGEST_ERRORS.HEAT_E_JWKS_KEY_NOT_FOUND,
+      `no JWKS key for kid ${JSON.stringify(header.kid ?? null)}`,
+      { internal: { jwksUrl: config.jwksUrl } }
     );
   }
 

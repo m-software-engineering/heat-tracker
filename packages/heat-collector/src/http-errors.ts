@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import type { ZodError } from "zod";
 import {
+  HeatTrackerError,
   createHeatError,
   maskProjectKey,
   truncateIp,
@@ -56,6 +57,24 @@ export const resetLegacyWarningForTests = () => {
 
 export const resolveRequestId = (req: Request) => (req as RequestWithContext).requestId || "unknown";
 
+/** Logs code + cause (plus server-only context); never a stack. */
+const describeOriginal = (original: unknown): Record<string, unknown> => {
+  if (original instanceof HeatTrackerError) {
+    return {
+      code: original.code,
+      cause: original.cause,
+      ...original.internal,
+      ...(original.original !== undefined ? { inner: describeOriginal(original.original) } : {})
+    };
+  }
+  if (original instanceof Error) {
+    const code = (original as { code?: unknown }).code;
+    const hasCode = typeof code === "string" || typeof code === "number";
+    return { name: original.name, ...(hasCode ? { code: String(code) } : {}) };
+  }
+  return { type: typeof original };
+};
+
 const redactContext = (context: Record<string, unknown>) => ({
   ...context,
   ...(typeof context.projectKey === "string" ? { projectKey: maskProjectKey(context.projectKey) } : {}),
@@ -95,7 +114,7 @@ export const sendError = (
     cause,
     ...redactContext(options.context ?? {}),
     ...(options.details !== undefined ? { details: options.details } : {}),
-    ...(options.original !== undefined ? { err: options.original } : {})
+    ...(options.original !== undefined ? { err: describeOriginal(options.original) } : {})
   });
 
   return res.status(definition.status).json({

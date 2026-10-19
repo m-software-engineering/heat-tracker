@@ -41,7 +41,7 @@ Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>":
 
 ## HEAT_E_CONFIG_MISSING
 
-- Message: init() was called without a required config key.
+- Message: init() is missing a required config key.
 - Fix: Pass both keys: init({ endpoint: "https://collector.example.com/ingest", projectKey: "pk_live_a1b2" }).
 
 ## HEAT_E_NOT_BROWSER
@@ -72,6 +72,13 @@ Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>":
 - Legacy code: `invalid_json`
 - Message: The request body is not valid JSON.
 - Fix: Send Content-Type: application/json with a JSON.stringify()-ed body.
+
+## HEAT_E_UNSUPPORTED_MEDIA_TYPE
+
+- HTTP status: 415
+- Legacy code: `unsupported_media_type`
+- Message: The ingest body is not sent as JSON.
+- Fix: Send the header Content-Type: application/json with the request.
 
 ## HEAT_E_PROJECT_KEY_MISSING
 
@@ -178,6 +185,13 @@ Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>":
 - Legacy code: `ingest_failed`
 - Message: The collector could not store the batch.
 - Fix: Search collector logs for the requestId and check database connectivity.
+
+## HEAT_E_ROUTE_NOT_FOUND
+
+- HTTP status: 404
+- Legacy code: `not_found`
+- Message: The collector has no route for this method and path.
+- Fix: Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics.
 
 ## HEAT_E_QUERY_INVALID
 

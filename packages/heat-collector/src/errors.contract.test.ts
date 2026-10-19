@@ -81,6 +81,77 @@ describe("collector error contract", () => {
     }
   });
 
+  it("returns the new shape for malformed JSON (no legacy error string)", async () => {
+    captureLogs();
+    const app = await createApp();
+    const res = await request(app)
+      .post("/ingest")
+      .set("x-project-key", PROJECT_KEY)
+      .set("Content-Type", "application/json")
+      .send("{")
+      .expect(400);
+    expect(res.body).toEqual({
+      error: expect.objectContaining({
+        code: "HEAT_E_INVALID_JSON",
+        status: 400,
+        requestId: res.headers["x-request-id"]
+      }),
+      code: "invalid_json",
+      message: res.body.error.message,
+      requestId: res.headers["x-request-id"]
+    });
+  });
+
+  it("rejects a non-JSON Content-Type with 415", async () => {
+    captureLogs();
+    const app = await createApp();
+    const res = await request(app)
+      .post("/ingest")
+      .set("x-project-key", PROJECT_KEY)
+      .set("Content-Type", "text/plain")
+      .send(JSON.stringify({ events: [] }))
+      .expect(415);
+    expect(res.body.error).toMatchObject({
+      code: "HEAT_E_UNSUPPORTED_MEDIA_TYPE",
+      cause: 'Content-Type is "text/plain", expected "application/json"'
+    });
+  });
+
+  it("answers unknown collector routes with a JSON 404 and leaves host routes alone", async () => {
+    captureLogs();
+    const app = await createApp();
+    app.get("/host-page", (_req, res) => res.send("host"));
+
+    const res = await request(app).get("/api/nope?x=1").expect(404);
+    expect(res.headers["content-type"]).toMatch(/json/);
+    expect(res.body.error).toMatchObject({ code: "HEAT_E_ROUTE_NOT_FOUND", cause: "no route for GET /api/nope" });
+    await request(app).get("/ingest").expect(404);
+    await request(app).get("/host-page").expect(200, "host");
+  });
+
+  it("logs code and cause without stacks, and keeps the JWKS URL server-side", async () => {
+    const logs = captureLogs();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 503 }))
+    );
+    const jwksUrl = "https://idp.internal.example/jwks";
+    const app = await createApp({ auth: { mode: "jwt", jwksUrl, issuer: "i", audience: "a" } });
+    const res = await request(app)
+      .post("/ingest")
+      .set("x-project-key", PROJECT_KEY)
+      .set("authorization", `Bearer ${JWT}`)
+      .send({})
+      .expect(503);
+
+    expect(JSON.stringify(res.body)).not.toContain(jwksUrl);
+    const line = logs.find((l) => l.includes("HEAT_E_AUTH_JWKS_UNAVAILABLE"));
+    expect(line).toBeDefined();
+    const parsed = JSON.parse(line as string);
+    expect(parsed.err).toEqual({ code: "HEAT_E_AUTH_JWKS_UNAVAILABLE", cause: "JWKS returned HTTP 503", jwksUrl });
+    expect(logs.join("\n")).not.toMatch(/"stack"|\n\s+at /);
+  });
+
   it("names the query param, received value, and expected format", async () => {
     captureLogs();
     const app = await createApp();

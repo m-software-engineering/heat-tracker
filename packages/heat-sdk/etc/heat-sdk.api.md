@@ -46,6 +46,8 @@ export class HeatTrackerError extends Error implements HeatError {
     // (undocumented)
     readonly fix: string;
     // (undocumented)
+    readonly internal?: Record<string, unknown>;
+    // (undocumented)
     readonly original?: unknown;
     // (undocumented)
     readonly requestId?: string;

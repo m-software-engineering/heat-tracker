@@ -246,6 +246,17 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     const projectKey = req.header("x-project-key");
 
+    // express.json() skips other media types and leaves an empty body; say so instead of a schema error.
+    if (req.headers["content-type"] && !req.is("application/json")) {
+      return sendError(
+        logger,
+        req,
+        res,
+        INGEST_ERRORS.HEAT_E_UNSUPPORTED_MEDIA_TYPE,
+        `Content-Type is ${JSON.stringify(req.headers["content-type"])}, expected "application/json"`
+      );
+    }
+
     if (!projectKey) {
       return sendError(logger, req, res, INGEST_ERRORS.HEAT_E_PROJECT_KEY_MISSING, "header x-project-key is missing", {
         context: { ip }
@@ -611,6 +622,16 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
   router.use(ingestRouter);
   router.use(apiRouter);
+  // JSON 404 only under collector-owned prefixes, so host-app routes mounted after the router still work.
+  router.use(["/ingest", "/api"], (req, res) =>
+    sendError(
+      logger,
+      req,
+      res,
+      QUERY_ERRORS.HEAT_E_ROUTE_NOT_FOUND,
+      `no route for ${req.method} ${req.originalUrl.split("?")[0]}`
+    )
+  );
 
   return { router, ingestRouter, apiRouter, metrics };
 };
