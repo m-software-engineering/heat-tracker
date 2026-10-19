@@ -4,17 +4,26 @@
 "@m-software-engineering/heat-sdk": minor
 ---
 
-**BREAKING (collector error responses):** the top-level `error` string is removed. `error` is now a `HeatError` object.
+## Breaking
 
-```js
-// before
-showToast(body.error); // "invalid jwt"
-// after
-showToast(body.error.message); // "The JWT has expired."
-```
+1. **Error `error` field: string → object.**
+   Before: `{ "error": "invalid jwt", "code": "invalid_jwt", … }`. After: `{ "error": { "code": "HEAT_E_JWT_EXPIRED", "message": "The JWT has expired.", … }, … }`.
+   What to do: replace `body.error` with `body.error.message`, and `body.code` with `body.error.code`.
+2. **Non-JSON `Content-Type` on `POST /ingest` → 415.**
+   Before: `Content-Type: text/plain` returned 400 `invalid_payload`. After: 415 `HEAT_E_UNSUPPORTED_MEDIA_TYPE`.
+   What to do: send `Content-Type: application/json` (the SDK already does).
+3. **Strict JWT `kid`.**
+   Before: a token whose `kid` was not in the JWKS was checked against the first key. After: 401 `HEAT_E_JWKS_KEY_NOT_FOUND`.
+   What to do: publish every signing key in the JWKS, or issue tokens with a `kid` that the JWKS lists.
+4. **JSON 404 for unknown collector routes.**
+   Before: unknown `/ingest` and `/api/*` paths returned Express's HTML 404. After: JSON 404 `{ "error": { "code": "HEAT_E_ROUTE_NOT_FOUND", … } }`.
+   What to do: parse 404 bodies as JSON. Routes outside `/ingest` and `/api` in the host app are unaffected.
 
-**BREAKING (collector ingest/auth):** `POST /ingest` with a non-JSON `Content-Type` now returns 415 `HEAT_E_UNSUPPORTED_MEDIA_TYPE` (it used to return a 400 schema error). Unknown `/ingest` and `/api/*` routes return a JSON 404 `HEAT_E_ROUTE_NOT_FOUND`. A JWT whose `kid` is not in the JWKS is now rejected with `HEAT_E_JWKS_KEY_NOT_FOUND` instead of being checked against the first key.
+## Other changes
 
-**BREAKING (collector auth):** when the JWKS cannot be downloaded, the collector now returns HTTP 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with `Retry-After: 30`. It used to return 401 `invalid_jwt`.
-
-Add `@m-software-engineering/heat-errors`: one `HeatError` shape (`HEAT_E_*` code, message, cause, fix, docs, requestId, status, details) used by the SDK, collector, CLI, and DB layer. The top-level `code`, `message`, `requestId`, and `details` fields are deprecated and will be removed in the next major version. Read `error.code`, `error.message`, `error.requestId`, and `error.details` instead. Error responses send `Deprecation: true`, and the collector logs one deprecation warning per process. JWT failures have specific codes. Query validation errors name the parameter, the received value, and the expected format in `details.fieldErrors`. Logs mask project keys and truncate IPs. They record code + cause (never stacks), and the JWKS URL appears only in server logs. `heat-collector-migrate` reports failures as driver error class + code + host (never credentials) and adds the masked raw driver message only with `--verbose`. The SDK adds `onError(err)` and `debug` (logs each code once per page load). See `docs/errors.md`.
+- Add `@m-software-engineering/heat-errors`: one `HeatError` shape (`HEAT_E_*` code, message, cause, fix, docs, requestId, status, details) for the SDK, collector, CLI, and DB layer. See `docs/errors.md`.
+- When the JWKS cannot be downloaded, the collector returns 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with `Retry-After: 30` (it used to return 401 `invalid_jwt`). The JWKS URL appears only in server logs.
+- Top-level `code`, `message`, `requestId`, and `details` are deprecated and will be removed in the next major version. Responses that still carry them send `Deprecation: true` and `Link: <…/docs/errors.md#migrating-from-legacy-fields>; rel="deprecation"`, and the collector logs one warning per process that names each replacement (`code -> error.code`, …).
+- JWT failures have specific codes. Query validation errors name the parameter, the received value, and the expected format in `details.fieldErrors`. Logs mask project keys and truncate IPs, and record code + cause, never stacks.
+- `heat-collector-migrate` reports failures as driver error class + code + host (never credentials) and adds the masked raw driver message only with `--verbose`.
+- SDK: `onError(err)` and `debug` (logs each code once per page load). `init()` names the missing config key(s) in `message`.

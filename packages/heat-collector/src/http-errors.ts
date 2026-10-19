@@ -29,6 +29,9 @@ export const LEGACY_FIELDS = {
   details: "error.details"
 } as const;
 
+export const MIGRATION_DOCS_URL =
+  "https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md#migrating-from-legacy-fields";
+
 let legacyWarningLogged = false;
 
 /**
@@ -38,15 +41,11 @@ let legacyWarningLogged = false;
 const warnLegacyFieldsOnce = (logger: Logger) => {
   if (legacyWarningLogged) return;
   legacyWarningLogged = true;
+  const pairs = Object.entries(LEGACY_FIELDS).map(([field, replacement]) => `${field} -> ${replacement}`);
   logger.warn(
-    "Error responses still include deprecated top-level code, message, requestId, and details; " +
-      "read error.code, error.message, error.requestId, and error.details instead. Removed in the next major version.",
-    {
-      deprecated: Object.keys(LEGACY_FIELDS),
-      replacements: LEGACY_FIELDS,
-      removal: "next major version",
-      docs: "https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md"
-    }
+    `Error responses include deprecated top-level fields; read the replacement instead: ${pairs.join(", ")}. ` +
+      "Removed in the next major version.",
+    { replacements: LEGACY_FIELDS, removal: "next major version", docs: MIGRATION_DOCS_URL }
   );
 };
 
@@ -96,16 +95,20 @@ export const sendError = (
   const rid = resolveRequestId(req);
   const headers = {
     ...(definition.retryAfterSeconds !== undefined ? { "Retry-After": String(definition.retryAfterSeconds) } : {}),
-    ...options.headers,
-    Deprecation: "true",
-    Link: '<https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md>; rel="deprecation"'
+    ...options.headers
   };
   for (const [key, value] of Object.entries(headers)) {
     res.setHeader(key, value);
   }
-  warnLegacyFieldsOnce(logger);
 
   const error = createHeatError(definition, cause, { requestId: rid, details: options.details });
+  const legacy = legacyFields(definition, rid, options.details);
+  // Deprecation signals exist only because legacy fields are in the body; they go away together.
+  if (Object.keys(legacy).length > 0) {
+    res.setHeader("Deprecation", "true");
+    res.setHeader("Link", `<${MIGRATION_DOCS_URL}>; rel="deprecation"`);
+    warnLegacyFieldsOnce(logger);
+  }
   const level = options.logLevel || "warn";
   logger[level](definition.message, {
     requestId: rid,
@@ -117,14 +120,20 @@ export const sendError = (
     ...(options.original !== undefined ? { err: describeOriginal(options.original) } : {})
   });
 
-  return res.status(definition.status).json({
-    error,
-    code: definition.legacyCode,
-    message: definition.message,
-    requestId: rid,
-    ...(options.details !== undefined ? { details: options.details } : {})
-  });
+  return res.status(definition.status).json({ error, ...legacy });
 };
+
+/** Deprecated top-level fields (see LEGACY_FIELDS). Delete this in the next major. */
+const legacyFields = (
+  definition: HttpErrorDefinition,
+  rid: string,
+  details: Record<string, unknown> | undefined
+): Partial<Record<keyof typeof LEGACY_FIELDS, unknown>> => ({
+  code: definition.legacyCode,
+  message: definition.message,
+  requestId: rid,
+  ...(details !== undefined ? { details } : {})
+});
 
 const issuePath = (path: (string | number)[]) => (path.length ? path.join(".") : "(root)");
 

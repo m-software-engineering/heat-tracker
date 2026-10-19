@@ -59,6 +59,9 @@ describe("collector error contract", () => {
     });
     expect(typeof res.body.error).toBe("object"); // legacy `error` string removed
     expect(res.headers.deprecation).toBe("true");
+    expect(res.headers.link).toBe(
+      '<https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md#migrating-from-legacy-fields>; rel="deprecation"'
+    );
     // Legacy fields: removed in the next major.
     expect(res.body.code).toBe("missing_project_key");
     expect(res.body.message).toBe(res.body.error.message);
@@ -76,8 +79,8 @@ describe("collector error contract", () => {
 
     const warnings = logs.filter((line) => line.includes("deprecated top-level"));
     expect(warnings).toHaveLength(1);
-    for (const field of ["error.code", "error.message", "error.requestId", "error.details"]) {
-      expect(warnings[0]).toContain(field);
+    for (const field of ["code", "message", "requestId", "details"]) {
+      expect(warnings[0]).toContain(`${field} -> error.${field}`);
     }
   });
 
@@ -150,6 +153,17 @@ describe("collector error contract", () => {
     const parsed = JSON.parse(line as string);
     expect(parsed.err).toEqual({ code: "HEAT_E_AUTH_JWKS_UNAVAILABLE", cause: "JWKS returned HTTP 503", jwksUrl });
     expect(logs.join("\n")).not.toMatch(/"stack"|\n\s+at /);
+  });
+
+  it("sends Deprecation/Link only with responses that carry legacy fields", async () => {
+    captureLogs();
+    const app = await createApp();
+    const ok = await request(app).get("/api/metrics").expect(200);
+    expect(ok.headers.deprecation).toBeUndefined();
+    expect(ok.headers.link).toBeUndefined();
+    const bad = await request(app).get("/api/projects/p/heatmap").query({ resolution: 1 }).expect(400);
+    expect(bad.body.code).toBe("invalid_query");
+    expect(bad.headers.deprecation).toBe("true");
   });
 
   it("names the query param, received value, and expected format", async () => {

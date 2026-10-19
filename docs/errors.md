@@ -17,9 +17,14 @@ type HeatError = {
 };
 ```
 
-Collector responses wrap it as `{ "error": HeatError }`. The top-level `code`, `message`, `requestId`, and
-`details` fields are deprecated and will be removed in the next major version; read `error` instead.
-Error responses carry `Deprecation: true` and the collector logs one deprecation warning per process.
+Collector responses wrap it as `{ "error": HeatError }`.
+Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>": "<message>" }`).
+
+## Migrating from legacy fields
+
+The top-level `code`, `message`, `requestId`, and `details` fields are deprecated and will be removed in the
+next major version. While a response still carries them it also sends `Deprecation: true` and a `Link` to this
+section, and the collector logs one deprecation warning per process.
 
 | Deprecated field | Read instead      |
 | ---------------- | ----------------- |
@@ -36,8 +41,6 @@ console.log(body.error); // "invalid jwt"
 // after
 console.log(body.error.message); // "The JWT has expired."
 ```
-
-Validation errors put per-field messages in `details.fieldErrors` (`{ "<param>": "<message>" }`).
 
 ## HEAT_E_CONFIG_MISSING
 
