@@ -36,6 +36,11 @@ export type Collector = {
   ingestRouter: express.Router;
   apiRouter: express.Router;
   metrics: Metrics;
+  /**
+   * Opt-in JSON 404 (`HEAT_E_ROUTE_NOT_FOUND`). Not mounted by `router`, so host routes registered
+   * after it keep working; mount it last: `app.use(collector.notFoundHandler)`.
+   */
+  notFoundHandler: express.RequestHandler;
 };
 
 type EventType = "click" | "move" | "scroll" | "pageview" | "custom" | "input" | "keyboard";
@@ -247,13 +252,16 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     const projectKey = req.header("x-project-key");
 
     // express.json() skips other media types and leaves an empty body; say so instead of a schema error.
-    if (req.headers["content-type"] && !req.is("application/json")) {
+    const contentType = req.headers["content-type"];
+    if (!contentType || !req.is("application/json")) {
       return sendError(
         logger,
         req,
         res,
         INGEST_ERRORS.HEAT_E_UNSUPPORTED_MEDIA_TYPE,
-        `Content-Type is ${JSON.stringify(req.headers["content-type"])}, expected "application/json"`
+        contentType
+          ? `Content-Type is ${JSON.stringify(contentType)}, expected "application/json"`
+          : 'Content-Type header is missing, expected "application/json"'
       );
     }
 
@@ -622,18 +630,18 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
   router.use(ingestRouter);
   router.use(apiRouter);
-  // JSON 404 only under collector-owned prefixes, so host-app routes mounted after the router still work.
-  router.use(["/ingest", "/api"], (req, res) =>
+
+  const notFoundHandler: express.RequestHandler = (req, res) => {
     sendError(
       logger,
       req,
       res,
       QUERY_ERRORS.HEAT_E_ROUTE_NOT_FOUND,
       `no route for ${req.method} ${req.originalUrl.split("?")[0]}`
-    )
-  );
+    );
+  };
 
-  return { router, ingestRouter, apiRouter, metrics };
+  return { router, ingestRouter, apiRouter, metrics, notFoundHandler };
 };
 
 const ensureProjectAndUser = async (

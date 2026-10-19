@@ -28,6 +28,7 @@ export type Collector = {
     ingestRouter: express.Router;
     apiRouter: express.Router;
     metrics: Metrics;
+    notFoundHandler: express.RequestHandler;
 };
 
 // @public (undocumented)

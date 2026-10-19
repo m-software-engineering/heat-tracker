@@ -33,6 +33,9 @@ const collector = await createCollector({
 
 const app = express();
 app.use(collector.router);
+// ...your own routes, including under /api...
+// Optional: JSON 404 { error: HeatError } with code HEAT_E_ROUTE_NOT_FOUND. Mount it last.
+app.use(collector.notFoundHandler);
 
 app.listen(3000, () => {
   console.log("Collector listening on http://localhost:3000");

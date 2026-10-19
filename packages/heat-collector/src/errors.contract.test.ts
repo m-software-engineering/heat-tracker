@@ -120,16 +120,43 @@ describe("collector error contract", () => {
     });
   });
 
-  it("answers unknown collector routes with a JSON 404 and leaves host routes alone", async () => {
+  it("never shadows host routes registered after the router", async () => {
     captureLogs();
     const app = await createApp();
-    app.get("/host-page", (_req, res) => res.send("host"));
+    app.get("/api/health", (_req, res) => res.json({ ok: true }));
+    app.post("/ingest/custom", (_req, res) => res.json({ mine: true }));
 
+    await request(app).get("/api/health").expect(200, { ok: true });
+    await request(app).post("/ingest/custom").send({}).expect(200, { mine: true });
+    // Without the opt-in handler the host app keeps Express's default 404.
+    const plain = await request(app).get("/api/nope").expect(404);
+    expect(plain.body).toEqual({});
+  });
+
+  it("answers unknown routes with a JSON 404 when the host mounts notFoundHandler last", async () => {
+    captureLogs();
+    const file = path.join(mkdtempSync(path.join(tmpdir(), "heat-errors-")), "test.db");
+    const collector = await createCollector({ db: { dialect: "sqlite", file }, auth: { mode: "projectKey" } });
+    const app = express();
+    app.use(collector.router);
+    app.get("/api/health", (_req, res) => res.json({ ok: true }));
+    app.use(collector.notFoundHandler);
+
+    await request(app).get("/api/health").expect(200);
     const res = await request(app).get("/api/nope?x=1").expect(404);
     expect(res.headers["content-type"]).toMatch(/json/);
+    expect(res.headers["x-request-id"]).toBe(res.body.error.requestId);
     expect(res.body.error).toMatchObject({ code: "HEAT_E_ROUTE_NOT_FOUND", cause: "no route for GET /api/nope" });
-    await request(app).get("/ingest").expect(404);
-    await request(app).get("/host-page").expect(200, "host");
+  });
+
+  it("rejects a POST without Content-Type with 415", async () => {
+    captureLogs();
+    const app = await createApp();
+    const res = await request(app).post("/ingest").set("x-project-key", PROJECT_KEY).expect(415);
+    expect(res.body.error).toMatchObject({
+      code: "HEAT_E_UNSUPPORTED_MEDIA_TYPE",
+      cause: 'Content-Type header is missing, expected "application/json"'
+    });
   });
 
   it("logs code and cause without stacks, and keeps the JWKS URL server-side", async () => {
