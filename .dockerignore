@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/dist
+**/dist-server
+**/coverage
+.git
+.pnpm-store
+playwright-report
+test-results
+**/*.db
+**/*.log

@@ -1,13 +1,18 @@
-import { useCallback } from "react";
-import { fetchProjects, type ProjectSummary } from "../lib/api";
+import { useCallback, type ReactNode } from "react";
+import { fetchProjects, type ProjectListItem } from "../lib/api";
 import { useListing } from "../lib/use-listing";
 import EntryTable, { type Column } from "./EntryTable";
 
-type Props = { collectorUrl: string; hrefFor: (project: ProjectSummary) => string };
+type Props = {
+  collectorUrl: string;
+  hrefFor: (project: ProjectListItem) => string;
+  /** Shown when the collector has no project yet (the dashboard passes #24's onboarding). */
+  empty?: ReactNode;
+};
 
 const number = (value: number) => new Intl.NumberFormat().format(value);
 
-const columns: Column<ProjectSummary>[] = [
+const columns: Column<ProjectListItem>[] = [
   {
     label: "Project",
     cell: (p) => (
@@ -30,7 +35,7 @@ const columns: Column<ProjectSummary>[] = [
 ];
 
 /** Dashboard home (#25): every project in this collector, with a receiving-data dot. */
-export default function ProjectList({ collectorUrl, hrefFor }: Props) {
+export default function ProjectList({ collectorUrl, hrefFor, empty }: Props) {
   const load = useCallback(
     (cursor?: string | null) =>
       fetchProjects(collectorUrl, cursor).then((r) => ({ items: r.projects, nextCursor: r.meta.nextCursor })),
@@ -46,7 +51,7 @@ export default function ProjectList({ collectorUrl, hrefFor }: Props) {
       onMore={listing.more}
       rowKey={(p) => p.id}
       rowHref={hrefFor}
-      empty={<p className="ph-empty">No projects yet. A project appears when its first event arrives.</p>}
+      empty={empty ?? <p className="ph-empty">No projects yet. A project appears when its first event arrives.</p>}
     />
   );
 }

@@ -208,3 +208,28 @@ describe("GET /api/projects", () => {
     expect(second.body.meta).toMatchObject({ limit: 50, nextCursor: null });
   });
 });
+
+describe("admin token (#24) on the entry endpoints", () => {
+  it("answers 401 without the token and lists with it", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "heat-pages-admin-"));
+    const collector = await createCollector({
+      db: { dialect: "sqlite", file: path.join(dir, "t.db") },
+      auth: { mode: "projectKey" },
+      admin: { token: "admin-secret" },
+      heatmap: { rollupCatchUpIntervalMs: 0 }
+    });
+    const app = express().use(collector.router);
+    await send(app, "s", [{ type: "pageview", path: "/", title: "Home" }]);
+
+    const denied = await request(app).get("/api/projects").expect(401);
+    expect(denied.body.error.code).toBe("HEAT_E_ADMIN_TOKEN_MISSING");
+    const list = await request(app).get("/api/projects").set("authorization", "Bearer admin-secret").expect(200);
+    const id = list.body.projects[0].id;
+    await request(app).get(`/api/projects/${id}/pages`).set("authorization", "Bearer wrong").expect(401);
+    const pages = await request(app)
+      .get(`/api/projects/${id}/pages`)
+      .set("authorization", "Bearer admin-secret")
+      .expect(200);
+    expect(pages.body.pages).toEqual([{ path: "/", title: "Home", hasTitle: true, sessions: 1, clicks: 0 }]);
+  });
+});

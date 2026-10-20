@@ -9,3 +9,4 @@ temp/
 .DS_Store
 *.log
 *.db
+dist-server/

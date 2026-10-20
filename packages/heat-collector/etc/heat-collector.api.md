@@ -37,6 +37,9 @@ export type CollectorConfig = {
     db: DbAdapterConfig;
     auth: AuthConfig;
     autoMigrate?: boolean;
+    admin?: {
+        token: string;
+    };
     heatmap?: {
         rollupCatchUpIntervalMs?: number;
     };
@@ -98,7 +101,7 @@ export { isHeatError }
 
 // Warnings were encountered during analysis:
 //
-// dist/index.d.ts:79:5 - (ae-forgotten-export) The symbol "Metrics" needs to be exported by the entry point index.d.ts
+// dist/index.d.ts:87:5 - (ae-forgotten-export) The symbol "Metrics" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

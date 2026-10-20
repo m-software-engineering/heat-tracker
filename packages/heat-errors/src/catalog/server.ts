@@ -5,7 +5,27 @@ export const SERVER_ERRORS = {
   HEAT_E_DB_CONFIG: {
     code: "HEAT_E_DB_CONFIG",
     message: "The database config has neither a connection string nor a client.",
-    fix: "Pass db.connectionString or db.client to createCollector()."
+    fix: "Set DATABASE_URL for the heat-collector server (docker compose sets it), or pass db.connectionString or db.client to createCollector()."
+  },
+  HEAT_E_DB_UNREACHABLE: {
+    code: "HEAT_E_DB_UNREACHABLE",
+    message: "The collector could not connect to the database.",
+    fix: "Check that the database is running and reachable at the host and port in DATABASE_URL, for example with `docker compose ps postgres`."
+  },
+  HEAT_E_ADMIN_TOKEN_STORE: {
+    code: "HEAT_E_ADMIN_TOKEN_STORE",
+    message: "The collector could not read or write the admin token file.",
+    fix: "Mount a writable volume at HEAT_DATA_DIR (default /data), or set HEAT_ADMIN_TOKEN."
+  },
+  HEAT_E_SERVER_LISTEN: {
+    code: "HEAT_E_SERVER_LISTEN",
+    message: "The collector could not listen on its port.",
+    fix: "Free the port or set PORT to another one; in docker compose, change the published port in docker-compose.yml."
+  },
+  HEAT_E_SERVER_COMMAND: {
+    code: "HEAT_E_SERVER_COMMAND",
+    message: "heat-collector does not know this command.",
+    fix: "Run `heat-collector` (or `heat-collector serve`) to start the server, or `heat-collector token` to print the admin token."
   },
   HEAT_E_ROLLUP_CATCH_UP: {
     code: "HEAT_E_ROLLUP_CATCH_UP",

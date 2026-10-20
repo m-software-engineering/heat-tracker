@@ -437,3 +437,31 @@ main {
 .entry-more {
   margin-top: 12px;
 }
+
+.onboarding-card {
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.onboarding-card pre {
+  overflow-x: auto;
+  padding: 12px;
+  border-radius: 6px;
+  background: #101828;
+  color: #f2f4f7;
+}
+
+.onboarding-card button {
+  justify-self: start;
+  padding: 8px 14px;
+}
+
+.ph-error {
+  color: #b42318;
+}

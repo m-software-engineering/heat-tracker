@@ -2,6 +2,8 @@
 
 exports[`catalog > pins the HTTP status of every collector code 1`] = `
 {
+  "HEAT_E_ADMIN_TOKEN_INVALID": 401,
+  "HEAT_E_ADMIN_TOKEN_MISSING": 401,
   "HEAT_E_AUTH_JWKS_UNAVAILABLE": 503,
   "HEAT_E_EVENTS_QUERY_FAILED": 500,
   "HEAT_E_HEATMAP_QUERY_FAILED": 500,
@@ -24,6 +26,7 @@ exports[`catalog > pins the HTTP status of every collector code 1`] = `
   "HEAT_E_PROJECTS_QUERY_FAILED": 500,
   "HEAT_E_PROJECT_KEY_MISSING": 401,
   "HEAT_E_PROJECT_NOT_FOUND": 404,
+  "HEAT_E_PROJECT_QUERY_FAILED": 500,
   "HEAT_E_QUERY_CURSOR": 400,
   "HEAT_E_QUERY_FROM": 400,
   "HEAT_E_QUERY_INVALID": 400,

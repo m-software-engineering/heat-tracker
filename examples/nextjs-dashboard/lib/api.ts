@@ -34,6 +34,7 @@ const getJson = async (baseUrl: string, url: string) => {
   return body;
 };
 
+/** Collector errors are rethrown as-is (they are already catalog errors); anything else is HEAT_E_DASHBOARD_FETCH. */
 export const fetchHeatmap = async (baseUrl: string, projectId: string, params: Record<string, string>) => {
   const query = new URLSearchParams(params).toString();
   const body = await getJson(baseUrl, `${baseUrl}/api/projects/${encodeURIComponent(projectId)}/heatmap?${query}`);
@@ -43,7 +44,7 @@ export const fetchHeatmap = async (baseUrl: string, projectId: string, params: R
   return body as HeatmapResponse;
 };
 
-export type ProjectSummary = {
+export type ProjectListItem = {
   id: string;
   name: string;
   createdAt: number;
@@ -63,7 +64,7 @@ export const fetchProjects = async (baseUrl: string, cursor?: string | null) => 
   if (!body || !Array.isArray(body.projects)) {
     throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_DASHBOARD_FETCH, "collector response has no projects array");
   }
-  return body as Listing<"projects", ProjectSummary>;
+  return body as Listing<"projects", ProjectListItem>;
 };
 
 export const fetchPages = async (baseUrl: string, projectId: string, cursor?: string | null) => {
