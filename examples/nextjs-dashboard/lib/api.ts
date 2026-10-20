@@ -52,6 +52,8 @@ export type ProjectListItem = {
   eventsLast24h: number;
   lastEventAt: number | null;
   receivingData: boolean;
+  /** Events dated in the future exist (site clock ahead); not counted in lastEventAt/eventsLast24h. */
+  hasFutureEvents: boolean;
 };
 
 export type PopularPage = { path: string; title: string; hasTitle: boolean; sessions: number; clicks: number };

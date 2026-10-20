@@ -47,12 +47,14 @@ export const listProjectsMongo = async (
   const stats = await db
     .collection("events")
     .aggregate([
-      { $match: { ts: { $lte: opts.asOf } } },
       {
         $group: {
           _id: "$projectId",
-          last: { $max: "$ts" },
-          recent: { $sum: { $cond: [{ $gte: ["$ts", opts.asOf - DAY_MS] }, 1, 0] } }
+          last: { $max: { $cond: [{ $lte: ["$ts", opts.asOf] }, "$ts", null] } },
+          future: { $sum: { $cond: [{ $gt: ["$ts", opts.asOf] }, 1, 0] } },
+          recent: {
+            $sum: { $cond: [{ $and: [{ $gte: ["$ts", opts.asOf - DAY_MS] }, { $lte: ["$ts", opts.asOf] }] }, 1, 0] }
+          }
         }
       }
     ])
@@ -67,7 +69,8 @@ export const listProjectsMongo = async (
       projectKey: String(p.key),
       createdAt: Number(p.createdAt),
       eventsLast24h: Number(s?.recent ?? 0),
-      lastEventAt: s?.last == null ? null : Number(s.last)
+      lastEventAt: s?.last == null ? null : Number(s.last),
+      hasFutureEvents: Number(s?.future ?? 0) > 0
     };
   });
   const ordered = rows.sort(

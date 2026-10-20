@@ -120,7 +120,14 @@ describe("GET /api/projects snapshot and limits (#64 QA)", () => {
     const res = await request(app).get("/api/projects?limit=").expect(200);
     expect(res.body.meta.limit).toBe(50);
     expect(res.body.projects).toEqual([
-      expect.objectContaining({ projectKey: "future", eventsLast24h: 0, receivingData: false })
+      // Not "never received": the future-dated events are flagged.
+      expect.objectContaining({
+        projectKey: "future",
+        eventsLast24h: 0,
+        lastEventAt: null,
+        hasFutureEvents: true,
+        receivingData: false
+      })
     ]);
   });
 });

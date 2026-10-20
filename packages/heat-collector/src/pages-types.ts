@@ -9,6 +9,8 @@ export type ProjectRow = {
   createdAt: number;
   eventsLast24h: number;
   lastEventAt: number | null;
+  /** Events dated after the snapshot exist (e.g. a site clock running ahead); they are not counted above. */
+  hasFutureEvents: boolean;
 };
 
 /** `title` is the stored (latest-seen) title, null when the page never sent one. */

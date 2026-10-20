@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { trackingSnippet } from "../examples/nextjs-dashboard/lib/onboarding";
+import { scriptString, trackingSnippet } from "../examples/nextjs-dashboard/lib/onboarding";
 
 // The snippet is pasted into an HTML page, so a hostile key or URL must stay one JS string (#64 QA).
 const evil = 'x"});fetch("//evil.example")//</script><script>alert(1)</script>\u2028';
@@ -26,5 +26,14 @@ test.describe("tracking snippet", () => {
     expect(trackingSnippet("http://localhost:4000", "pk_ab")).toContain(
       'init({ endpoint: "http://localhost:4000/ingest", projectKey: "pk_ab" });'
     );
+  });
+
+  test("scriptString round-trips through JSON and never emits <, </script, U+2028 or U+2029", () => {
+    for (const value of ["pk_ab", 'a"b\\c', "</script><!--", "x\u2028y\u2029z", "ü🔥\n"]) {
+      const literal = scriptString(value);
+      expect(JSON.parse(literal)).toBe(value);
+      expect(literal).not.toMatch(/[<\u2028\u2029]/);
+    }
+    expect(scriptString("</script>")).toBe('"\\u003c/script>"');
   });
 });

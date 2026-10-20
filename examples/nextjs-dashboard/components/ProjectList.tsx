@@ -24,7 +24,9 @@ const columns: Column<ProjectListItem>[] = [
           title={
             p.lastEventAt
               ? `Last event ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(p.lastEventAt)}`
-              : "No events yet"
+              : p.hasFutureEvents
+                ? "Only future-dated events so far (check the site's clock)"
+                : "No events yet"
           }
         />
         <span dir="auto">{p.name}</span>

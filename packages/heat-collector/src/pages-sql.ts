@@ -57,7 +57,8 @@ export const listProjectsSql = async (
     ctx,
     sql`SELECT * FROM (SELECT p.id AS id, p.name AS name, ${keyColumn} AS project_key, p.created_at AS created_at,
       (SELECT COUNT(*) FROM events e WHERE e.project_id = p.id AND e.ts >= ${opts.asOf - DAY_MS} AND e.ts <= ${opts.asOf}) AS events_24h,
-      (SELECT MAX(e.ts) FROM events e WHERE e.project_id = p.id AND e.ts <= ${opts.asOf}) AS last_event_at
+      (SELECT MAX(e.ts) FROM events e WHERE e.project_id = p.id AND e.ts <= ${opts.asOf}) AS last_event_at,
+      (SELECT COUNT(*) FROM events e WHERE e.project_id = p.id AND e.ts > ${opts.asOf}) AS future_events
       FROM projects p WHERE p.created_at <= ${opts.asOf}) q ${after} ORDER BY ${sortKey} DESC, q.id ASC LIMIT ${opts.limit + 1}`
   );
   return rows.map((row) => ({
@@ -66,7 +67,8 @@ export const listProjectsSql = async (
     projectKey: String(row.project_key),
     createdAt: Number(row.created_at),
     eventsLast24h: Number(row.events_24h ?? 0),
-    lastEventAt: row.last_event_at == null ? null : Number(row.last_event_at)
+    lastEventAt: row.last_event_at == null ? null : Number(row.last_event_at),
+    hasFutureEvents: Number(row.future_events ?? 0) > 0
   }));
 };
 

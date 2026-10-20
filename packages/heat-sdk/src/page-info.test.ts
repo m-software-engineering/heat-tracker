@@ -29,7 +29,14 @@ describe("shared privacy rules (fixtures/privacy-cases.json)", () => {
   });
 
   it.each(cases.paths)("sends %s as %s", (input, output) => {
-    expect(at(input as string)).toBe(output);
+    // Allowlist every param in the input, so only the shared rule decides.
+    const query = (input as string).split("?")[1] ?? "";
+    expect(
+      at(
+        input as string,
+        query.split("&").map((pair) => pair.split("=")[0])
+      )
+    ).toBe(output);
   });
 });
 

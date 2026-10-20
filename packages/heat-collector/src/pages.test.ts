@@ -167,10 +167,8 @@ describe("ingest path and title privacy", () => {
       { type: "click", path: dirty }
     ]);
     const paths = client.prepare("select distinct path from events").all() as Array<{ path: string }>;
-    // Token rule (Margot, #64): Authorization, promo-code and state_code have no sensitive token.
-    expect(paths).toEqual([
-      { path: "/a?utm_source=x&Authorization=a&promo-code=1&email=plain&page=2#access=1&state_code=2" }
-    ]);
+    // Token rule (Margot, #64): authorization is a token; promo-code and state_code are not sensitive.
+    expect(paths).toEqual([{ path: "/a?utm_source=x&promo-code=1&email=plain&page=2#access=1&state_code=2" }]);
     const page = client.prepare("select title from pages").get() as { title: string };
     expect(Array.from(page.title)).toHaveLength(200);
   });

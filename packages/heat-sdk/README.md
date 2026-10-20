@@ -69,7 +69,7 @@ Optional fields:
 - `privacy`: selector masking and blocking options; `keepQueryParams: ["utm_source", ...]` keeps those query
   params in the stored path (default `[]`: the path is `location.pathname` only, no query string or hash).
   Sensitive params are never kept, with the same token rule and fixtures as the collector (see the collector README):
-  `access_token`, `apiKey`, `X-Amz-Signature`, `code` and email values are dropped; `keyboard` and `zipcode` stay.
+  `access_token`, `apiKey`, `authorization`, `token[]`, `code` and email values are dropped; `keyword`, `turkey` and `postcode` stay.
   `;matrix` path params are dropped and email-looking path segments become `[email]`.
 - `capture`: capture-level controls; `pageTitle: false` stops sending `document.title` on pageviews (default on;
   `maskTextSelectors` text in the title is replaced by `•••`, at most 200 characters)
