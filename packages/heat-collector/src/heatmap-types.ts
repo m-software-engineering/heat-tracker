@@ -11,12 +11,11 @@ export type HeatmapGrid = { resolution: number; bucketWidth: number; bucketHeigh
 /** Viewport source values grouped by the database; `pickBucket` turns each into a bucket. */
 export type ViewportGroup = { explicit: unknown; w: unknown; h: unknown; count: number };
 
-/** Per-type counts plus the largest non-scroll y (NULL y counts as 0; null when no such row). */
-export type HeatmapSummary = { typeBreakdown: Record<string, number>; maxY: number | null };
-
 /** What a dialect computes in the database. Only grouped rows reach Node. */
 export type HeatmapBackend = {
-  summary: (filter: HeatmapFilter) => Promise<HeatmapSummary>;
+  typeCounts: (filter: HeatmapFilter) => Promise<Record<string, number>>;
+  /** Largest non-scroll y (NULL y counts as 0); null when there is no such row. */
+  maxY: (filter: HeatmapFilter) => Promise<number | null>;
   /** Viewport sources of the `limit` most recent matching events. */
   viewportGroups: (filter: HeatmapFilter, limit: number, visit: (group: ViewportGroup) => void) => Promise<void>;
   buckets: (filter: HeatmapFilter, grid: HeatmapGrid) => Promise<Array<{ bx: number; by: number; count: number }>>;

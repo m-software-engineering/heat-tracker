@@ -20,24 +20,21 @@ export const aggregateMongo = (ctx: DbContext): HeatmapBackend => {
   const events = ctx.db.collection("events");
 
   return {
-    summary: async (filter) => {
+    typeCounts: async (filter) => {
+      const rows = await events
+        .aggregate([{ $match: match(filter) }, { $group: { _id: "$type", count: { $sum: 1 } } }])
+        .toArray();
+      return Object.fromEntries(rows.map((row: any) => [String(row._id ?? "unknown"), row.count]));
+    },
+
+    maxY: async (filter) => {
       const rows = await events
         .aggregate([
           { $match: match(filter) },
-          {
-            $group: {
-              _id: "$type",
-              count: { $sum: 1 },
-              maxY: { $max: { $cond: [isScroll, null, "$y"] } }
-            }
-          }
+          { $group: { _id: null, maxY: { $max: { $cond: [isScroll, null, "$y"] } } } }
         ])
         .toArray();
-      const ys = rows.map((row: any) => row.maxY).filter((y: unknown): y is number => typeof y === "number");
-      return {
-        typeBreakdown: Object.fromEntries(rows.map((row: any) => [String(row._id ?? "unknown"), row.count])),
-        maxY: ys.length > 0 ? Math.max(...ys) : null
-      };
+      return typeof rows[0]?.maxY === "number" ? rows[0].maxY : null;
     },
 
     // Mongo stores meta as a JSON string the pipeline cannot parse, so the sampled viewports are

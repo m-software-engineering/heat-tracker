@@ -48,8 +48,8 @@ const dominantBucket = async (backend: HeatmapBackend, filter: HeatmapFilter) =>
 };
 
 /**
- * Aggregates a heatmap in the database with three grouped queries (summary and viewport in parallel,
- * then buckets); none returns raw events, so collector memory does not grow with matched events.
+ * Aggregates a heatmap in the database with four grouped queries in two concurrent phases (max y and
+ * viewport sample, then type counts and buckets); none returns raw events, so collector memory does not grow with matched events.
  * Output matches the pre-#26 in-Node path whenever at most VIEWPORT_SAMPLE_SIZE events match.
  */
 export const aggregateHeatmap = async (
@@ -59,11 +59,11 @@ export const aggregateHeatmap = async (
 ) => {
   const backend = backendFor(ctx);
   const { resolution } = options;
-  const [{ typeBreakdown, maxY: observedY }, dominant] = await Promise.all([
-    backend.summary(filter),
+  // Phase 1 fixes the grid (max y, viewport); phase 2 counts types and buckets concurrently.
+  const [observedY, dominant] = await Promise.all([
+    backend.maxY(filter),
     options.viewportBucket ? undefined : dominantBucket(backend, filter)
   ]);
-  const total = Object.values(typeBreakdown).reduce((sum, n) => sum + n, 0);
 
   const preferredBucket = options.viewportBucket || dominant;
   const viewport = parseViewportBucket(preferredBucket) || DEFAULT_VIEWPORT;
@@ -75,7 +75,8 @@ export const aggregateHeatmap = async (
     renderHeight
   };
 
-  const buckets = total > 0 ? await backend.buckets(filter, grid) : [];
+  const [typeBreakdown, buckets] = await Promise.all([backend.typeCounts(filter), backend.buckets(filter, grid)]);
+  const total = Object.values(typeBreakdown).reduce((sum, n) => sum + n, 0);
   const points = buckets
     .map(({ bx, by, count }) => ({
       x: Math.round((bx + 0.5) * grid.bucketWidth),
