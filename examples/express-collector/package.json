@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@m-software-engineering/heat-collector": "workspace:*",
-    "better-sqlite3": "^11.5.0",
+    "better-sqlite3": "^13.0.3",
     "express": "^4.22.2"
   },
   "devDependencies": {
