@@ -46,7 +46,7 @@ export const aggregateHeatmap = async (
     options.viewportBucket || filter.viewport ? undefined : dominantBucket(backend, filter)
   ]);
 
-  const preferredBucket = options.viewportBucket || filter.viewport || dominant;
+  const preferredBucket = options.viewportBucket || filter.viewport?.[0] || dominant;
   const viewport = parseViewportBucket(preferredBucket) || DEFAULT_VIEWPORT;
   const renderHeight = Math.max(viewport.h, observedY == null ? viewport.h : Math.round(observedY));
   const grid = {
@@ -86,7 +86,7 @@ export const aggregateHeatmap = async (
       ignored: Math.max(0, total - plotted),
       excluded: { noCoordinates },
       range: options.range,
-      viewportFilter: filter.viewport ?? null,
+      viewportFilter: filter.viewport?.join(",") ?? null,
       viewportBuckets: Object.entries(bucketCounts)
         .filter(([bucket]) => bucket !== "")
         .map(([bucket, count]) => ({ bucket, count }))

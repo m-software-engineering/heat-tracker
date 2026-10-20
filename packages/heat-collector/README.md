@@ -94,8 +94,15 @@ Accepted headers:
 - `GET /api/projects/:projectId/heatmap`
 - `GET /api/projects/:projectId/events`
 - `GET /api/projects/:projectId/sessions`
+- `GET /api/projects/by-key/:projectKey` (`{ project: { id, name, createdAt } | null }`; `null` until the first event for that key arrives)
 - `GET /api/sessions/:sessionId`
 - `GET /api/metrics`
+
+With `admin: { token }` in the config, every `/api/*` route requires `Authorization: Bearer <token>` and answers 401 `HEAT_E_ADMIN_TOKEN_MISSING` or `HEAT_E_ADMIN_TOKEN_INVALID` otherwise. Without it the read API stays open, as before. A project is created by the first ingest for its key and named after the request's `Origin` (or `Default`).
+
+### Health
+
+`GET /healthz` → `200 { "ok": true }` while the process is up. It does not touch the database.
 
 ### Response headers and error payloads
 
@@ -151,7 +158,7 @@ A JWKS download failure now returns HTTP 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with
 - The heatmap renderer adapts to deeper page interactions by expanding `meta.renderHeight` beyond the base viewport when events are observed below the fold.
 - Aggregation runs in the database (`GROUP BY` on bucketed coordinates; MongoDB aggregation pipelines), so a heatmap over 1 M events stays within p95 ≤ 500 ms on Postgres with constant collector memory. `meta.totalEvents` is the number of matched events and `meta.sampled` is `false` (every matched event is counted).
 - Without `from` and `to`, a heatmap covers the last 7 days ending with the current hour; `meta.range` is `{ from, to, defaulted }`. `from` alone ends at now, `to` alone starts at 0.
-- `viewport=390x800` counts only events stored with that viewport bucket (and uses it as the grid). `meta.viewportBuckets` lists `{ bucket, count }` for every bucket in the range, ignoring `viewport`.
+- `viewport=400x800,400x900` counts only events stored with one of those viewport buckets (the first sets the grid). `meta.viewportBuckets` lists `{ bucket, count }` for every bucket in the range, ignoring `viewport`.
 - `click`/`move` events without coordinates (and scrolls without depth) are skipped on every database and counted in `meta.excluded.noCoordinates`. SQL databases used to plot them at 0,0.
 - Whole hours are read from the `heatmap_rollup` table, which ingest keeps up to date and `autoMigrate` builds from existing events (MongoDB reads events directly).
 - Without `viewportBucket`, the viewport is the most common bucket among the 10,000 most recent matching events. `viewportBucket` must look like `1440x900`; anything else returns 400 `HEAT_E_QUERY_INVALID` naming the param.
@@ -212,6 +219,27 @@ db: {
 ```
 
 The collector now prefers `db.database` when provided, otherwise it uses the database from the MongoDB connection string.
+
+## Standalone server (`heat-collector`)
+
+The package ships a ready-to-run server, used by the Docker images:
+
+```bash
+DATABASE_URL=postgres://heat:heat@localhost:5432/heat_tracker HEAT_DATA_DIR=./data heat-collector
+heat-collector token   # prints the admin token again
+```
+
+| Variable           | Default            | Meaning                                                                                                                               |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEAT_DIALECT`     | `pg`               | `pg`, `mysql`, `mongodb` or `sqlite` (`SQLITE_FILE`).                                                                                 |
+| `DATABASE_URL`     | —                  | Required except for SQLite; missing → `HEAT_E_DB_CONFIG`, unreachable → `HEAT_E_DB_UNREACHABLE` (host:port only, never the password). |
+| `HEAT_DATA_DIR`    | `/data`            | Where the generated admin token is stored (`admin-token`, mode 0600).                                                                 |
+| `HEAT_ADMIN_TOKEN` | —                  | Use this token instead of the stored one.                                                                                             |
+| `PORT` / `HOST`    | `4000` / `0.0.0.0` | Listen address.                                                                                                                       |
+| `HEAT_LOG_LEVEL`   | `warn`             | Request logs appear at `info`.                                                                                                        |
+| `HEAT_TRUST_PROXY` | —                  | Express `trust proxy` value when behind a reverse proxy.                                                                              |
+
+At startup it prints one block with the dashboard URL, the admin token, and the command to show it again. `/ingest` answers CORS preflights from any origin (ingest stays authenticated by project key); the read API sends no CORS headers.
 
 ## Production migration command
 

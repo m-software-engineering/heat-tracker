@@ -16,6 +16,9 @@ import { aggregateHeatmap } from "./heatmap";
 import { insertEventsWithRollup, ROLLUP_HOUR_MS } from "./heatmap-rollup";
 import { backfillRollup, CATCH_UP_BATCHES } from "./heatmap-migrate";
 import { storedBucket } from "./viewport-bucket";
+import { requireAdminToken } from "./admin-auth";
+import { projectNameFromOrigin } from "./project-name";
+import { mountProjectsApi } from "./projects-api";
 
 const DEFAULT_HEATMAP_WINDOW_MS = 7 * 24 * ROLLUP_HOUR_MS;
 import type { EventQueryType } from "./heatmap-types";
@@ -34,6 +37,12 @@ export type CollectorConfig = {
   db: DbAdapterConfig;
   auth: AuthConfig;
   autoMigrate?: boolean;
+  /**
+   * When set, every read API route (`/api/*`) requires `Authorization: Bearer <token>` and answers
+   * 401 `HEAT_E_ADMIN_TOKEN_MISSING` / `HEAT_E_ADMIN_TOKEN_INVALID` otherwise. Ingest and
+   * `GET /healthz` stay open. Unset keeps the read API unauthenticated (backward compatible).
+   */
+  admin?: { token: string };
   heatmap?: {
     /**
      * How often to count rows written with `rollup_state` NULL (an older collector during a rolling
@@ -197,6 +206,12 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     next();
   });
 
+  // Process liveness for container healthchecks; touches no database (readiness is separate).
+  router.get("/healthz", (_req, res) => {
+    markNoStore(res);
+    res.status(200).json({ ok: true });
+  });
+
   router.use(express.json({ limit: maxBody }));
 
   router.use((err: any, req: Request, res: Response, next: NextFunction) => {
@@ -324,7 +339,13 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
         payload = hookResult.data;
       }
 
-      const { projectId, userId } = await ensureProjectAndUser(dbContext, projectKey, payload, jwtSub);
+      const { projectId, userId } = await ensureProjectAndUser(
+        dbContext,
+        projectKey,
+        payload,
+        jwtSub,
+        projectNameFromOrigin(req.header("origin"))
+      );
       await upsertSession(dbContext, projectId, userId, payload, req);
       await insertEvents(dbContext, projectId, userId, payload);
 
@@ -357,6 +378,11 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       });
     }
   });
+
+  if (config.admin?.token) {
+    apiRouter.use("/api", requireAdminToken(logger, config.admin.token));
+  }
+  mountProjectsApi(apiRouter, dbContext, logger);
 
   apiRouter.get("/api/projects/:projectId/heatmap", async (req, res) => {
     const parseResult = heatmapQuerySchema.safeParse(req.query);
@@ -394,7 +420,14 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     const requestedType = (query.type ?? "click") as EventQueryType;
 
     try {
-      const filter = { projectId, type: requestedType, path: query.path, viewport: query.viewport, from, to };
+      const filter = {
+        projectId,
+        type: requestedType,
+        path: query.path,
+        viewport: query.viewport?.split(","),
+        from,
+        to
+      };
       const range = { from, to, defaulted };
       const options = { resolution: query.resolution, viewportBucket: query.viewportBucket, requestedType, range };
       let result = await aggregateHeatmap(dbContext, filter, options);
@@ -641,7 +674,8 @@ const ensureProjectAndUser = async (
   ctx: DbContext,
   projectKey: string,
   payload: any,
-  jwtSub?: string
+  jwtSub?: string,
+  name = "Default"
 ): Promise<{ projectId: string; userId?: string }> => {
   const now = Date.now();
 
@@ -652,7 +686,7 @@ const ensureProjectAndUser = async (
     let project = await projects.findOne({ key: projectKey });
     if (!project) {
       const projectId = crypto.randomUUID();
-      await projects.insertOne({ id: projectId, key: projectKey, name: "Default", createdAt: now });
+      await projects.insertOne({ id: projectId, key: projectKey, name, createdAt: now });
       project = { id: projectId };
     }
 
@@ -693,7 +727,7 @@ const ensureProjectAndUser = async (
     await ctx.db.insert(projects).values({
       id: projectId,
       key: projectKey,
-      name: "Default",
+      name,
       createdAt: now
     });
   } else {
