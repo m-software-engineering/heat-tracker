@@ -91,7 +91,9 @@ test.describe("checkFrame redirects", () => {
   });
 
   test(`more than ${MAX_REDIRECTS} redirects is unverified`, async () => {
-    const site = await listen((q, r) => r.writeHead(302, { location: `${q.url}x` }).end());
+    // Fixed redirect chain driven by a server-side counter, never by request input.
+    let hop = 0;
+    const site = await listen((_q, r) => r.writeHead(302, { location: `/hop-${++hop}` }).end());
     try {
       const verdict = await checkFrame(`${site.origin}/`, "http://dash.test", [site.origin]);
       expect(verdict).toMatchObject({ blocked: false, verified: false });
