@@ -289,10 +289,12 @@ export const buildCreateTableSql = (dialect: Dialect) => {
     };
   }
 
+  // `key` is a reserved word in MySQL, so it must be quoted there (Postgres accepts it bare).
+  const keyColumn = sql.raw(dialect === "mysql" ? "`key`" : "key");
   return {
     projects: sql`CREATE TABLE IF NOT EXISTS projects (
       id VARCHAR(64) PRIMARY KEY,
-      key VARCHAR(255) NOT NULL UNIQUE,
+      ${keyColumn} VARCHAR(255) NOT NULL UNIQUE,
       name VARCHAR(255) NOT NULL,
       created_at BIGINT NOT NULL
     );`,
