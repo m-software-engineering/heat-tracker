@@ -9,9 +9,12 @@ test.describe("tracking snippet", () => {
     const snippet = trackingSnippet(`https://c.example${evil}`, evil);
     // The page as a site owner would paste it, with the CDN import swapped for a recorder.
     const pasted = snippet.replace(/^\s*import .*$/m, "");
-    await page.setContent(
-      `<script>window.calls = []; window.init = (c) => calls.push(c); window.alert = () => calls.push("alert");</script>${pasted}`
-    );
+    await page.addInitScript(() => {
+      const calls: unknown[] = [];
+      Object.assign(window, { calls, init: (c: unknown) => calls.push(c), alert: () => calls.push("alert") });
+    });
+    await page.route("http://snippet.test/", (route) => route.fulfill({ contentType: "text/html", body: pasted }));
+    await page.goto("http://snippet.test/");
     await expect
       .poll(() => page.evaluate(() => (window as any).calls))
       .toEqual([{ endpoint: `https://c.example${evil}/ingest`, projectKey: evil }]);
