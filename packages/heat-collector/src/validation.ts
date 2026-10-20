@@ -50,7 +50,9 @@ const scrollEventSchema = baseEventSchema.extend({
 const pageviewEventSchema = baseEventSchema.extend({
   type: z.literal("pageview"),
   from: z.string().optional(),
-  to: z.string()
+  to: z.string(),
+  // Trimmed and cut to 200 characters on ingest (sanitizePayloadPaths), never rejected for length.
+  title: z.string().optional()
 });
 
 const customEventSchema = baseEventSchema.extend({
@@ -153,4 +155,29 @@ export const sessionEventsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).optional().default(200),
   offset: z.coerce.number().int().min(0).optional().default(0),
   type: z.string().optional()
+});
+
+// Above the max the limit is clamped (not rejected); the applied limit is returned in meta.limit.
+// An empty `limit=` means the default (#64 QA).
+const listLimit = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.coerce
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .default(50)
+    .transform((limit) => Math.min(limit, 200))
+);
+
+export const projectsQuerySchema = z.object({
+  limit: listLimit,
+  cursor: z.string().optional()
+});
+
+export const pagesQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+  limit: listLimit,
+  cursor: z.string().optional()
 });

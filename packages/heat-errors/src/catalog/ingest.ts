@@ -30,6 +30,13 @@ export const INGEST_ERRORS = {
     message: "The ingest request has no project key.",
     fix: "Set projectKey in init() or forward the x-project-key header through your proxy."
   },
+  HEAT_E_PROJECT_KEY_INVALID: {
+    code: "HEAT_E_PROJECT_KEY_INVALID",
+    status: 400,
+    legacyCode: "invalid_project_key",
+    message: "The project key has characters the collector does not accept.",
+    fix: "Use 1 to 128 characters from A-Z, a-z, 0-9, `_` and `-`, such as the key the dashboard generates (`pk_…`)."
+  },
   HEAT_E_RATE_LIMITED: {
     code: "HEAT_E_RATE_LIMITED",
     status: 429,

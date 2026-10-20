@@ -327,6 +327,117 @@ main {
   cursor: not-allowed;
 }
 
+/* Entry screens (#25): project list and popular pages. */
+.entry-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  table-layout: fixed;
+}
+
+.entry-table th,
+.entry-table td {
+  padding: 10px 14px;
+  text-align: start;
+  border-bottom: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.entry-table .num {
+  text-align: end;
+  width: 8em;
+  font-variant-numeric: tabular-nums;
+}
+
+.entry-link {
+  display: block;
+  color: var(--ink);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.entry-link:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 2px;
+}
+
+.entry-title,
+.entry-path,
+.entry-name > span:last-child {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entry-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Full title on keyboard focus (hover uses the title attribute). */
+.entry-link:focus .entry-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.entry-path {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.data-dot {
+  flex: none;
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.data-dot.live {
+  background: #2e9d5b;
+}
+
+.skeleton {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, var(--border), #f4f2ee, var(--border));
+  background-size: 200% 100%;
+  animation: skeleton 1.2s linear infinite;
+}
+
+@keyframes skeleton {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+.waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.waiting.ready {
+  color: #2e9d5b;
+}
+
+.entry-more {
+  margin-top: 12px;
+}
+
 .onboarding-card {
   display: grid;
   gap: 12px;
