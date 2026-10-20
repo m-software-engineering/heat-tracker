@@ -12,6 +12,8 @@ import {
   sessionsQuerySchema
 } from "./validation";
 import { verifyJwt, type JwtConfig } from "./jwt";
+import { aggregateHeatmap } from "./heatmap";
+import type { EventQueryType } from "./heatmap-types";
 import { HeatTrackerError, INGEST_ERRORS, QUERY_ERRORS, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import { fieldErrors, payloadCause, queryCause, resolveRequestId, sendError } from "./http-errors";
 
@@ -43,8 +45,6 @@ export type Collector = {
   notFoundHandler: express.RequestHandler;
 };
 
-type EventType = "click" | "move" | "scroll" | "pageview" | "custom" | "input" | "keyboard";
-type EventQueryType = "all" | EventType;
 type RequestWithContext = Request & { requestId?: string; startedAtMs?: number };
 type TimeQuery = { from?: string; to?: string };
 
@@ -53,7 +53,6 @@ type RateLimitResult = { limited: boolean; remaining: number; resetAt: number; l
 
 const DEFAULT_LIMIT = { windowMs: 10000, max: 120 };
 const HEAT_COLLECTOR_HEADER_VALUE = "heat-collector";
-const HEATMAP_PLOTTABLE_TYPES = new Set<EventType>(["click", "move", "scroll"]);
 
 const consumeRateLimit = (
   buckets: Map<string, RateBucket>,
@@ -99,19 +98,6 @@ const requestId = () => {
   return crypto.randomBytes(16).toString("hex");
 };
 
-const parseViewportBucket = (bucket?: string) => {
-  if (!bucket) return null;
-  const [w, h] = bucket.split("x").map((n) => Number(n));
-  if (!w || !h) return null;
-  return { w, h };
-};
-
-const toViewportBucket = (w: number, h: number) => {
-  const bw = Math.round(w / 100) * 100;
-  const bh = Math.round(h / 100) * 100;
-  return `${bw}x${bh}`;
-};
-
 const sanitizeEventMeta = (meta: any) => {
   if (!meta || typeof meta !== "object") return undefined;
   const clone = { ...meta };
@@ -136,36 +122,6 @@ const rangeCause = (from: number, to: number) => `from=${from} is later than to=
 
 const markNoStore = (res: Response) => {
   res.setHeader("Cache-Control", "no-store");
-};
-
-const safeParseMetaJson = (value: unknown) => {
-  if (!value) return {} as Record<string, unknown>;
-  if (typeof value === "object") return value as Record<string, unknown>;
-  if (typeof value !== "string") return {} as Record<string, unknown>;
-
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-};
-
-const pickBucketFromMeta = (meta: Record<string, unknown>) => {
-  const nestedMeta = meta.meta as Record<string, unknown> | undefined;
-  const explicit = typeof nestedMeta?.viewportBucket === "string" ? nestedMeta.viewportBucket : undefined;
-  if (explicit && parseViewportBucket(explicit)) {
-    return explicit;
-  }
-
-  const viewport = meta.viewport as Record<string, unknown> | undefined;
-  const w = Number(viewport?.w);
-  const h = Number(viewport?.h);
-  if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
-    return toViewportBucket(w, h);
-  }
-
-  return undefined;
 };
 
 export const createCollector = async (config: CollectorConfig): Promise<Collector> => {
@@ -415,18 +371,18 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     const requestedType = (query.type ?? "click") as EventQueryType;
 
     try {
+      const filter = { projectId, type: requestedType, path: query.path, from, to };
+      const options = { resolution: query.resolution, viewportBucket: query.viewportBucket, requestedType };
+      let result = await aggregateHeatmap(dbContext, filter, options);
       let resolvedType = requestedType;
-      let rows = await queryEvents(dbContext, projectId, requestedType, query.path, from, to);
 
-      if (!query.type && rows.length === 0) {
-        const fallbackRows = await queryEvents(dbContext, projectId, "all", query.path, from, to);
-        if (fallbackRows.length > 0) {
-          rows = fallbackRows;
+      if (!query.type && result.meta.total === 0) {
+        const fallback = await aggregateHeatmap(dbContext, { ...filter, type: "all" }, options);
+        if (fallback.meta.total > 0) {
+          result = fallback;
           resolvedType = "all";
         }
       }
-
-      const result = buildHeatmap(rows, query.resolution, query.viewportBucket, requestedType, resolvedType);
 
       markNoStore(res);
       res.setHeader("X-Result-Count", String(result.meta.total));
@@ -876,29 +832,6 @@ const insertEvents = async (ctx: DbContext, projectId: string, userId: string | 
   await ctx.db.insert(events).values(rows);
 };
 
-const queryEvents = async (
-  ctx: DbContext,
-  projectId: string,
-  type: EventQueryType,
-  path: string | undefined,
-  from: number,
-  to: number
-) => {
-  if (isMongo(ctx)) {
-    const filter: any = { projectId, ts: { $gte: from, $lte: to } };
-    if (type !== "all") filter.type = type;
-    if (path) filter.path = path;
-    return ctx.db.collection("events").find(filter).toArray();
-  }
-
-  const { events } = ctx.schema as any;
-  const filters = [eq(events.projectId, projectId), gte(events.ts, from), lte(events.ts, to)];
-  if (type !== "all") filters.push(eq(events.type, type));
-  if (path) filters.push(eq(events.path, path));
-  const where = and(...filters);
-  return ctx.db.select().from(events).where(where);
-};
-
 const listProjectEvents = async (
   ctx: DbContext,
   projectId: string,
@@ -949,104 +882,6 @@ const listProjectEvents = async (
   const where = and(...filters);
 
   return ctx.db.select().from(events).where(where).orderBy(events.ts).limit(query.limit).offset(query.offset);
-};
-
-const buildHeatmap = (
-  rows: any[],
-  resolution: number,
-  viewportBucket: string | undefined,
-  requestedType: EventQueryType,
-  resolvedType: EventQueryType
-) => {
-  const buckets: Record<string, number> = {};
-  const bucketCounts: Record<string, number> = {};
-  const typeBreakdown: Record<string, number> = {};
-  let plotted = 0;
-
-  for (const row of rows) {
-    const rowType = typeof row.type === "string" ? row.type : "unknown";
-    typeBreakdown[rowType] = (typeBreakdown[rowType] || 0) + 1;
-
-    const meta = safeParseMetaJson(row.metaJson);
-    const bucket = pickBucketFromMeta(meta);
-    if (bucket) {
-      bucketCounts[bucket] = (bucketCounts[bucket] || 0) + 1;
-    }
-  }
-
-  const preferredBucket = viewportBucket || Object.entries(bucketCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-  const viewport = parseViewportBucket(preferredBucket) || { w: 1280, h: 720 };
-
-  let maxObservedY = viewport.h;
-  for (const row of rows) {
-    if (row.type === "scroll" && row.scrollDepth != null) {
-      continue;
-    }
-    const y = Number(row.y);
-    if (Number.isFinite(y)) {
-      maxObservedY = Math.max(maxObservedY, Math.round(y));
-    }
-  }
-
-  const bucketWidth = viewport.w / resolution;
-  const renderHeight = Math.max(viewport.h, maxObservedY);
-  const bucketHeight = renderHeight / resolution;
-
-  for (const row of rows) {
-    let x = Number(row.x);
-    let y = Number(row.y);
-
-    if (row.type === "scroll" && row.scrollDepth != null) {
-      const rawDepth = Number(row.scrollDepth);
-      const normalizedDepth = rawDepth > 100 ? rawDepth / 100 : rawDepth;
-      const pct = normalizedDepth / 100;
-      x = 0;
-      y = Math.round(pct * renderHeight);
-    }
-
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      continue;
-    }
-
-    const bx = Math.min(resolution - 1, Math.max(0, Math.floor(x / bucketWidth)));
-    const by = Math.min(resolution - 1, Math.max(0, Math.floor(y / bucketHeight)));
-    const key = `${bx}:${by}`;
-    buckets[key] = (buckets[key] || 0) + 1;
-    plotted += 1;
-  }
-
-  const points = Object.entries(buckets).map(([key, value]) => {
-    const [bx, by] = key.split(":").map((n) => Number(n));
-    return {
-      x: Math.round((bx + 0.5) * bucketWidth),
-      y: Math.round((by + 0.5) * bucketHeight),
-      value
-    };
-  });
-
-  const ignored = Math.max(0, rows.length - plotted);
-  const warning =
-    rows.length > 0 && plotted === 0
-      ? "Events matched the filter but none are plottable. Use type=click|move|scroll or inspect /api/projects/:projectId/events."
-      : undefined;
-
-  return {
-    points,
-    meta: {
-      resolution,
-      viewport,
-      renderHeight,
-      total: rows.length,
-      plotted,
-      ignored,
-      requestedType,
-      resolvedType,
-      bucket: preferredBucket || `${viewport.w}x${viewport.h}`,
-      plottableTypes: Array.from(HEATMAP_PLOTTABLE_TYPES),
-      typeBreakdown,
-      ...(warning ? { warning } : {})
-    }
-  };
 };
 
 const listSessions = async (

@@ -31,7 +31,75 @@ class FakeCursor {
   async toArray() {
     return this.docs;
   }
+
+  async *[Symbol.asyncIterator]() {
+    yield* this.docs;
+  }
 }
+
+// Evaluates the aggregation expressions the heatmap pipeline uses (heatmap-mongo.ts).
+const evalExpr = (doc: any, expr: any): any => {
+  if (typeof expr === "string" && expr.startsWith("$")) return doc[expr.slice(1)];
+  if (expr === null || typeof expr !== "object") return expr;
+  const [op, raw] = Object.entries(expr)[0] as [string, any];
+  const args = Array.isArray(raw) ? raw.map((a) => evalExpr(doc, a)) : [evalExpr(doc, raw)];
+  switch (op) {
+    case "$eq":
+      return args[0] === args[1];
+    case "$gt":
+      return args[1] === null ? args[0] != null : args[0] > args[1];
+    case "$and":
+      return args.every(Boolean);
+    case "$not":
+      return !args[0];
+    case "$cond":
+      return args[0] ? args[1] : args[2];
+    case "$divide":
+      return args[0] / args[1];
+    case "$multiply":
+      return args[0] * args[1];
+    case "$add":
+      return args[0] + args[1];
+    case "$floor":
+      return Math.floor(args[0]);
+    case "$min":
+      return Math.min(...args);
+    case "$max":
+      return Math.max(...args);
+    case "$isNumber":
+      return typeof args[0] === "number";
+    default:
+      return Object.fromEntries(Object.entries(expr).map(([k, v]) => [k, evalExpr(doc, v)]));
+  }
+};
+
+const runPipeline = (docs: any[], pipeline: any[]) => {
+  let rows = docs;
+  for (const stage of pipeline) {
+    if (stage.$match) {
+      const { $expr, ...filter } = stage.$match;
+      rows = rows.filter((doc) => matchFilter(doc, filter) && ($expr ? evalExpr(doc, $expr) : true));
+    } else if (stage.$project) {
+      rows = rows.map((doc) => evalExpr(doc, stage.$project));
+    } else if (stage.$group) {
+      const groups = new Map<string, any>();
+      const { _id, ...fields } = stage.$group;
+      for (const doc of rows) {
+        const id = evalExpr(doc, _id);
+        const key = JSON.stringify(id ?? null);
+        const group = groups.get(key) ?? { _id: id ?? null };
+        for (const [name, acc] of Object.entries(fields) as Array<[string, any]>) {
+          if ("$sum" in acc) group[name] = (group[name] ?? 0) + evalExpr(doc, acc.$sum);
+          const value = "$max" in acc ? evalExpr(doc, acc.$max) : undefined;
+          if (typeof value === "number") group[name] = Math.max(group[name] ?? -Infinity, value);
+        }
+        groups.set(key, group);
+      }
+      rows = [...groups.values()];
+    }
+  }
+  return rows;
+};
 
 const matchFilter = (doc: any, filter: any) => {
   for (const [key, value] of Object.entries(filter || {})) {
@@ -82,6 +150,10 @@ class FakeCollection {
 
   find(filter: any) {
     return new FakeCursor(this.docs.filter((doc) => matchFilter(doc, filter)));
+  }
+
+  aggregate(pipeline: any[]) {
+    return new FakeCursor(runPipeline(this.docs, pipeline));
   }
 
   async countDocuments(filter: any) {
@@ -169,7 +241,12 @@ describe("mongodb support", () => {
 
     expect(ctx.dialect).toBe("mongodb");
     expect(db.collection("projects").indexes.length).toBeGreaterThan(0);
-    expect(db.collection("events").indexes.length).toBeGreaterThan(0);
+    expect(db.collection("events").indexes.map((entry: any) => entry.index)).toContainEqual({
+      projectId: 1,
+      path: 1,
+      type: 1,
+      ts: 1
+    });
   });
 
   it("does not fail migration when mongodb user cannot create indexes", async () => {

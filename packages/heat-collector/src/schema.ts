@@ -86,6 +86,12 @@ export const createSchema = (dialect: Dialect): Schema => {
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
+        projectPathTypeTsIdx: index("events_project_path_type_ts_idx").on(
+          table.projectId,
+          table.path,
+          table.type,
+          table.ts
+        ),
         sessionTsIdx: index("events_session_ts_idx").on(table.sessionId, table.ts)
       })
     );
@@ -153,6 +159,12 @@ export const createSchema = (dialect: Dialect): Schema => {
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
+        projectPathTypeTsIdx: index("events_project_path_type_ts_idx").on(
+          table.projectId,
+          table.path,
+          table.type,
+          table.ts
+        ),
         sessionTsIdx: index("events_session_ts_idx").on(table.sessionId, table.ts)
       })
     );
@@ -219,6 +231,12 @@ export const createSchema = (dialect: Dialect): Schema => {
     },
     (table: any) => ({
       projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
+      projectPathTypeTsIdx: index("events_project_path_type_ts_idx").on(
+        table.projectId,
+        table.path,
+        table.type,
+        table.ts
+      ),
       sessionTsIdx: index("events_session_ts_idx").on(table.sessionId, table.ts)
     })
   );
@@ -311,4 +329,18 @@ export const buildCreateTableSql = (dialect: Dialect) => {
       meta_json TEXT
     );`
   };
+};
+
+/** Name of the heatmap filter index (project, path, type, ts), created by `autoMigrate`. */
+export const HEATMAP_INDEX = "events_project_path_type_ts_idx";
+
+/**
+ * Builds the heatmap index statement. MySQL has no `IF NOT EXISTS` for indexes (the caller ignores
+ * ER_DUP_KEYNAME) and needs a prefix on `path`, which is VARCHAR(1024).
+ */
+export const buildCreateIndexSql = (dialect: Dialect) => {
+  if (dialect === "mysql") {
+    return sql.raw(`CREATE INDEX ${HEATMAP_INDEX} ON events (project_id, path(255), type, ts)`);
+  }
+  return sql.raw(`CREATE INDEX IF NOT EXISTS ${HEATMAP_INDEX} ON events (project_id, path, type, ts)`);
 };

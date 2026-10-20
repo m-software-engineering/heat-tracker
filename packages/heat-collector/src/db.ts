@@ -1,6 +1,6 @@
 import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import type { Dialect } from "./schema";
-import { buildCreateTableSql, createSchema } from "./schema";
+import { buildCreateIndexSql, buildCreateTableSql, createSchema } from "./schema";
 
 export type DbAdapterConfig =
   | {
@@ -139,6 +139,7 @@ export const autoMigrate = async (ctx: DbContext) => {
     await createMongoIndex(ctx.db.collection("sessions"), { projectId: 1, startedAt: 1 });
     await createMongoIndex(ctx.db.collection("events"), { id: 1 }, { unique: true });
     await createMongoIndex(ctx.db.collection("events"), { projectId: 1, path: 1, ts: 1 });
+    await createMongoIndex(ctx.db.collection("events"), { projectId: 1, path: 1, type: 1, ts: 1 });
     await createMongoIndex(ctx.db.collection("events"), { sessionId: 1, ts: 1 });
     return;
   }
@@ -148,7 +149,15 @@ export const autoMigrate = async (ctx: DbContext) => {
   await execute(ctx.db, statements.users);
   await execute(ctx.db, statements.sessions);
   await execute(ctx.db, statements.events);
+  await execute(ctx.db, buildCreateIndexSql(ctx.dialect)).catch((error: any) => {
+    // MySQL: the index already exists (ER_DUP_KEYNAME). Anything else is a real failure.
+    if (ctx.dialect === "mysql" && isDuplicateKeyName(error)) return;
+    throw error;
+  });
 };
+
+const isDuplicateKeyName = (error: any) =>
+  error?.errno === 1061 || error?.code === "ER_DUP_KEYNAME" || error?.cause?.errno === 1061;
 
 const createMongoIndex = async (collection: any, index: any, options?: any) => {
   try {
