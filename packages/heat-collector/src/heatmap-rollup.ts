@@ -177,9 +177,8 @@ export const inTransaction = async (
   work: (tx: any, run: (query: any) => unknown) => unknown
 ) => {
   if (ctx.dialect === "sqlite") {
-    // IMMEDIATE takes the write lock up front, so concurrent backfills and ingest serialize. Explicit
-    // BEGIN/COMMIT/ROLLBACK statements, not better-sqlite3's transaction wrapper: a failing statement then
-    // throws through an ordinary run() (a throw through the wrapper crashed the Node 24 test worker in CI).
+    // IMMEDIATE takes the write lock up front, so concurrent backfills and ingest serialize. Plain
+    // BEGIN/COMMIT/ROLLBACK statements work with any drizzle SQLite session (no driver transaction wrapper).
     ctx.db.run(sql.raw("BEGIN IMMEDIATE"));
     try {
       const result = work(ctx.db, (query: any) => query.run());
