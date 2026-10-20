@@ -16,6 +16,7 @@ import {
   type ViewState
 } from "../lib/view-state";
 import FrameBlockedNotice from "./FrameBlockedNotice";
+import FrameUnverifiedNotice from "./FrameUnverifiedNotice";
 import HeatmapControls from "./HeatmapControls";
 import HeatmapLegend from "./HeatmapLegend";
 import SiteNotAllowedNotice from "./SiteNotAllowedNotice";
@@ -58,13 +59,21 @@ const useFrameVerdict = (pageUrl: string, frameCheckUrl: string) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FRAME_CHECK_BUDGET_MS);
     const query = new URLSearchParams({ url: pageUrl, origin: window.location.origin });
+    let active = true;
     fetch(`${frameCheckUrl}?${query}`, { signal: controller.signal })
-      .then((res) => res.json())
-      .then((body: FrameVerdict) => setVerdict(body))
-      // No verdict in time: show the frame and let the browser decide.
-      .catch(() => !controller.signal.aborted || setVerdict({ blocked: false, reason: "frame check timed out" }))
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`frame check returned ${res.status}`))))
+      .then((body: FrameVerdict) => active && setVerdict(body))
+      // No verdict (timeout, error): fail closed and do not load the page.
+      .catch((err: Error) => {
+        if (!active) return;
+        const reason = controller.signal.aborted ? "frame check timed out" : err.message || "frame check failed";
+        setVerdict({ blocked: false, verified: false, reason });
+      })
       .finally(() => clearTimeout(timer));
-    return () => controller.abort();
+    return () => {
+      active = false;
+      controller.abort();
+    };
   }, [pageUrl, frameCheckUrl]);
   return verdict;
 };
@@ -88,7 +97,8 @@ export default function PageHeatmap({
   const pageUrl = siteOrigin ? new URL(path, siteOrigin).toString() : "";
   const verdict = useFrameVerdict(pageUrl, frameCheckUrl);
   const notAllowed = verdict?.allowed === false;
-  const framed = Boolean(pageUrl) && verdict?.blocked === false && !notAllowed;
+  const unverified = verdict?.verified === false;
+  const framed = Boolean(pageUrl) && verdict?.blocked === false && !notAllowed && !unverified;
   // Bucket counts ignore the viewport filter, so the last response always has every option's count.
   const [buckets, setBuckets] = useState<BucketCount[] | null>(null);
   const options = useMemo(() => (buckets ? viewportOptions(buckets) : null), [buckets]);
@@ -193,6 +203,7 @@ export default function PageHeatmap({
         </div>
       )}
       {notAllowed && <SiteNotAllowedNotice siteOrigin={new URL(siteOrigin).origin} />}
+      {unverified && <FrameUnverifiedNotice reason={verdict.reason} />}
       {verdict?.blocked && <FrameBlockedNotice reason={verdict.reason} dashboardOrigin={window.location.origin} />}
       <TopAreasTable areas={areas} visible={state.view === "table"} caption={summary} />
       <div

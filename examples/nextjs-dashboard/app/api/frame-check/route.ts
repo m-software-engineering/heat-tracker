@@ -12,7 +12,10 @@ export async function GET(request: Request) {
   if (!url || !URL.canParse(url)) {
     return Response.json({ blocked: true, reason: "url is missing or not absolute" }, { status: 400 });
   }
-  return Response.json(await checkFrame(url, origin, allowedSiteOrigins()), {
+  if (!URL.canParse(origin)) {
+    return Response.json({ blocked: true, reason: "origin is not absolute" }, { status: 400 });
+  }
+  return Response.json(await checkFrame(url, new URL(origin).origin, allowedSiteOrigins()), {
     headers: { "Cache-Control": "no-store" }
   });
 }

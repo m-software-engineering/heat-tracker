@@ -1,5 +1,6 @@
 "use client";
 
+import { Fragment } from "react";
 import { PERIOD_DAYS, type ViewState, type ViewportClass, type ViewportOption } from "../lib/view-state";
 
 type Props = {
@@ -9,6 +10,8 @@ type Props = {
   options: ViewportOption[] | null;
   onChange: (next: Partial<ViewState>) => void;
 };
+
+const EMPTY_REASON = "No events for this viewport in this period";
 
 const LABELS: Record<ViewportClass, string> = { desktop: "Desktop", tablet: "Tablet", mobile: "Mobile" };
 
@@ -20,21 +23,29 @@ export default function HeatmapControls({ state, activeViewport, options, onChan
         {(options ?? []).map(({ viewport, bucket, count }) => {
           const empty = count === 0;
           return (
-            <label
-              key={viewport}
-              className={empty ? "ph-target disabled" : "ph-target"}
-              title={empty ? "No events for this viewport in this period" : `${bucket} px`}
-            >
-              <input
-                type="radio"
-                name="heatmap-viewport"
-                value={viewport}
-                checked={activeViewport === viewport}
-                disabled={empty}
-                onChange={() => onChange({ viewport })}
-              />
-              {LABELS[viewport]} · {count.toLocaleString("en-US")}
-            </label>
+            <Fragment key={viewport}>
+              <label
+                className={empty ? "ph-target disabled" : "ph-target"}
+                title={empty ? EMPTY_REASON : `${bucket} px`}
+              >
+                <input
+                  type="radio"
+                  name="heatmap-viewport"
+                  value={viewport}
+                  checked={activeViewport === viewport}
+                  disabled={empty}
+                  aria-describedby={empty ? `heatmap-viewport-${viewport}-reason` : undefined}
+                  onChange={() => onChange({ viewport })}
+                />
+                {LABELS[viewport]} · {count.toLocaleString("en-US")}
+              </label>
+              {/* title alone is not exposed reliably to assistive technology. */}
+              {empty && (
+                <span id={`heatmap-viewport-${viewport}-reason`} className="sr-only">
+                  {EMPTY_REASON}
+                </span>
+              )}
+            </Fragment>
           );
         })}
       </fieldset>

@@ -17,7 +17,9 @@ if (projectId) {
         params.get("site") === "unlisted" ? "__UNLISTED_ORIGIN__" : "__SITE_ORIGIN__"
       ]
     ),
-    path: params.get("path") ?? "/pricing"
+    path: params.get("path") ?? "/pricing",
+    // check=slow: a frame-check route that answers after the client budget.
+    frameCheckUrl: params.get("check") === "slow" ? "/api/frame-check-slow" : "/api/frame-check"
   };
   // Full-width grid cell, like the dashboard's main column.
   const cell = { style: { gridColumn: "1 / -1", minWidth: 0 } };

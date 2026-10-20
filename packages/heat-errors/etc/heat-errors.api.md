@@ -24,6 +24,16 @@ export const DASHBOARD_ERRORS: {
         readonly message: "This site isn't allowed yet.";
         readonly fix: "Add its origin to HEAT_DASHBOARD_SITE_ORIGINS and restart the dashboard.";
     };
+    readonly HEAT_E_FRAME_CHECK_UNVERIFIED: {
+        readonly code: "HEAT_E_FRAME_CHECK_UNVERIFIED";
+        readonly message: "The dashboard could not verify that this site may be shown in a frame, so the page is not loaded.";
+        readonly fix: "Check that the dashboard server can reach the site and that the site responds within 3 seconds, then reload this page.";
+    };
+    readonly HEAT_E_FRAME_ORIGIN_INVALID: {
+        readonly code: "HEAT_E_FRAME_ORIGIN_INVALID";
+        readonly message: "An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.";
+        readonly fix: "List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin.";
+    };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";
         readonly message: "The dashboard could not read heatmap data from the collector.";

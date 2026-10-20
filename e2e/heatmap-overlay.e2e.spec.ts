@@ -150,6 +150,18 @@ test("blocked framing shows HEAT_E_FRAME_BLOCKED within 3 s with the exact fix",
   await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
 });
 
+test("a frame check that does not answer in time fails closed: no iframe, could-not-verify notice", async ({
+  page
+}) => {
+  await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/pricing&check=slow`);
+  const alert = page.locator('[data-code="HEAT_E_FRAME_CHECK_UNVERIFIED"]');
+  await expect(alert).toBeVisible({ timeout: 4000 });
+  await expect(alert).toContainText("could not verify");
+  await expect(alert).toContainText("frame check timed out");
+  await expect(page.locator("iframe")).toHaveCount(0);
+  await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
+});
+
 test("empty page says so and names the period", async ({ page }) => {
   await openDashboard(page, "path=/empty");
   await expect(page.getByText("No clicks on this page in the last 7 days.")).toBeVisible();
@@ -186,6 +198,9 @@ test("viewport toggle filters events, shows counts and disables empty buckets", 
     "title",
     "No events for this viewport in this period"
   );
+  // The reason is exposed to assistive technology, not only as a tooltip.
+  await expect(tablet).toHaveAccessibleDescription("No events for this viewport in this period");
+  await expect(group.getByRole("radio", { name: /^Desktop/ })).toHaveAccessibleDescription("");
 
   await expect(page.getByTestId("frame-scale")).toHaveText(/^1400 px/);
   await group.getByRole("radio", { name: `Mobile · ${MOBILE_CLICKS + 1}` }).check();

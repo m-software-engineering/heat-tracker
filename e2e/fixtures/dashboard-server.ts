@@ -78,6 +78,9 @@ export const startOverlayStack = async () => {
   dashboard.get("/api/frame-check", async (req, res) => {
     res.json(await checkFrame(String(req.query.url), String(req.query.origin), [siteOrigin]));
   });
+  dashboard.get("/api/frame-check-slow", (_req, res) => {
+    setTimeout(() => res.json({ blocked: false, reason: "too late" }), 4_000).unref();
+  });
   // Static page: the harness reads project/path from location.search; only server-known values are injected.
   const page =
     `<!doctype html><html lang="en"><head><meta charset="utf-8" /><title>Heatmap</title>` +
