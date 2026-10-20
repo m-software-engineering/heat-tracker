@@ -1,6 +1,12 @@
 import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import type { Dialect } from "./schema";
-import { buildAddEventColumnSql, buildCreateIndexSql, buildCreateTableSql, createSchema } from "./schema";
+import {
+  buildAddEventColumnSql,
+  buildCreatePendingIndexSql,
+  buildCreateIndexSql,
+  buildCreateTableSql,
+  createSchema
+} from "./schema";
 import { migrateHeatmapMongo, migrateHeatmapSql } from "./heatmap-migrate";
 
 export type DbAdapterConfig =
@@ -162,6 +168,10 @@ export const autoMigrate = async (ctx: DbContext) => {
       throw error;
     });
   }
+  await execute(ctx.db, buildCreatePendingIndexSql(ctx.dialect)).catch((error: any) => {
+    if (ctx.dialect === "mysql" && isDuplicateKeyName(error)) return;
+    throw error;
+  });
   await migrateHeatmapSql(ctx, execute);
 };
 

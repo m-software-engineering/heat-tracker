@@ -360,6 +360,14 @@ export const buildCreateIndexSql = (dialect: Dialect) => {
   return sql.raw(`CREATE INDEX IF NOT EXISTS ${HEATMAP_INDEX} ON events (project_id, path, type, ts)`);
 };
 
+/** Finds rows not yet counted in the rollup (catch-up); partial where the dialect supports it. */
+export const buildCreatePendingIndexSql = (dialect: Dialect) =>
+  sql.raw(
+    dialect === "mysql"
+      ? "CREATE INDEX events_rollup_pending_idx ON events (rollup_state, project_id)"
+      : "CREATE INDEX IF NOT EXISTS events_rollup_pending_idx ON events (project_id) WHERE rollup_state IS NULL"
+  );
+
 /**
  * Adds a #26 column to `events` tables created before it existed; callers ignore "duplicate column".
  * `viewport_bucket` is the stored bucket; `rollup_state` is 1 once the row is counted in `heatmap_rollup`.

@@ -127,7 +127,7 @@ Package-level highlights:
 
 Concrete, source-based concerns:
 
-- **Large single-module collector**: `packages/heat-collector/src/collector.ts` combines routing, auth, persistence orchestration, and querying in one file, increasing change risk and cognitive load. Heatmap aggregation now lives in `src/heatmap*.ts` and runs in the database (grouped queries, no raw rows in Node); whole hours read the `heatmap_rollup` table maintained at ingest.
+- **Large single-module collector**: `packages/heat-collector/src/collector.ts` combines routing, auth, persistence orchestration, and querying in one file, increasing change risk and cognitive load. Heatmap aggregation now lives in `src/heatmap*.ts` and runs in the database (grouped queries, no raw rows in Node); whole hours read the `heatmap_rollup` table maintained at ingest. Rows written by older collectors during a rolling upgrade (`rollup_state` NULL) are counted by a bounded catch-up before each rollup read (falling back to raw events when more remain) and by a periodic background catch-up.
 - **In-memory rate limit store**: buckets are scoped per collector instance and pruned, but are still process-local, not distributed-safe, and reset on restart.
 - **Potential N+1 session counting**: `listSessions` computes event counts per session via repeated queries.
 - **Multi-dialect schema loading**: Drizzle dialect-core modules are imported statically so the published ESM entrypoint remains executable; optional database drivers are still loaded only for the configured adapter.

@@ -10,3 +10,5 @@ Heatmaps are aggregated in the database. `GET /api/projects/:projectId/heatmap` 
 - New `viewport=<w>x<h>` query param filters events by stored viewport bucket.
 - Without `viewportBucket`, the default viewport is the most common bucket among the 10,000 most recent matching events (identical to before when fewer events match).
 - `viewportBucket` must be `<width>x<height>` (e.g. `1440x900`); other values now return 400 `HEAT_E_QUERY_INVALID` naming the param instead of silently using 1280x720.
+
+During a rolling upgrade, events written by older collectors are counted before heatmap reads and by a periodic background catch-up (`heatmap.rollupCatchUpIntervalMs`), so whole-hour heatmaps no longer miss them. Adds `Collector.close()` and the `HEAT_E_ROLLUP_CATCH_UP` error code.

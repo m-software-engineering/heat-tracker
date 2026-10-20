@@ -257,6 +257,11 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The database config has neither a connection string nor a client.
 - Fix: Pass db.connectionString or db.client to createCollector().
 
+## HEAT_E_ROLLUP_CATCH_UP
+
+- Message: The collector could not count new events into the heatmap rollup; heatmaps read raw events until it can.
+- Fix: Check database connectivity and permissions on events and heatmap_rollup; the next catch-up retries automatically.
+
 ## HEAT_E_DB_EXECUTE
 
 - Message: The database client cannot run raw SQL statements.
