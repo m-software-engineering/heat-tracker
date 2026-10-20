@@ -86,7 +86,8 @@ export const createSchema = (dialect: Dialect): Schema => {
         y: integer("y"),
         scrollDepth: integer("scroll_depth"),
         metaJson: text("meta_json"),
-        viewportBucket: text("viewport_bucket")
+        viewportBucket: text("viewport_bucket"),
+        rollupState: integer("rollup_state")
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
@@ -160,7 +161,8 @@ export const createSchema = (dialect: Dialect): Schema => {
         y: int("y"),
         scrollDepth: int("scroll_depth"),
         metaJson: text("meta_json"),
-        viewportBucket: text("viewport_bucket")
+        viewportBucket: text("viewport_bucket"),
+        rollupState: int("rollup_state")
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
@@ -233,7 +235,8 @@ export const createSchema = (dialect: Dialect): Schema => {
       y: integer("y"),
       scrollDepth: integer("scroll_depth"),
       metaJson: text("meta_json"),
-      viewportBucket: text("viewport_bucket")
+      viewportBucket: text("viewport_bucket"),
+      rollupState: integer("rollup_state")
     },
     (table: any) => ({
       projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
@@ -291,7 +294,8 @@ export const buildCreateTableSql = (dialect: Dialect) => {
         y INTEGER,
         scroll_depth INTEGER,
         meta_json TEXT,
-        viewport_bucket TEXT
+        viewport_bucket TEXT,
+        rollup_state INTEGER
       );`
     };
   }
@@ -336,7 +340,8 @@ export const buildCreateTableSql = (dialect: Dialect) => {
       y INT,
       scroll_depth INT,
       meta_json TEXT,
-      viewport_bucket VARCHAR(32)
+      viewport_bucket VARCHAR(32),
+      rollup_state INT
     );`
   };
 };
@@ -355,10 +360,18 @@ export const buildCreateIndexSql = (dialect: Dialect) => {
   return sql.raw(`CREATE INDEX IF NOT EXISTS ${HEATMAP_INDEX} ON events (project_id, path, type, ts)`);
 };
 
-/** Adds `events.viewport_bucket` (#26) to tables created before it existed; callers ignore "duplicate column". */
-export const buildAddViewportBucketSql = (dialect: Dialect) =>
-  sql.raw(
-    dialect === "pg"
-      ? "ALTER TABLE events ADD COLUMN IF NOT EXISTS viewport_bucket TEXT"
-      : `ALTER TABLE events ADD COLUMN viewport_bucket ${dialect === "mysql" ? "VARCHAR(32)" : "TEXT"}`
-  );
+/**
+ * Adds a #26 column to `events` tables created before it existed; callers ignore "duplicate column".
+ * `viewport_bucket` is the stored bucket; `rollup_state` is 1 once the row is counted in `heatmap_rollup`.
+ */
+export const buildAddEventColumnSql = (dialect: Dialect, column: "viewport_bucket" | "rollup_state") => {
+  const type =
+    column === "rollup_state"
+      ? dialect === "mysql"
+        ? "INT"
+        : "INTEGER"
+      : dialect === "mysql"
+        ? "VARCHAR(32)"
+        : "TEXT";
+  return sql.raw(`ALTER TABLE events ADD COLUMN ${dialect === "pg" ? "IF NOT EXISTS " : ""}${column} ${type}`);
+};

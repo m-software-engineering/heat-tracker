@@ -4,7 +4,7 @@
 
 Heatmaps are aggregated in the database. `GET /api/projects/:projectId/heatmap` now runs grouped queries (`GROUP BY` on bucketed coordinates for Postgres, MySQL and SQLite; aggregation pipelines for MongoDB) instead of loading every matched event into Node, so collector memory no longer grows with traffic. Whole hours are served from a `heatmap_rollup` table that ingest keeps up to date, so 1 M events stay within p95 ≤ 500 ms. Output is golden-tested on every database, plus `meta.totalEvents`, `meta.sampled` (`false`), `meta.range`, `meta.excluded` and `meta.viewportBuckets`.
 
-- `autoMigrate` creates the `events_project_path_type_ts_idx` index on (project, path, type, ts), adds `events.viewport_bucket` (filled for existing rows) and creates and backfills `heatmap_rollup`. The first start after upgrading reads every stored event once.
+- `autoMigrate` creates the `events_project_path_type_ts_idx` index on (project, path, type, ts), adds `events.viewport_bucket` (filled for existing rows) `events.rollup_state`, and creates and backfills `heatmap_rollup` in locked batches (safe under concurrent ingest; never double-counts). Ingest writes events and rollup in one transaction. The first start after upgrading reads every stored event once (about 75 s per 1M events on Postgres).
 - **Behavior change:** without `from` and `to` a heatmap covers the last 7 days (ending with the current hour) instead of all time; `meta.range` returns the applied range.
 - **Behavior change (SQL):** `click`/`move` events without coordinates are no longer plotted at 0,0; they are skipped (as MongoDB already did) and counted in `meta.excluded.noCoordinates`.
 - New `viewport=<w>x<h>` query param filters events by stored viewport bucket.

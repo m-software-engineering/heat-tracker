@@ -155,7 +155,7 @@ A JWKS download failure now returns HTTP 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with
 - `click`/`move` events without coordinates (and scrolls without depth) are skipped on every database and counted in `meta.excluded.noCoordinates`. SQL databases used to plot them at 0,0.
 - Whole hours are read from the `heatmap_rollup` table, which ingest keeps up to date and `autoMigrate` builds from existing events (MongoDB reads events directly).
 - Without `viewportBucket`, the viewport is the most common bucket among the 10,000 most recent matching events. `viewportBucket` must look like `1440x900`; anything else returns 400 `HEAT_E_QUERY_INVALID` naming the param.
-- `autoMigrate` adds the `events_project_path_type_ts_idx` index (project, path, type, ts), the `events.viewport_bucket` column and the `heatmap_rollup` table (backfilled once).
+- `autoMigrate` adds the `events_project_path_type_ts_idx` index (project, path, type, ts), the `events.viewport_bucket` and `events.rollup_state` columns and the `heatmap_rollup` table, and counts older rows into it (safe to run while ingesting, and on several instances at once).
 - Scroll events are projected vertically from scroll depth percentage into the active render height, so scroll hotspots line up better with long-page behavior.
 
 ## Configuration

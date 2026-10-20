@@ -1,6 +1,6 @@
 import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import type { Dialect } from "./schema";
-import { buildAddViewportBucketSql, buildCreateIndexSql, buildCreateTableSql, createSchema } from "./schema";
+import { buildAddEventColumnSql, buildCreateIndexSql, buildCreateTableSql, createSchema } from "./schema";
 import { migrateHeatmapMongo, migrateHeatmapSql } from "./heatmap-migrate";
 
 export type DbAdapterConfig =
@@ -156,10 +156,12 @@ export const autoMigrate = async (ctx: DbContext) => {
     if (ctx.dialect === "mysql" && isDuplicateKeyName(error)) return;
     throw error;
   });
-  await execute(ctx.db, buildAddViewportBucketSql(ctx.dialect)).catch((error: any) => {
-    if (isDuplicateColumn(error)) return;
-    throw error;
-  });
+  for (const column of ["viewport_bucket", "rollup_state"] as const) {
+    await execute(ctx.db, buildAddEventColumnSql(ctx.dialect, column)).catch((error: any) => {
+      if (isDuplicateColumn(error)) return;
+      throw error;
+    });
+  }
   await migrateHeatmapSql(ctx, execute);
 };
 
