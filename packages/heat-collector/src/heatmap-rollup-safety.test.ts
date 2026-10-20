@@ -16,13 +16,8 @@ type Target = {
   query: (q: string, p?: unknown[]) => Promise<any[]>;
 };
 
-// Closed in afterAll: a native handle finalized during worker shutdown aborts Node 24
-// ("RemoveEnvironmentCleanupHook: Assertion failed: (env) != nullptr").
-const sqliteClients: Database.Database[] = [];
-
 const sqliteTarget = (): Target => {
   const client = new Database(":memory:");
-  sqliteClients.push(client);
   return {
     name: "sqlite",
     failRollup: [
@@ -65,7 +60,6 @@ const pgTarget = (): Target => {
 
 afterAll(async () => {
   await Promise.all(pools.map((pool) => pool.end()));
-  for (const client of sqliteClients) client.close();
 });
 
 const targets = [sqliteTarget, ...(process.env.HEAT_TEST_PG_URL ? [pgTarget] : [])];
