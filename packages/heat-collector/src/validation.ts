@@ -158,13 +158,17 @@ export const sessionEventsQuerySchema = z.object({
 });
 
 // Above the max the limit is clamped (not rejected); the applied limit is returned in meta.limit.
-const listLimit = z.coerce
-  .number()
-  .int()
-  .min(1)
-  .optional()
-  .default(50)
-  .transform((limit) => Math.min(limit, 200));
+// An empty `limit=` means the default (#64 QA).
+const listLimit = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.coerce
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .default(50)
+    .transform((limit) => Math.min(limit, 200))
+);
 
 export const projectsQuerySchema = z.object({
   limit: listLimit,

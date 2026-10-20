@@ -1,0 +1,35 @@
+{
+  "params": {
+    "drop": [
+      "access_token",
+      "api_key",
+      "accessToken",
+      "X-Amz-Signature",
+      "apikey",
+      "sessionid",
+      "code",
+      "auth_code",
+      "%74oken%ZZ",
+      "ｔｏｋｅｎ",
+      "token",
+      "client_secret",
+      "jwt",
+      "otp",
+      "verification_code",
+      "sig"
+    ],
+    "keep": ["keyboard", "monkey", "author", "zipcode", "country_code", "utm_source", "page", "email"]
+  },
+  "emails": {
+    "mask": ["a+b@x.com", "ana@example.com", "me@x.co"],
+    "keep": ["logo@2x.png", "react@18.2.0", "font@1x.woff2", "plain", "a@b"]
+  },
+  "paths": [
+    ["/p;jsessionid=ABC", "/p"],
+    ["/a;x=1/b;y=2", "/a/b"],
+    ["/u/a+b@x.com", "/u/[email]"],
+    ["/users/ana%40example.com/orders", "/users/[email]/orders"],
+    ["/assets/logo@2x.png", "/assets/logo@2x.png"],
+    ["/npm/react@18.2.0", "/npm/react@18.2.0"]
+  ]
+}

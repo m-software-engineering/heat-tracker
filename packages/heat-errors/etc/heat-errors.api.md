@@ -154,6 +154,13 @@ export const INGEST_ERRORS: {
         readonly message: "The ingest request has no project key.";
         readonly fix: "Set projectKey in init() or forward the x-project-key header through your proxy.";
     };
+    readonly HEAT_E_PROJECT_KEY_INVALID: {
+        readonly code: "HEAT_E_PROJECT_KEY_INVALID";
+        readonly status: 400;
+        readonly legacyCode: "invalid_project_key";
+        readonly message: "The project key has characters the collector does not accept.";
+        readonly fix: "Use 1 to 128 characters from A-Z, a-z, 0-9, `_` and `-`, such as the key the dashboard generates (`pk_…`).";
+    };
     readonly HEAT_E_RATE_LIMITED: {
         readonly code: "HEAT_E_RATE_LIMITED";
         readonly status: 429;

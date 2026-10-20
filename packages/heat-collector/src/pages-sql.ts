@@ -1,6 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 import type { DbContext } from "./db";
 import {
+  DAY_MS,
   NO_EVENTS_SORT_KEY,
   type PageCursor,
   type PageRow,
@@ -45,7 +46,7 @@ export const upsertPageTitlesSql = async (ctx: DbContext, projectId: string, tit
  */
 export const listProjectsSql = async (
   ctx: DbContext,
-  opts: { limit: number; after?: ProjectCursor; since: number }
+  opts: { limit: number; after?: ProjectCursor; asOf: number }
 ): Promise<ProjectRow[]> => {
   const sortKey = sql`COALESCE(q.last_event_at, ${NO_EVENTS_SORT_KEY})`;
   const after = opts.after
@@ -55,9 +56,9 @@ export const listProjectsSql = async (
   const rows = await rowsOf(
     ctx,
     sql`SELECT * FROM (SELECT p.id AS id, p.name AS name, ${keyColumn} AS project_key, p.created_at AS created_at,
-      (SELECT COUNT(*) FROM events e WHERE e.project_id = p.id AND e.ts >= ${opts.since}) AS events_24h,
-      (SELECT MAX(e.ts) FROM events e WHERE e.project_id = p.id) AS last_event_at
-      FROM projects p) q ${after} ORDER BY ${sortKey} DESC, q.id ASC LIMIT ${opts.limit + 1}`
+      (SELECT COUNT(*) FROM events e WHERE e.project_id = p.id AND e.ts >= ${opts.asOf - DAY_MS} AND e.ts <= ${opts.asOf}) AS events_24h,
+      (SELECT MAX(e.ts) FROM events e WHERE e.project_id = p.id AND e.ts <= ${opts.asOf}) AS last_event_at
+      FROM projects p WHERE p.created_at <= ${opts.asOf}) q ${after} ORDER BY ${sortKey} DESC, q.id ASC LIMIT ${opts.limit + 1}`
   );
   return rows.map((row) => ({
     id: String(row.id),

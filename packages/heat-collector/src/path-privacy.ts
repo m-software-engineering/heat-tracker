@@ -3,50 +3,23 @@
  * unless `privacy.keepQueryParams` allowlists a param; the collector strips these always, with no opt-in,
  * so an allowlist mistake or an older SDK cannot store them.
  */
-// Rule, not list (Margot, #64): the name lowercased without `-`/`_` contains one of these
-// (catches access_token, api_key, X-Amz-Signature). Rare false positives are accepted.
-const SENSITIVE_PARTS = ["token", "key", "secret", "password", "passwd", "auth", "sig", "jwt", "session", "code"];
-const EMAIL_VALUE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
+import { isSensitivePair, sanitizePathname } from "./privacy-rules";
+
 export const MAX_TITLE_LENGTH = 200;
-
-const decode = (value: string) => {
-  try {
-    return decodeURIComponent(value.replace(/\+/g, " "));
-  } catch {
-    return value;
-  }
-};
-
-const isSensitive = (pair: string) => {
-  const eq = pair.indexOf("=");
-  const name = decode(eq < 0 ? pair : pair.slice(0, eq))
-    .trim()
-    .toLowerCase();
-  const value = eq < 0 ? "" : decode(pair.slice(eq + 1)).trim();
-  const folded = name.replace(/[-_]/g, "");
-  return SENSITIVE_PARTS.some((part) => folded.includes(part)) || EMAIL_VALUE.test(value);
-};
-
-/** Path segments that look like an email become `[email]`, so /users/a@b.com and /users/c@d.com group as one page. */
-export const maskEmailSegments = (pathname: string) =>
-  pathname
-    .split("/")
-    .map((segment) => (EMAIL_VALUE.test(decode(segment)) ? "[email]" : segment))
-    .join("/");
 
 const filterParams = (params: string) =>
   params
     .split("&")
-    .filter((pair) => pair !== "" && !isSensitive(pair))
+    .filter((pair) => pair !== "" && !isSensitivePair(pair))
     .join("&");
 
-/** Masks email segments and removes sensitive query params (also in a `#a=b` fragment); keeps everything else as sent. */
+/** Drops `;matrix` params, masks email segments and removes sensitive query params (also in a `#a=b` fragment); keeps everything else as sent. */
 export const sanitizePath = (path: string) => {
   const hashAt = path.indexOf("#");
   const beforeHash = hashAt < 0 ? path : path.slice(0, hashAt);
   let hash = hashAt < 0 ? "" : path.slice(hashAt + 1);
   const queryAt = beforeHash.indexOf("?");
-  const pathname = maskEmailSegments(queryAt < 0 ? beforeHash : beforeHash.slice(0, queryAt));
+  const pathname = sanitizePathname(queryAt < 0 ? beforeHash : beforeHash.slice(0, queryAt));
   const query = queryAt < 0 ? "" : filterParams(beforeHash.slice(queryAt + 1));
   if (hash.includes("=")) hash = filterParams(hash);
   return `${pathname}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`;

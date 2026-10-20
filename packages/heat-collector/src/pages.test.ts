@@ -157,7 +157,7 @@ describe("GET /api/projects/:projectId/pages", () => {
 });
 
 describe("ingest path and title privacy", () => {
-  it("strips params whose folded name contains a sensitive part, and email values; trims titles", async () => {
+  it("strips params with a sensitive name token or an email value; trims titles", async () => {
     const { app, client } = await setup();
     const dirty =
       "/a?utm_source=x&access_token=t&api_key=k&X-Amz-Signature=s&passwd=p&client_secret=c&Authorization=a" +
@@ -167,7 +167,10 @@ describe("ingest path and title privacy", () => {
       { type: "click", path: dirty }
     ]);
     const paths = client.prepare("select distinct path from events").all() as Array<{ path: string }>;
-    expect(paths).toEqual([{ path: "/a?utm_source=x&email=plain&page=2#access=1" }]);
+    // Token rule (Margot, #64): Authorization, promo-code and state_code have no sensitive token.
+    expect(paths).toEqual([
+      { path: "/a?utm_source=x&Authorization=a&promo-code=1&email=plain&page=2#access=1&state_code=2" }
+    ]);
     const page = client.prepare("select title from pages").get() as { title: string };
     expect(Array.from(page.title)).toHaveLength(200);
   });

@@ -1,5 +1,37 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { init, type InitConfig } from "./index";
+import { pagePath } from "./page-info";
+import cases from "../../../fixtures/privacy-cases.json";
+
+// Same table as the collector's privacy.test.ts (shared rule, Margot on #64).
+
+describe("shared privacy rules (fixtures/privacy-cases.json)", () => {
+  afterEach(() => history.replaceState({}, "", "/"));
+  const at = (url: string, keep: string[] = []) => {
+    history.replaceState({}, "", url);
+    return pagePath(keep);
+  };
+
+  it.each(cases.params.drop)("drops the param %s even when allowlisted", (name) => {
+    expect(at(`/p?${name}=v&page=2`, [name, "page"])).toBe("/p?page=2");
+  });
+
+  it.each(cases.params.keep)("keeps the allowlisted param %s", (name) => {
+    expect(at(`/p?${name}=v`, [name])).toBe(`/p?${name}=v`);
+  });
+
+  it.each(cases.emails.mask)("treats %s as an email (value and segment)", (email) => {
+    expect(at(`/u/${email}?ref=${encodeURIComponent(email)}&page=2`, ["ref", "page"])).toBe("/u/[email]?page=2");
+  });
+
+  it.each(cases.emails.keep)("does not treat %s as an email", (text) => {
+    expect(at(`/u/${text}?ref=${text}`, ["ref"])).toBe(`/u/${text}?ref=${text}`);
+  });
+
+  it.each(cases.paths)("sends %s as %s", (input, output) => {
+    expect(at(input as string)).toBe(output);
+  });
+});
 
 const NO_POINTER = { click: false, move: { enabled: false, throttleMs: 80 }, scroll: false } as const;
 
@@ -43,22 +75,16 @@ describe("page path and title (#25)", () => {
     expect(view).toMatchObject({ path: "/checkout", to: "/checkout" });
   });
 
-  it("keeps only allowlisted params, never ones whose folded name is sensitive or with email values", async () => {
-    history.replaceState(
-      {},
-      "",
-      "/p?utm_source=ads&access_token=t&api_key=k&X-Amz-Signature=s&ref=me%40x.com&email=plain&other=1"
-    );
-    const [view] = await pageviews({
-      privacy: { keepQueryParams: ["utm_source", "access_token", "api_key", "X-Amz-Signature", "ref", "email"] }
-    });
+  it("keeps only allowlisted params, never sensitive names or email values", async () => {
+    history.replaceState({}, "", "/p?utm_source=ads&access_token=t&ref=a%2Bb%40x.com&email=plain&other=1");
+    const [view] = await pageviews({ privacy: { keepQueryParams: ["utm_source", "access_token", "ref", "email"] } });
     expect(view.path).toBe("/p?utm_source=ads&email=plain");
   });
 
-  it("replaces email-looking path segments with [email]", async () => {
-    history.replaceState({}, "", "/users/ana%40example.com/orders");
+  it("drops ;matrix params and masks email segments (a+b@x.com stays one email)", async () => {
+    history.replaceState({}, "", "/u/a+b@x.com;jsessionid=ABC/orders");
     const [view] = await pageviews();
-    expect(view.path).toBe("/users/[email]/orders");
+    expect(view.path).toBe("/u/[email]/orders");
   });
 
   it("sends the trimmed title, masks maskTextSelectors text and caps it at 200 characters", async () => {

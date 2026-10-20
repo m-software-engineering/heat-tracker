@@ -6,13 +6,12 @@ import { fieldErrors, queryCause, sendError } from "./http-errors";
 import { pagesQuerySchema, projectsQuerySchema } from "./validation";
 import { listPagesMongo, listProjectsMongo, projectExistsMongo, upsertPageTitlesMongo } from "./pages-mongo";
 import { listPagesSql, listProjectsSql, projectExistsSql, upsertPageTitlesSql } from "./pages-sql";
-import { projectSortKey, type PageCursor, type PageTitle, type ProjectCursor } from "./pages-types";
+import { DAY_MS, projectSortKey, type PageCursor, type PageTitle, type ProjectCursor } from "./pages-types";
 
 /**
  * Projects and popular pages (#25): `GET /api/projects` and `GET /api/projects/:projectId/pages`.
  * Each request runs at most two database queries (pages: project lookup + one grouped read).
  */
-const DAY_MS = 86_400_000;
 const DEFAULT_PAGES_WINDOW_MS = 7 * DAY_MS;
 
 /** Latest titled pageview per path in an ingest batch (already sanitized by `sanitizePayloadPaths`). */
@@ -43,7 +42,7 @@ const decodeCursor = <T>(raw: string, valid: (value: any) => boolean): T | undef
 };
 
 const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
-const isProjectCursor = (v: any) => isNum(v?.k) && typeof v?.i === "string";
+const isProjectCursor = (v: any) => isNum(v?.k) && typeof v?.i === "string" && isNum(v?.s);
 const isPageCursor = (v: any) => isNum(v?.s) && typeof v?.p === "string" && isNum(v?.f) && isNum(v?.t);
 
 const timeCause = (param: "from" | "to", value?: string) =>
@@ -71,7 +70,9 @@ export const registerPageRoutes = (
       return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_CURSOR, `cursor=${JSON.stringify(cursor)}`);
     }
     try {
-      const opts = { limit, after, since: Date.now() - DAY_MS };
+      // Snapshot: every page is computed as of the first page's time (stable under concurrent ingest).
+      const asOf = after?.s ?? Date.now();
+      const opts = { limit, after, asOf };
       const rows = ctx.dialect === "mongodb" ? await listProjectsMongo(ctx.db, opts) : await listProjectsSql(ctx, opts);
       const projects = rows.slice(0, limit).map((p) => ({ ...p, receivingData: p.eventsLast24h > 0 }));
       const last = projects[projects.length - 1];
@@ -81,7 +82,7 @@ export const registerPageRoutes = (
         meta: {
           count: projects.length,
           limit,
-          nextCursor: rows.length > limit ? encodeCursor({ k: projectSortKey(last), i: last.id }) : null
+          nextCursor: rows.length > limit ? encodeCursor({ k: projectSortKey(last), i: last.id, s: asOf }) : null
         }
       });
     } catch (err) {

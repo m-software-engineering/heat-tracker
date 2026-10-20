@@ -3,42 +3,21 @@
  * the site allowlists in `privacy.keepQueryParams`, and the masked document title on pageviews.
  * Sensitive params are never kept, even when allowlisted (the collector strips them again).
  */
-// Same rule as the collector: the name lowercased without `-`/`_` contains one of these.
-const SENSITIVE_PARTS = ["token", "key", "secret", "password", "passwd", "auth", "sig", "jwt", "session", "code"];
-const EMAIL_VALUE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
+import { isSensitivePair, normalizeParamName, sanitizePathname } from "./privacy-rules";
+
 const MAX_TITLE_LENGTH = 200;
 const MASK = "•••";
 
-const isSensitive = (name: string, value: string) => {
-  const folded = name.toLowerCase().replace(/[-_]/g, "");
-  return SENSITIVE_PARTS.some((part) => folded.includes(part)) || EMAIL_VALUE.test(value.trim());
-};
-
-const decode = (segment: string) => {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return segment;
-  }
-};
-
-/** Email-looking path segments become `[email]` (one page for /users/<any email>). */
-const maskEmails = (pathname: string) =>
-  pathname
-    .split("/")
-    .map((segment) => (EMAIL_VALUE.test(decode(segment)) ? "[email]" : segment))
-    .join("/");
-
+/** Allowlisted, non-sensitive pairs are kept as sent (raw, so decoding matches the collector's). */
 export const pagePath = (keepQueryParams: string[]) => {
-  const { search } = location;
-  const pathname = maskEmails(location.pathname);
+  const pathname = sanitizePathname(location.pathname);
+  const search = location.search.slice(1);
   if (keepQueryParams.length === 0 || !search) return pathname;
-  const allowed = new Set(keepQueryParams.map((name) => name.toLowerCase()));
-  const kept = new URLSearchParams();
-  new URLSearchParams(search).forEach((value, name) => {
-    if (allowed.has(name.toLowerCase()) && !isSensitive(name, value)) kept.append(name, value);
-  });
-  const query = kept.toString();
+  const allowed = new Set(keepQueryParams.map(normalizeParamName));
+  const query = search
+    .split("&")
+    .filter((pair) => pair !== "" && !isSensitivePair(pair) && allowed.has(normalizeParamName(pair.split("=")[0])))
+    .join("&");
   return query ? `${pathname}?${query}` : pathname;
 };
 

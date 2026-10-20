@@ -1,4 +1,5 @@
 import {
+  DAY_MS,
   projectSortKey,
   type PageCursor,
   type PageRow,
@@ -36,18 +37,22 @@ export const upsertPageTitlesMongo = async (db: any, projectId: string, titles: 
  */
 export const listProjectsMongo = async (
   db: any,
-  opts: { limit: number; after?: ProjectCursor; since: number }
+  opts: { limit: number; after?: ProjectCursor; asOf: number }
 ): Promise<ProjectRow[]> => {
-  const projects = await db.collection("projects").find({}).toArray();
+  const projects = await db
+    .collection("projects")
+    .find({ createdAt: { $lte: opts.asOf } })
+    .toArray();
   if (projects.length === 0) return [];
   const stats = await db
     .collection("events")
     .aggregate([
+      { $match: { ts: { $lte: opts.asOf } } },
       {
         $group: {
           _id: "$projectId",
           last: { $max: "$ts" },
-          recent: { $sum: { $cond: [{ $gte: ["$ts", opts.since] }, 1, 0] } }
+          recent: { $sum: { $cond: [{ $gte: ["$ts", opts.asOf - DAY_MS] }, 1, 0] } }
         }
       }
     ])

@@ -92,13 +92,14 @@ Accepted headers:
 ### Query APIs
 
 - `GET /api/projects?limit&cursor`: every project with `projectKey`, `eventsLast24h`, `lastEventAt` and `receivingData`;
-  projects with no events first, then by most recent event.
+  projects with no events first, then by most recent event, as of the first page's time (the cursor keeps that
+  snapshot, so later ingest does not shift pages; future-dated events are not counted).
 - `GET /api/projects/:projectId/pages?from&to&limit&cursor`: pages with at least one pageview in the window
   (default last 7 days), sorted by distinct pageview `sessions` then path, with `clicks` and the latest-seen
   `title` (the path when none was sent; `hasTitle: false`). Unknown project: 404 `HEAT_E_PROJECT_NOT_FOUND`.
 - Both list endpoints page with `meta.nextCursor` (send it back as `cursor`); `limit` defaults to 50 and is
   clamped to 200 (the applied value is `meta.limit`). An unknown cursor is 400 `HEAT_E_QUERY_CURSOR`.
-- Stored paths never keep a query key whose name, lowercased with `-` and `_` removed, contains `token`, `key`, `secret`, `password`, `passwd`, `auth`, `sig`, `jwt`, `session` or `code` (e.g. `access_token`, `api_key`, `X-Amz-Signature`; rare false positives accepted), or whose value looks like an email (also in a `#a=b` fragment), and email-looking path segments become `[email]`.
+- Stored paths never keep a query param whose name (decoded, NFKC, lowercased) has a token, split on `-`, `_` and camelCase, in `token`, `key`, `secret`, `password`, `passwd`, `auth`, `sig`, `signature`, `jwt`, `session`; or whose whole name without `-`/`_` is `apikey`, `accesstoken`, `authtoken`, `refreshtoken`, `idtoken`, `sessionid`, `sessiontoken`, `clientsecret`, `xamzsignature`, `code`, `otp`, `authcode` or `verificationcode` (so `keyboard`, `author`, `zipcode`, `country_code` stay); a name that cannot be decoded; or a value that looks like an email (alphabetic TLD of 2+ letters that is not a file extension, so `logo@2x.png` and `react@18.2.0` stay) (also in a `#a=b` fragment), and `;matrix` path params are dropped (`/p;jsessionid=x` → `/p`) and email-looking path segments become `[email]` (path decoding: `+` stays `+`).
   This runs on every ingest, with no opt-in.
 - `GET /api/projects/:projectId/heatmap`
 - `GET /api/projects/:projectId/events`

@@ -33,6 +33,8 @@ import {
 } from "@m-software-engineering/heat-errors";
 import { fieldErrors, payloadCause, queryCause, resolveRequestId, sendError } from "./http-errors";
 
+const PROJECT_KEY_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
 export type AuthConfig = { mode: "projectKey" } | ({ mode: "jwt" } & JwtConfig) | ({ mode: "both" } & JwtConfig);
 
 export type CollectorConfig = {
@@ -262,6 +264,18 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       return sendError(logger, req, res, INGEST_ERRORS.HEAT_E_PROJECT_KEY_MISSING, "header x-project-key is missing", {
         context: { ip }
       });
+    }
+
+    // The key ends up in the dashboard's install snippet, so only a safe charset is accepted (#64).
+    if (!PROJECT_KEY_PATTERN.test(projectKey)) {
+      return sendError(
+        logger,
+        req,
+        res,
+        INGEST_ERRORS.HEAT_E_PROJECT_KEY_INVALID,
+        `header x-project-key has ${projectKey.length} characters; expected 1-128 of [A-Za-z0-9_-]`,
+        { context: { ip } }
+      );
     }
 
     const limitStatus = consumeRateLimit(rateBuckets, `${projectKey}:${ip}`, limiter.windowMs, limiter.max);

@@ -90,6 +90,13 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The ingest request has no project key.
 - Fix: Set projectKey in init() or forward the x-project-key header through your proxy.
 
+## HEAT_E_PROJECT_KEY_INVALID
+
+- HTTP status: 400
+- Legacy code: `invalid_project_key`
+- Message: The project key has characters the collector does not accept.
+- Fix: Use 1 to 128 characters from A-Z, a-z, 0-9, `_` and `-`, such as the key the dashboard generates (`pk_…`).
+
 ## HEAT_E_RATE_LIMITED
 
 - HTTP status: 429
