@@ -7,8 +7,8 @@
 // 1. A token (split on - _ [ ] . + space, camelCase and digit/letter boundaries) is one of these:
 const SENSITIVE_TOKENS = new Set(
   (
-    "token secret password passwd auth authorization sig signature jwt session bearer cookie credential " +
-    "credentials csrf xsrf nonce hmac pwd passcode otp ssn ticket assertion samlresponse"
+    "token key secret password passwd auth authorization sig signature jwt session bearer cookie credential " +
+    "credentials csrf xsrf nonce hmac pwd pass passcode otp ssn ticket assertion samlresponse"
   ).split(" ")
 );
 // 2. Or the whole name without separators is one of these compounds:
@@ -19,11 +19,16 @@ const SENSITIVE_NAMES = new Set(
   ).split(" ")
 );
 // 3. Or a token ends in token/secret/sessid, or is <one of these>key (secretkey; not turkey or monkey).
-// 4. The token `key` alone only counts right after one of KEY_PREFIXES (api_key; not primary_key or sort_key).
-// 5. `pass` only counts as the whole name (pass; not boarding_pass or passport).
-// 6. Names ending in _id or _count are kept (key_id, ticket_id, session_count), except session_id.
+// 4. Exceptions may only remove false positives of the 65d8344 rule (a guardrail test enforces it), so they are
+//    exact names (Margot on #92): `key` after a non-secret word, `pass` outside a password, and the narrow
+//    _id/_count stems. Variants (stripe_key, token_id, session_id, ticketId) still drop.
+const KEPT_NAMES = new Set(
+  "primary_key sort_key cache-key publishable_key key_id ticket_id session_count boarding_pass pass_type".split(" ")
+);
 const SENSITIVE_SUFFIXES = ["token", "secret", "sessid"];
-const KEY_PREFIXES = new Set(["secret", "private", "access", "api", "my", "client", "session"]);
+const KEY_PREFIXES = new Set(
+  "secret private access api my client session signing encryption master shared app consumer".split(" ")
+);
 const FILE_EXTENSIONS = new Set(
   (
     "png jpg jpeg gif svg webp avif bmp ico heic heif tiff tif js mjs cjs ts css map json html htm xml txt csv tsv " +
@@ -58,10 +63,7 @@ export const decodeLenient = (text: string): { text: string; ok: boolean } => {
 /** Name as compared: decoded, NFKC-normalized, lowercased. */
 export const normalizeParamName = (raw: string) => decodeLenient(raw).text.normalize("NFKC").trim().toLowerCase();
 
-const KEPT_NAME_SUFFIX = /_(?:id|count)$/;
-
-const isSensitiveToken = (token: string, index: number, tokens: string[]) => {
-  if (token === "key") return index > 0 && KEY_PREFIXES.has(tokens[index - 1]);
+const isSensitiveToken = (token: string) => {
   if (SENSITIVE_TOKENS.has(token) || SENSITIVE_SUFFIXES.some((suffix) => token.endsWith(suffix))) return true;
   return token.endsWith("key") && KEY_PREFIXES.has(token.slice(0, -3));
 };
@@ -71,9 +73,7 @@ export const isSensitiveParamName = (raw: string) => {
   const decoded = decodeLenient(raw);
   if (!decoded.ok) return true;
   const name = decoded.text.normalize("NFKC").trim();
-  const lower = name.toLowerCase();
-  if (KEPT_NAME_SUFFIX.test(lower) && lower !== "session_id") return false;
-  if (lower === "pass") return true;
+  if (KEPT_NAMES.has(name.toLowerCase())) return false;
   const tokens = name
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
