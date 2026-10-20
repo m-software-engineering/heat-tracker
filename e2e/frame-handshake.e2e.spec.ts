@@ -7,7 +7,8 @@ type Stack = Awaited<ReturnType<typeof startOverlayStack>>;
 let stack: Stack;
 let projectId: string;
 
-const NO_RESPONSE = "This page didn't respond. It may block framing or be offline.";
+const NO_RESPONSE =
+  "This page didn't respond. Check that the heat-tracker snippet is installed with this dashboard in `dashboardOrigins`, and that the site allows framing.";
 const HELLO = "heat-tracker:frame-hello";
 
 test.beforeAll(async ({ browser }) => {
@@ -57,26 +58,49 @@ const expectNoResponse = async (page: Page, pagePath: string, origin = stack.sit
   await expect(page.locator("section.page-heatmap")).toHaveAttribute("data-frame-state", "no-response");
 };
 
-test.describe("pages that never answer the handshake show the no-response state", () => {
-  test("X-Frame-Options DENY", async ({ page }) => {
+test.describe("framing headers detected by the server: blocked at once, no 8 s wait", () => {
+  for (const [name, pagePath, detail] of [
+    ["X-Frame-Options DENY", "/xfo", "X-Frame-Options DENY"],
+    ["CSP frame-ancestors 'none'", "/blocked", "Content-Security-Policy frame-ancestors 'none'"]
+  ] as const) {
+    test(name, async ({ page }) => {
+      // Fake clock that is never advanced: the blocked state cannot come from the 8 s handshake timeout.
+      await page.clock.install();
+      await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=${pagePath}`);
+      const alert = page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]');
+      await expect(alert).toBeVisible({ timeout: 3000 });
+      await expect(alert).toContainText(detail);
+      await expect(alert).toContainText(
+        `Add \`Content-Security-Policy: frame-ancestors 'self' ${stack.dashboardUrl}\` on your site`
+      );
+      await expect(page.locator("section.page-heatmap")).toHaveAttribute("data-frame-state", "blocked");
+      await expect(page.locator("iframe")).toHaveCount(0);
+      await expect(page.getByTestId("frame-no-response")).toHaveCount(0);
+      await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
+    });
+  }
+});
+
+test.describe("inconclusive cases show the no-response state after 8 s", () => {
+  test("a site that times out on the server check", async ({ page }) => {
     const logs = warnings(page);
-    await openAndWait(page, "path=/xfo", async () => {
+    await openAndWait(page, "path=/hang", async () => {
       await expect(page.getByTestId("frame-no-response")).toHaveCount(0);
     });
-    await expectNoResponse(page, "/xfo");
+    await expectNoResponse(page, "/hang");
     // The detail goes to devtools only, never into the visible notice.
-    await expect.poll(() => logs.join("\n")).toContain("X-Frame-Options DENY");
-    await expect(page.getByTestId("frame-no-response")).not.toContainText("X-Frame-Options");
-  });
-
-  test("CSP frame-ancestors 'none'", async ({ page }) => {
-    await openAndWait(page, "path=/blocked");
-    await expectNoResponse(page, "/blocked");
+    await expect.poll(() => logs.join("\n")).toContain("did not answer within");
+    await expect(page.getByTestId("frame-no-response")).not.toContainText("did not answer");
   });
 
   test("an unreachable site", async ({ page }) => {
     await openAndWait(page, "path=/pricing&site=down");
     await expectNoResponse(page, "/pricing", await page.evaluate(() => (window as any).__DOWN_ORIGIN__));
+  });
+
+  test("a page whose snippet has no dashboardOrigins sends nothing", async ({ page }) => {
+    await openAndWait(page, "path=/no-dashboard-origins");
+    await expectNoResponse(page, "/no-dashboard-origins");
   });
 });
 
@@ -105,17 +129,18 @@ test("a cross-origin redirect hides the heatmap and names the URL as text", asyn
 
 test.describe("forged handshakes are ignored", () => {
   test("from the dashboard window itself (wrong source)", async ({ page }) => {
-    await openAndWait(page, "path=/xfo", async () => {
+    await openAndWait(page, "path=/no-dashboard-origins", async () => {
+      // nosemgrep: javascript.browser.security.wildcard-postmessage-configuration.wildcard-postmessage-configuration -- test-only forged message, sent to the page itself
       await page.evaluate(([type, href]) => window.postMessage({ type, href }, "*"), [
         HELLO,
-        `${stack.siteUrl}/xfo`
+        `${stack.siteUrl}/no-dashboard-origins`
       ] as const);
     });
-    await expectNoResponse(page, "/xfo");
+    await expectNoResponse(page, "/no-dashboard-origins");
   });
 
   test("from another allowlisted frame (wrong source and origin)", async ({ page }) => {
-    await openAndWait(page, "path=/xfo", async () => {
+    await openAndWait(page, "path=/no-dashboard-origins", async () => {
       // A sibling frame on another allowlisted origin claims to be the expected page.
       await page.evaluate((src) => {
         const frame = document.createElement("iframe");
@@ -126,12 +151,13 @@ test.describe("forged handshakes are ignored", () => {
       await expect.poll(() => Boolean(findSibling())).toBe(true);
       const sibling = findSibling()!;
       await sibling.waitForLoadState();
+      // nosemgrep: javascript.browser.security.wildcard-postmessage-configuration.wildcard-postmessage-configuration -- test-only forged message from a sibling frame
       await sibling.evaluate(([type, href]) => window.parent.postMessage({ type, href }, "*"), [
         HELLO,
-        `${stack.siteUrl}/xfo`
+        `${stack.siteUrl}/no-dashboard-origins`
       ] as const);
     });
-    await expectNoResponse(page, "/xfo");
+    await expectNoResponse(page, "/no-dashboard-origins");
     await expect(page.getByTestId("frame-redirected")).toHaveCount(0);
   });
 });

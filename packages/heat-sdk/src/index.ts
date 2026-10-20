@@ -15,6 +15,12 @@ export type InitConfig = {
   /** Receives every SDK and collector error; the SDK is otherwise silent after init. */
   onError?: (err: HeatError) => void;
   app?: { name?: string; version?: string; env?: string };
+  /**
+   * Origins of heat-tracker dashboards allowed to show this page in a frame, e.g. `["https://heat.example.com"]`.
+   * When framed, the SDK posts `{ type: "heat-tracker:frame-hello", href: origin + pathname }` to each of them
+   * (exact targetOrigin, never `*`; no query or hash) so the dashboard knows the page loaded. Omit to send nothing.
+   */
+  dashboardOrigins?: string[];
   session?: {
     idleTimeoutMs?: number;
     persist?: "tab" | "browser";
@@ -960,7 +966,7 @@ export const init = (config: InitConfig): Tracker => {
   if (typeof window === "undefined") {
     throw new HeatTrackerError(SDK_ERRORS.HEAT_E_NOT_BROWSER, 'typeof window is "undefined"');
   }
-  announceToParentFrame();
+  announceToParentFrame(config.dashboardOrigins);
 
   if (resolved.privacy.respectDoNotTrack && navigator.doNotTrack === "1") {
     return createNoopTracker();

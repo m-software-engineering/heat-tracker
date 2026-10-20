@@ -360,8 +360,8 @@ console.log(body.error.message); // "The JWT has expired."
 
 ## HEAT_E_FRAME_NO_RESPONSE
 
-- Message: This page didn't respond. It may block framing or be offline.
-- Fix: Check that the page loads the heat-tracker SDK, is online, and allows framing with `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>`, then reload this page.
+- Message: This page didn't respond. Check that the heat-tracker snippet is installed with this dashboard in `dashboardOrigins`, and that the site allows framing.
+- Fix: Install the snippet from the dashboard (it sets `dashboardOrigins` to this dashboard's origin), make sure the site is online and sends `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>`, then reload this page.
 
 ## HEAT_E_FRAME_REDIRECTED
 

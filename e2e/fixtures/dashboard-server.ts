@@ -51,7 +51,7 @@ export const bundleHarness = async () => {
   return readFileSync(path.join(outDir, "harness.global.js"), "utf8");
 };
 
-const SITE_PAGE = `<!doctype html>
+const SITE_PAGE_TEMPLATE = `<!doctype html>
 <html lang="en">
   <head><meta charset="utf-8" /><title>Pricing</title>
     <style>body { margin: 0; height: 2000px; font-family: sans-serif; }
@@ -62,10 +62,17 @@ const SITE_PAGE = `<!doctype html>
     <button id="buy">Buy</button>
     <script type="module">
       import { init } from "/sdk/index.mjs";
-      window.__tracker__ = init({ endpoint: location.origin + "/ingest", projectKey: "overlay-key" });
+      window.__tracker__ = init({ endpoint: location.origin + "/ingest", projectKey: "overlay-key"/*DASHBOARD_ORIGINS*/ });
     </script>
   </body>
 </html>`;
+
+/** The tracked page; `dashboardOrigins` lists the dashboard unless `withDashboard` is false (#59). */
+const sitePage = (dashboardOrigin: string, withDashboard = true) =>
+  SITE_PAGE_TEMPLATE.replace(
+    "/*DASHBOARD_ORIGINS*/",
+    withDashboard ? `, dashboardOrigins: [${JSON.stringify(dashboardOrigin)}]` : ""
+  );
 
 /**
  * Two origins share one collector: the tracked site (127.0.0.1) and the dashboard (localhost), so
@@ -77,12 +84,18 @@ export const startOverlayStack = async () => {
   const collector = await createCollector({ db: { dialect: "sqlite", file: dbFile }, auth: { mode: "projectKey" } });
   const bundle = await bundleHarness();
 
+  // Known once the dashboard listens (before any page is requested).
+  let dashboardOrigin = "";
   const site = express();
-  site.get(["/pricing", "/empty", "/nopos", "/nopos-many"], (_req, res) => res.type("html").send(SITE_PAGE));
-  site.get("/blocked", (_req, res) =>
-    res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(SITE_PAGE)
+  // Runs the SDK without dashboardOrigins: it must not send the handshake.
+  site.get("/no-dashboard-origins", (_req, res) => res.type("html").send(sitePage(dashboardOrigin, false)));
+  site.get(["/pricing", "/empty", "/nopos", "/nopos-many"], (_req, res) =>
+    res.type("html").send(sitePage(dashboardOrigin))
   );
-  site.get("/xfo", (_req, res) => res.set("X-Frame-Options", "DENY").type("html").send(SITE_PAGE));
+  site.get("/blocked", (_req, res) =>
+    res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(sitePage(dashboardOrigin))
+  );
+  site.get("/xfo", (_req, res) => res.set("X-Frame-Options", "DENY").type("html").send(sitePage(dashboardOrigin)));
   // Never answers: the frame check times out and the iframe never loads.
   site.get("/hang", () => {});
   const sdk = express.static(path.resolve(__dirname, "../../packages/heat-sdk/dist"));
@@ -94,7 +107,7 @@ export const startOverlayStack = async () => {
 
   // A second allowlisted origin: /moved on the site redirects here, and it hosts a sibling frame for forgery tests.
   const other = express();
-  other.get("/landing", (_req, res) => res.type("html").send(SITE_PAGE));
+  other.get("/landing", (_req, res) => res.type("html").send(sitePage(dashboardOrigin)));
   other.use("/sdk", sdk);
   const otherServer = await listen(other);
   const otherOrigin = `http://127.0.0.1:${otherServer.port}`;
@@ -133,12 +146,13 @@ export const startOverlayStack = async () => {
   );
   dashboard.use(collector.router);
   const dashboardServer = await listen(dashboard);
+  dashboardOrigin = `http://localhost:${dashboardServer.port}`;
 
   return {
     dbFile,
     siteUrl: siteOrigin,
     otherUrl: otherOrigin,
-    dashboardUrl: `http://localhost:${dashboardServer.port}`,
+    dashboardUrl: dashboardOrigin,
     close: async () => {
       await siteServer.close();
       await otherServer.close();

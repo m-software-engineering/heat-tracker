@@ -17,6 +17,7 @@ import {
 } from "../lib/view-state";
 import { HANDSHAKE_TIMEOUT_MS } from "../lib/frame-handshake";
 import { useFrameHandshake } from "../lib/use-frame-handshake";
+import FrameBlockedNotice from "./FrameBlockedNotice";
 import FrameCheckFailedNotice from "./FrameCheckFailedNotice";
 import { FrameNoResponseNotice, FrameRedirectedNotice } from "./FrameHandshakeNotice";
 import HeatmapControls from "./HeatmapControls";
@@ -107,9 +108,11 @@ export default function PageHeatmap({
   const inconclusive = verdict !== null && isInconclusive(verdict);
   const notAllowed = verdict?.verified === false && verdict.reason === "not-allowed";
   const refused = verdict?.verified === false && !inconclusive && !notAllowed;
-  // Allowlisted page: always framed, whatever its headers say. Only the SDK handshake proves it is showing
-  // (the iframe's load event fires for Chromium's error page too); the header verdict is logged as a detail.
-  const framed = Boolean(pageUrl) && (verdict?.verified === true || inconclusive);
+  // The server read X-Frame-Options or CSP frame-ancestors and they forbid framing: blocked right away, no frame.
+  const blocked = verdict?.verified === true && verdict.blocked;
+  // Otherwise (allowed or inconclusive) the page is framed and only the SDK handshake proves it is showing
+  // (the iframe's load event fires for Chromium's error page too); the verdict detail is logged.
+  const framed = Boolean(pageUrl) && (verdict?.verified === true || inconclusive) && !blocked;
   const handshake = useFrameHandshake(
     frameRef,
     pageUrl,
@@ -208,7 +211,7 @@ export default function PageHeatmap({
     <section
       className="page-heatmap"
       aria-label={`Click heatmap for ${path}`}
-      data-frame-state={framed ? handshake.status : "none"}
+      data-frame-state={blocked ? "blocked" : framed ? handshake.status : "none"}
     >
       <HeatmapControls state={state} activeViewport={activeViewport} options={options} onChange={update} />
       <p className="ph-summary" aria-live="polite" data-testid="heatmap-summary">
@@ -229,6 +232,7 @@ export default function PageHeatmap({
       )}
       {notAllowed && <SiteNotAllowedNotice siteOrigin={new URL(siteOrigin).origin} />}
       {refused && <FrameCheckFailedNotice reason={verdict.detail} />}
+      {blocked && <FrameBlockedNotice reason={verdict.detail} dashboardOrigin={window.location.origin} />}
       {framed && handshake.status === "no-response" && <FrameNoResponseNotice pageUrl={pageUrl} />}
       {framed && handshake.status === "redirected" && <FrameRedirectedNotice href={handshake.href} />}
       <TopAreasTable areas={areas} visible={state.view === "table"} caption={summary} />
