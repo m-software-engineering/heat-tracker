@@ -50,7 +50,19 @@
       "pin",
       "Policy",
       "assertion",
-      "apikey2"
+      "apikey2",
+      "session_id",
+      "passwd",
+      "password",
+      "api key",
+      "auth.token",
+      "_sid",
+      "access_token_2",
+      "refresh-token-v2",
+      "topsecret",
+      "user_sessid",
+      "session_key",
+      "%61uthorization"
     ],
     "keep": [
       "keyboard",
@@ -75,7 +87,34 @@
       "ref",
       "sort",
       "passenger",
-      "passport"
+      "passport",
+      "primary_key",
+      "sort_key",
+      "cache-key",
+      "key_id",
+      "ticket_id",
+      "session_count",
+      "boarding_pass",
+      "whiskey",
+      "jockey",
+      "hotkey",
+      "turnkey",
+      "compass",
+      "bypass",
+      "pinterest",
+      "sidebar",
+      "side",
+      "residence",
+      "tickets",
+      "v2",
+      "h264",
+      "mp3",
+      "id3",
+      "address",
+      "privacy_policy",
+      "tokenize",
+      "codec",
+      "passive"
     ]
   },
   "emails": {
@@ -86,7 +125,10 @@
       "name@domain.museum",
       "x@sub.example.co.uk",
       "UPPER@EXAMPLE.COM",
-      "a@bücher.de"
+      "a@bücher.de",
+      "a@b.photo",
+      "r@v1.md",
+      "s@x.py"
     ],
     "keep": [
       "logo@2x.png",

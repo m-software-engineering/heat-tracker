@@ -7,8 +7,8 @@
 // 1. A token (split on - _ [ ] . + space, camelCase and digit/letter boundaries) is one of these:
 const SENSITIVE_TOKENS = new Set(
   (
-    "token key secret password passwd auth authorization sig signature jwt session bearer cookie credential " +
-    "credentials csrf xsrf nonce hmac pwd pass passcode otp ssn ticket assertion samlresponse"
+    "token secret password passwd auth authorization sig signature jwt session bearer cookie credential " +
+    "credentials csrf xsrf nonce hmac pwd passcode otp ssn ticket assertion samlresponse"
   ).split(" ")
 );
 // 2. Or the whole name without separators is one of these compounds:
@@ -19,6 +19,9 @@ const SENSITIVE_NAMES = new Set(
   ).split(" ")
 );
 // 3. Or a token ends in token/secret/sessid, or is <one of these>key (secretkey; not turkey or monkey).
+// 4. The token `key` alone only counts right after one of KEY_PREFIXES (api_key; not primary_key or sort_key).
+// 5. `pass` only counts as the whole name (pass; not boarding_pass or passport).
+// 6. Names ending in _id or _count are kept (key_id, ticket_id, session_count), except session_id.
 const SENSITIVE_SUFFIXES = ["token", "secret", "sessid"];
 const KEY_PREFIXES = new Set(["secret", "private", "access", "api", "my", "client", "session"]);
 const FILE_EXTENSIONS = new Set(
@@ -55,7 +58,10 @@ export const decodeLenient = (text: string): { text: string; ok: boolean } => {
 /** Name as compared: decoded, NFKC-normalized, lowercased. */
 export const normalizeParamName = (raw: string) => decodeLenient(raw).text.normalize("NFKC").trim().toLowerCase();
 
-const isSensitiveToken = (token: string) => {
+const KEPT_NAME_SUFFIX = /_(?:id|count)$/;
+
+const isSensitiveToken = (token: string, index: number, tokens: string[]) => {
+  if (token === "key") return index > 0 && KEY_PREFIXES.has(tokens[index - 1]);
   if (SENSITIVE_TOKENS.has(token) || SENSITIVE_SUFFIXES.some((suffix) => token.endsWith(suffix))) return true;
   return token.endsWith("key") && KEY_PREFIXES.has(token.slice(0, -3));
 };
@@ -65,6 +71,9 @@ export const isSensitiveParamName = (raw: string) => {
   const decoded = decodeLenient(raw);
   if (!decoded.ok) return true;
   const name = decoded.text.normalize("NFKC").trim();
+  const lower = name.toLowerCase();
+  if (KEPT_NAME_SUFFIX.test(lower) && lower !== "session_id") return false;
+  if (lower === "pass") return true;
   const tokens = name
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
