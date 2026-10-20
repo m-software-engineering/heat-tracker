@@ -1,13 +1,30 @@
-// Browser entry for e2e/heatmap-overlay.e2e.spec.ts (bundled by e2e/fixtures/dashboard-server.ts): mounts the dashboard's PageHeatmap without Next.js,
-// and exposes the canvas renderer for the 100 k-point budget check.
+// Browser entry for the dashboard e2e specs (bundled by e2e/fixtures/dashboard-server.ts): mounts the entry flow
+// (ProjectList, PopularPages) and PageHeatmap without Next.js, and exposes the canvas renderer for the 100 k-point budget check.
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import PageHeatmap from "../components/PageHeatmap";
+import PopularPages from "../components/PopularPages";
+import ProjectList from "../components/ProjectList";
+import { pageHref, projectHref } from "../lib/entry-links";
 import { renderHeatmap } from "../lib/heatmap-render";
 
 const params = new URLSearchParams(window.location.search);
 const projectId = params.get("project");
-if (projectId) {
+const root = () => createRoot(document.getElementById("root")!);
+// Entry flow (#25): no project → project list; project without path → popular pages.
+if (!projectId) {
+  root().render(
+    createElement(ProjectList, { collectorUrl: window.location.origin, hrefFor: (p) => projectHref(p.id) })
+  );
+} else if (!params.has("path")) {
+  root().render(
+    createElement(PopularPages, {
+      collectorUrl: window.location.origin,
+      projectId,
+      hrefFor: (p) => pageHref(projectId, p.path)
+    })
+  );
+} else {
   const config = {
     collectorUrl: window.location.origin,
     projectId,
@@ -17,13 +34,13 @@ if (projectId) {
         params.get("site") === "unlisted" ? "__UNLISTED_ORIGIN__" : "__SITE_ORIGIN__"
       ]
     ),
-    path: params.get("path") ?? "/pricing",
+    path: params.get("path") ?? "/",
     // check=slow: a frame-check route that answers after the client budget.
     frameCheckUrl: params.get("check") === "slow" ? "/api/frame-check-slow" : "/api/frame-check"
   };
   // Full-width grid cell, like the dashboard's main column.
   const cell = { style: { gridColumn: "1 / -1", minWidth: 0 } };
-  createRoot(document.getElementById("root")!).render(createElement("div", cell, createElement(PageHeatmap, config)));
+  root().render(createElement("div", cell, createElement(PageHeatmap, config)));
 }
 
 (window as unknown as Record<string, unknown>).__renderBench = async (count: number) => {

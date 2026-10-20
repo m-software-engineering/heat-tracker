@@ -66,8 +66,11 @@ Optional fields:
 - `session`: persistence (`tab` or `browser`) and idle timeout
 - `batch`: batch limits and queue strategy
 - `sampling`: sampling rate (0..1)
-- `privacy`: selector masking and blocking options
-- `capture`: capture-level controls
+- `privacy`: selector masking and blocking options; `keepQueryParams: ["utm_source", ...]` keeps those query
+  params in the stored path (default `[]`: the path is `location.pathname` only, no query string or hash).
+  `token`, `email`, `code`, `password`, `secret`, `key`, `auth`, `session*` and email-looking values are never kept.
+- `capture`: capture-level controls; `pageTitle: false` stops sending `document.title` on pageviews (default on;
+  `maskTextSelectors` text in the title is replaced by `•••`, at most 200 characters)
 - `onError(err)`: receives every ingest error as a `HeatError` (`code`, `message`, `cause`, `fix`, `docs`, `requestId?`)
 - `debug`: logs each error code once per page load; the SDK is silent otherwise
 

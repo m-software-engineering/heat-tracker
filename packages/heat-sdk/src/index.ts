@@ -2,6 +2,7 @@
 
 import { HeatTrackerError, SDK_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
 import { createErrorReporter, ingestHttpError, ingestNetworkError, type ReportError } from "./errors";
+import { pagePath, pageTitle } from "./page-info";
 
 export type { HeatError, HeatErrorCode } from "@m-software-engineering/heat-errors";
 export { HeatTrackerError, isHeatError } from "@m-software-engineering/heat-errors";
@@ -30,12 +31,16 @@ export type InitConfig = {
     blockSelectors?: string[];
     allowSelectors?: string[];
     maskTextSelectors?: string[];
+    /** Query params kept in the stored path; every other param (and the hash) is dropped. Default `[]`. */
+    keepQueryParams?: string[];
   };
   capture?: {
     click?: boolean;
     move?: { enabled: boolean; throttleMs: number };
     scroll?: boolean;
     pageview?: boolean;
+    /** Send `document.title` (masked, ≤ 200 chars) on pageviews. Default `true`. */
+    pageTitle?: boolean;
     inputs?: {
       enabled: boolean;
       mode: "off" | "metadata" | "masked" | "allowlist";
@@ -62,6 +67,7 @@ type ResolvedCaptureConfig = {
   move: { enabled: boolean; throttleMs: number };
   scroll: boolean;
   pageview: boolean;
+  pageTitle: boolean;
   inputs: {
     enabled: boolean;
     mode: "off" | "metadata" | "masked" | "allowlist";
@@ -93,6 +99,7 @@ type ResolvedConfig = {
     blockSelectors: string[];
     allowSelectors: string[];
     maskTextSelectors: string[];
+    keepQueryParams: string[];
   };
   capture: ResolvedCaptureConfig;
 };
@@ -130,6 +137,7 @@ type PageviewEvent = EventBase & {
   type: "pageview";
   from?: string;
   to: string;
+  title?: string;
 };
 
 type CustomEvent = EventBase & {
@@ -191,13 +199,15 @@ const DEFAULT_CONFIG: ResolvedConfig = {
     respectDoNotTrack: true,
     blockSelectors: DEFAULT_BLOCK_SELECTORS,
     allowSelectors: [],
-    maskTextSelectors: []
+    maskTextSelectors: [],
+    keepQueryParams: []
   },
   capture: {
     click: true,
     move: { enabled: true, throttleMs: 80 },
     scroll: true,
     pageview: true,
+    pageTitle: true,
     inputs: { enabled: false, mode: "off", allowSelectors: [] },
     keyboard: { enabled: false, mode: "off", allowSelectors: [] }
   }
@@ -305,8 +315,6 @@ const randomId = () => {
   const hex = Array.from(bytes, toHex).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
-
-const getPath = () => `${location.pathname}${location.search}${location.hash}`;
 
 const getViewport = () => ({
   w: window.innerWidth,
@@ -423,7 +431,8 @@ const ensureConfig = (config: InitConfig): ResolvedConfig => {
       ...config.privacy,
       blockSelectors: config.privacy?.blockSelectors ?? DEFAULT_CONFIG.privacy.blockSelectors,
       allowSelectors: config.privacy?.allowSelectors ?? DEFAULT_CONFIG.privacy.allowSelectors,
-      maskTextSelectors: config.privacy?.maskTextSelectors ?? DEFAULT_CONFIG.privacy.maskTextSelectors
+      maskTextSelectors: config.privacy?.maskTextSelectors ?? DEFAULT_CONFIG.privacy.maskTextSelectors,
+      keepQueryParams: config.privacy?.keepQueryParams ?? DEFAULT_CONFIG.privacy.keepQueryParams
     },
     capture: {
       ...DEFAULT_CONFIG.capture,
@@ -465,12 +474,14 @@ class TrackerImpl implements Tracker {
   private flushing?: Promise<void>;
   private lastMoveCapture = 0;
   private lastScrollCapture = 0;
-  private currentPath = getPath();
+  private currentPath: string;
+  private lastTitle?: string;
   private sessionStore: StorageLike;
   private queueStore: StorageLike;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
+    this.currentPath = this.path();
     this.reportError = createErrorReporter(config);
     this.sessionStore = getBrowserStorage(
       this.config.session.persist === "browser" ? "localStorage" : "sessionStorage"
@@ -655,7 +666,7 @@ class TrackerImpl implements Tracker {
       eventId: randomId(),
       sessionId: this.sessionId,
       ts,
-      path: getPath(),
+      path: this.path(),
       viewport: getViewport(),
       device: getDevice(),
       meta: {
@@ -729,8 +740,12 @@ class TrackerImpl implements Tracker {
     removeHistoryListener(this.handleNavigation);
   }
 
+  private path() {
+    return pagePath(this.config.privacy.keepQueryParams);
+  }
+
   private handleNavigation = () => {
-    const nextPath = getPath();
+    const nextPath = this.path();
     if (nextPath === this.currentPath) return;
     const prev = this.currentPath;
     this.currentPath = nextPath;
@@ -743,8 +758,15 @@ class TrackerImpl implements Tracker {
       ...base,
       type: "pageview",
       from,
-      to: to || getPath()
+      to: to || this.path()
     };
+    if (this.config.capture.pageTitle) {
+      const title = pageTitle(this.config.privacy.maskTextSelectors);
+      // SPA routers often set the new title after pushState: a title unchanged from the previous path
+      // is probably the old page's, so it is not sent (the collector keeps the last real title).
+      if (title && !(from !== undefined && from !== evt.to && title === this.lastTitle)) evt.title = title;
+      this.lastTitle = title;
+    }
     this.enqueue(evt);
   }
 

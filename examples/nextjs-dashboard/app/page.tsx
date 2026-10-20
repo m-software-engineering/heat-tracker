@@ -1,20 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageHeatmap from "../components/PageHeatmap";
+import PopularPages from "../components/PopularPages";
+import ProjectList from "../components/ProjectList";
+import { pageHref, projectHref } from "../lib/entry-links";
 
 export default function Page() {
   const [baseUrl, setBaseUrl] = useState("http://localhost:4000");
   const [projectId, setProjectId] = useState("");
   const [siteOrigin, setSiteOrigin] = useState("");
-  const [path, setPath] = useState("/");
+  const [path, setPath] = useState("");
+
+  // The entry flow lives in the URL (?project=…&path=…) so rows are real links.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setProjectId(params.get("project") ?? "");
+    setPath(params.get("path") ?? "");
+  }, []);
 
   return (
     <main>
       <aside className="sidebar">
         <h1>Heat Tracker</h1>
         <nav aria-label="Sections">
-          <a href="#">Projects</a>
+          <a href="?">Projects</a>
           <a href="#">Heatmaps</a>
           <a href="#">Sessions</a>
           <a href="#">Settings</a>
@@ -23,8 +33,8 @@ export default function Page() {
 
       <section>
         <div className="topbar">
-          <h2>Heatmap View</h2>
-          <span>Clicks over your page</span>
+          <h2>{!projectId ? "Projects" : !path ? "Popular pages" : "Heatmap View"}</h2>
+          <span>{!projectId ? "Pick a project" : !path ? "Last 7 days, by sessions" : "Clicks over your page"}</span>
         </div>
 
         <div className="controls">
@@ -50,10 +60,12 @@ export default function Page() {
           </label>
         </div>
 
-        {projectId ? (
-          <PageHeatmap collectorUrl={baseUrl} projectId={projectId} siteOrigin={siteOrigin} path={path} />
+        {!projectId ? (
+          <ProjectList collectorUrl={baseUrl} hrefFor={(p) => projectHref(p.id)} />
+        ) : !path ? (
+          <PopularPages collectorUrl={baseUrl} projectId={projectId} hrefFor={(p) => pageHref(projectId, p.path)} />
         ) : (
-          <p className="ph-empty">Enter a Project ID to load the heatmap.</p>
+          <PageHeatmap collectorUrl={baseUrl} projectId={projectId} siteOrigin={siteOrigin} path={path} />
         )}
       </section>
 

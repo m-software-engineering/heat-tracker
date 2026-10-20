@@ -91,6 +91,14 @@ Accepted headers:
 
 ### Query APIs
 
+- `GET /api/projects?limit&cursor`: every project with `eventsLast24h`, `lastEventAt` and `receivingData`.
+- `GET /api/projects/:projectId/pages?from&to&limit&cursor`: pages with at least one pageview in the window
+  (default last 7 days), sorted by distinct pageview `sessions` then path, with `clicks` and the latest-seen
+  `title` (the path when none was sent; `hasTitle: false`). Unknown project: 404 `HEAT_E_PROJECT_NOT_FOUND`.
+- Both list endpoints page with `meta.nextCursor` (send it back as `cursor`); `limit` defaults to 50 and is
+  clamped to 200 (the applied value is `meta.limit`). An unknown cursor is 400 `HEAT_E_QUERY_CURSOR`.
+- Stored paths never keep the query params `token`, `email`, `code`, `password`, `secret`, `key`, `auth`,
+  `session*` or any email-looking value (also in a `#a=b` fragment); this runs on every ingest, with no opt-in.
 - `GET /api/projects/:projectId/heatmap`
 - `GET /api/projects/:projectId/events`
 - `GET /api/projects/:projectId/sessions`

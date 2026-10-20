@@ -38,6 +38,7 @@ Core structure in `src/index.ts`:
 - **Transport**:
   - `fetch` POST to endpoint with `x-project-key` and optional Bearer token.
   - Retry with exponential backoff + jitter on failure.
+- **Page identity** (`src/page-info.ts`, #25): every event's `path` is `location.pathname` only; query params listed in `privacy.keepQueryParams` are kept unless sensitive (`token`, `email`, `code`, `password`, `secret`, `key`, `auth`, `session*`, email-looking values); the hash is dropped. Pageviews carry `title` (`document.title` with `maskTextSelectors` text replaced by •••, whitespace collapsed, ≤ 200 characters; omitted when empty, fully masked, `capture.pageTitle: false`, or unchanged across an SPA navigation, since routers often set the new title after `pushState`).
 - **Navigation capture**:
   - A shared History API patch manager fans out navigation notifications to all active pageview trackers and restores methods when the last tracker shuts down.
 

@@ -16,6 +16,8 @@ import { aggregateHeatmap } from "./heatmap";
 import { insertEventsWithRollup, ROLLUP_HOUR_MS } from "./heatmap-rollup";
 import { backfillRollup, CATCH_UP_BATCHES } from "./heatmap-migrate";
 import { storedBucket } from "./viewport-bucket";
+import { pageTitlesOf, registerPageRoutes, upsertPageTitles } from "./pages";
+import { sanitizePayloadPaths } from "./path-privacy";
 
 const DEFAULT_HEATMAP_WINDOW_MS = 7 * 24 * ROLLUP_HOUR_MS;
 import type { EventQueryType } from "./heatmap-types";
@@ -323,10 +325,12 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
         }
         payload = hookResult.data;
       }
+      payload = sanitizePayloadPaths(payload);
 
       const { projectId, userId } = await ensureProjectAndUser(dbContext, projectKey, payload, jwtSub);
       await upsertSession(dbContext, projectId, userId, payload, req);
       await insertEvents(dbContext, projectId, userId, payload);
+      await upsertPageTitles(dbContext, projectId, pageTitlesOf(payload.events));
 
       metrics.ingestCount += 1;
       metrics.lastIngestMs = Date.now() - started;
@@ -357,6 +361,8 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       });
     }
   });
+
+  registerPageRoutes(apiRouter, dbContext, logger, parseTime, markNoStore);
 
   apiRouter.get("/api/projects/:projectId/heatmap", async (req, res) => {
     const parseResult = heatmapQuerySchema.safeParse(req.query);

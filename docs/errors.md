@@ -194,7 +194,7 @@ console.log(body.error.message); // "The JWT has expired."
 - HTTP status: 404
 - Legacy code: `not_found`
 - Message: The collector has no route for this method and path.
-- Fix: Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics.
+- Fix: Use POST /ingest or GET /api/projects, /api/projects/:projectId/{pages,heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics.
 
 ## HEAT_E_QUERY_INVALID
 
@@ -250,6 +250,34 @@ console.log(body.error.message); // "The JWT has expired."
 - HTTP status: 500
 - Legacy code: `session_detail_failed`
 - Message: The collector could not read the session detail.
+- Fix: Search collector logs for the requestId and check database connectivity.
+
+## HEAT_E_QUERY_CURSOR
+
+- HTTP status: 400
+- Legacy code: `invalid_cursor`
+- Message: Query parameter cursor is not a cursor this endpoint returned.
+- Fix: Send meta.nextCursor from the previous response unchanged, or omit cursor to start from the first page.
+
+## HEAT_E_PROJECT_NOT_FOUND
+
+- HTTP status: 404
+- Legacy code: `project_not_found`
+- Message: No project has this id.
+- Fix: List projects with GET /api/projects and use one of the returned ids.
+
+## HEAT_E_PROJECTS_QUERY_FAILED
+
+- HTTP status: 500
+- Legacy code: `projects_query_failed`
+- Message: The collector could not read projects.
+- Fix: Search collector logs for the requestId and check database connectivity.
+
+## HEAT_E_PAGES_QUERY_FAILED
+
+- HTTP status: 500
+- Legacy code: `pages_query_failed`
+- Message: The collector could not read the project's pages.
 - Fix: Search collector logs for the requestId and check database connectivity.
 
 ## HEAT_E_DB_CONFIG
