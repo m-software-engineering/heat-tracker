@@ -12,6 +12,20 @@ export type CatalogCode = keyof Catalog;
 // @public
 export const createHeatError: (definition: HeatErrorDefinition, cause: string, extras?: Omit<HeatErrorExtras, "original" | "internal">) => HeatError;
 
+// @public
+export const DASHBOARD_ERRORS: {
+    readonly HEAT_E_FRAME_BLOCKED: {
+        readonly code: "HEAT_E_FRAME_BLOCKED";
+        readonly message: "Your site does not allow the dashboard to show it in a frame, so the heatmap is drawn on a blank page.";
+        readonly fix: "Add `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>` on your site, then reload this page.";
+    };
+    readonly HEAT_E_DASHBOARD_FETCH: {
+        readonly code: "HEAT_E_DASHBOARD_FETCH";
+        readonly message: "The dashboard could not read heatmap data from the collector.";
+        readonly fix: "Check the Collector Base URL, that the collector is running, and that it allows CORS from the dashboard origin.";
+    };
+};
+
 // @public (undocumented)
 export const docsUrl: (code: HeatErrorCode) => string;
 

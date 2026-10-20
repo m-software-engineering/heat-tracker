@@ -1,0 +1,30 @@
+// Browser entry for e2e/heatmap-overlay.e2e.spec.ts (bundled by e2e/fixtures/dashboard-server.ts): mounts the dashboard's PageHeatmap without Next.js,
+// and exposes the canvas renderer for the 100 k-point budget check.
+import { createElement } from "react";
+import { createRoot } from "react-dom/client";
+import PageHeatmap from "../components/PageHeatmap";
+import { renderHeatmap } from "../lib/heatmap-render";
+
+type HarnessConfig = { collectorUrl: string; projectId: string; siteOrigin: string; path: string };
+
+const config = (window as unknown as { __HARNESS__?: HarnessConfig }).__HARNESS__;
+if (config) {
+  createRoot(document.getElementById("root")!).render(createElement(PageHeatmap, config));
+}
+
+(window as unknown as Record<string, unknown>).__renderBench = async (count: number) => {
+  const longTasks: number[] = [];
+  const observer = new PerformanceObserver((list) => list.getEntries().forEach((e) => longTasks.push(e.duration)));
+  observer.observe({ type: "longtask", buffered: false });
+  const points = Array.from({ length: count }, (_, i) => ({
+    x: (i * 7919) % 1400,
+    y: (i * 104729) % 4000,
+    value: 1 + (i % 25)
+  }));
+  const canvas = document.createElement("canvas");
+  document.body.appendChild(canvas);
+  const ms = await renderHeatmap(canvas, points, { width: 1400, height: 4000, radius: 16 });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  observer.disconnect();
+  return { ms, maxLongTaskMs: Math.max(0, ...longTasks) };
+};

@@ -1,0 +1,73 @@
+"use client";
+
+import { PERIOD_DAYS, type ViewState, type ViewportClass } from "../lib/view-state";
+
+type Props = {
+  state: ViewState;
+  activeViewport: ViewportClass;
+  onChange: (next: Partial<ViewState>) => void;
+};
+
+const VIEWPORTS: ViewportClass[] = ["desktop", "tablet", "mobile"];
+
+export default function HeatmapControls({ state, activeViewport, onChange }: Props) {
+  return (
+    <div className="ph-toolbar">
+      <fieldset className="ph-radios">
+        <legend>Viewport</legend>
+        {VIEWPORTS.map((viewport) => (
+          <label key={viewport} className="ph-target">
+            <input
+              type="radio"
+              name="heatmap-viewport"
+              value={viewport}
+              checked={activeViewport === viewport}
+              onChange={() => onChange({ viewport })}
+            />
+            {viewport[0].toUpperCase() + viewport.slice(1)}
+          </label>
+        ))}
+      </fieldset>
+      <label className="ph-target">
+        Opacity <span aria-hidden="true">([ / ])</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={state.opacity}
+          aria-valuetext={`${state.opacity}%`}
+          onChange={(e) => onChange({ opacity: Number(e.target.value) })}
+        />
+        <output>{state.opacity}%</output>
+      </label>
+      <button
+        type="button"
+        className="ph-target"
+        aria-pressed={state.showHeatmap}
+        aria-keyshortcuts="H"
+        onClick={() => onChange({ showHeatmap: !state.showHeatmap })}
+      >
+        Heatmap (H)
+      </button>
+      <button
+        type="button"
+        className="ph-target"
+        aria-pressed={state.view === "table"}
+        onClick={() => onChange({ view: state.view === "table" ? "map" : "table" })}
+      >
+        Table
+      </button>
+      <label className="ph-target">
+        Period
+        <select value={state.days} onChange={(e) => onChange({ days: Number(e.target.value) })}>
+          {PERIOD_DAYS.map((days) => (
+            <option key={days} value={days}>
+              Last {days} {days === 1 ? "day" : "days"}
+            </option>
+          ))}
+        </select>
+      </label>
+    </div>
+  );
+}

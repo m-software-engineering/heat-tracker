@@ -276,3 +276,13 @@ console.log(body.error.message); // "The JWT has expired."
 
 - Message: Database migrations did not complete.
 - Fix: Check DATABASE_URL (or SQLITE_FILE) and that the database user can create tables; rerun with --verbose for the driver message (password masked).
+
+## HEAT_E_FRAME_BLOCKED
+
+- Message: Your site does not allow the dashboard to show it in a frame, so the heatmap is drawn on a blank page.
+- Fix: Add `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>` on your site, then reload this page.
+
+## HEAT_E_DASHBOARD_FETCH
+
+- Message: The dashboard could not read heatmap data from the collector.
+- Fix: Check the Collector Base URL, that the collector is running, and that it allows CORS from the dashboard origin.
