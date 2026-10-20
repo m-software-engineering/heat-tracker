@@ -363,6 +363,21 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.
 - Fix: List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin.
 
+## HEAT_E_COLLECTOR_UNREACHABLE
+
+- Message: The dashboard can't reach the collector.
+- Fix: Check that the collector container is running: `docker compose ps`.
+
+## HEAT_E_DASHBOARD_CONTENT_TYPE
+
+- Message: The dashboard session request is not JSON.
+- Fix: Send the token as JSON with `Content-Type: application/json`, for example `{"token":"…"}`.
+
+## HEAT_E_DASHBOARD_ORIGIN
+
+- Message: The dashboard session request came from another site.
+- Fix: Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.
+
 ## HEAT_E_DASHBOARD_FETCH
 
 - Message: The dashboard could not read heatmap data from the collector.

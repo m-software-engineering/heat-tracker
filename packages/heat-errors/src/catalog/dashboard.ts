@@ -22,6 +22,21 @@ export const DASHBOARD_ERRORS = {
     message: "An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.",
     fix: "List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin."
   },
+  HEAT_E_COLLECTOR_UNREACHABLE: {
+    code: "HEAT_E_COLLECTOR_UNREACHABLE",
+    message: "The dashboard can't reach the collector.",
+    fix: "Check that the collector container is running: `docker compose ps`."
+  },
+  HEAT_E_DASHBOARD_CONTENT_TYPE: {
+    code: "HEAT_E_DASHBOARD_CONTENT_TYPE",
+    message: "The dashboard session request is not JSON.",
+    fix: 'Send the token as JSON with `Content-Type: application/json`, for example `{"token":"…"}`.'
+  },
+  HEAT_E_DASHBOARD_ORIGIN: {
+    code: "HEAT_E_DASHBOARD_ORIGIN",
+    message: "The dashboard session request came from another site.",
+    fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged."
+  },
   HEAT_E_DASHBOARD_FETCH: {
     code: "HEAT_E_DASHBOARD_FETCH",
     message: "The dashboard could not read heatmap data from the collector.",

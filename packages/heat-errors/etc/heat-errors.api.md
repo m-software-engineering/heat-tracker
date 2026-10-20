@@ -34,6 +34,21 @@ export const DASHBOARD_ERRORS: {
         readonly message: "An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.";
         readonly fix: "List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin.";
     };
+    readonly HEAT_E_COLLECTOR_UNREACHABLE: {
+        readonly code: "HEAT_E_COLLECTOR_UNREACHABLE";
+        readonly message: "The dashboard can't reach the collector.";
+        readonly fix: "Check that the collector container is running: `docker compose ps`.";
+    };
+    readonly HEAT_E_DASHBOARD_CONTENT_TYPE: {
+        readonly code: "HEAT_E_DASHBOARD_CONTENT_TYPE";
+        readonly message: "The dashboard session request is not JSON.";
+        readonly fix: "Send the token as JSON with `Content-Type: application/json`, for example `{\"token\":\"…\"}`.";
+    };
+    readonly HEAT_E_DASHBOARD_ORIGIN: {
+        readonly code: "HEAT_E_DASHBOARD_ORIGIN";
+        readonly message: "The dashboard session request came from another site.";
+        readonly fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.";
+    };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";
         readonly message: "The dashboard could not read heatmap data from the collector.";

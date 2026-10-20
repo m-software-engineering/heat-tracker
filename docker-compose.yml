@@ -1,0 +1,96 @@
+# Self-hosted Heat Tracker: `docker compose up`, then open http://localhost:3000.
+# Images are pinned to released versions (ghcr.io/m-software-engineering, built by CD on release).
+# Until the first release that publishes them, `docker compose up` cannot pull them (403); build
+# from this checkout instead: docker compose -f docker-compose.yml -f compose.dev.yml up
+# Optional settings come from a .env file next to this one (see README "Settings").
+# Full reset (DELETES all recorded data and the admin token): docker compose down -v
+name: heat-tracker
+
+x-hardening: &hardening
+  read_only: true
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+
+services:
+  postgres:
+    <<: *hardening
+    image: postgres:16.10-alpine
+    # The official image starts as root to fix data-dir ownership, then drops to `postgres`.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    environment:
+      POSTGRES_USER: heat
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-heat}
+      POSTGRES_DB: heat_tracker
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U heat -d heat_tracker"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    # Not published: only the collector reaches the database.
+
+  collector:
+    <<: *hardening
+    image: ghcr.io/m-software-engineering/heat-collector:0.4.0
+    user: node
+    environment:
+      DATABASE_URL: postgres://heat:${POSTGRES_PASSWORD:-heat}@postgres:5432/heat_tracker
+      HEAT_DATA_DIR: /data
+      HEAT_DASHBOARD_URL: ${HEAT_DASHBOARD_URL:-http://localhost:3000}
+      # Empty = use the token generated into the collector-data volume (min. 32 chars if set).
+      HEAT_ADMIN_TOKEN: ${HEAT_ADMIN_TOKEN:-}
+      # e.g. true, 1, or loopback,10.0.0.0/8 behind a reverse proxy.
+      HEAT_TRUST_PROXY: ${HEAT_TRUST_PROXY:-}
+      # Only the startup block is printed; raise to info/debug when troubleshooting.
+      HEAT_LOG_LEVEL: ${HEAT_LOG_LEVEL:-error}
+      HEAT_PUBLIC_COLLECTOR_URL: ${HEAT_PUBLIC_COLLECTOR_URL:-http://localhost:4000}
+    ports:
+      - "4000:4000"
+    tmpfs:
+      - /tmp
+    volumes:
+      - collector-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:4000/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  dashboard:
+    <<: *hardening
+    image: ghcr.io/m-software-engineering/heat-dashboard:0.4.0
+    user: node
+    environment:
+      HEAT_COLLECTOR_URL: http://collector:4000
+      # true behind an HTTPS reverse proxy that does not send X-Forwarded-Proto.
+      HEAT_DASHBOARD_SECURE_COOKIE: ${HEAT_DASHBOARD_SECURE_COOKIE:-false}
+      # Sites the heatmap may load in a frame, e.g. https://shop.example.com (comma-separated).
+      HEAT_DASHBOARD_SITE_ORIGINS: ${HEAT_DASHBOARD_SITE_ORIGINS:-}
+      HEAT_PUBLIC_COLLECTOR_URL: ${HEAT_PUBLIC_COLLECTOR_URL:-http://localhost:4000}
+    ports:
+      - "3000:3000"
+    tmpfs:
+      - /tmp
+      - /app/examples/nextjs-dashboard/.next/cache:uid=1000,gid=1000
+    depends_on:
+      collector:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:
+  collector-data:
