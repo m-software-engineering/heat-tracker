@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import express from "express";
 import request from "supertest";
 import Database from "better-sqlite3";
@@ -9,17 +9,6 @@ import { ROLLUP_HOUR_MS } from "./heatmap-rollup";
 const KEY = "rollup-key";
 const HOUR = ROLLUP_HOUR_MS;
 const T0 = 1_760_000_000_000 - (1_760_000_000_000 % HOUR); // an hour boundary
-
-// Closed after the file: Node 24 aborts when an unclosed native handle is finalized at worker exit.
-const clients: Database.Database[] = [];
-const open = () => {
-  const client = new Database(":memory:");
-  clients.push(client);
-  return client;
-};
-afterAll(() => {
-  for (const client of clients) client.close();
-});
 
 const collectorOn = async (client: Database.Database) => {
   const collector = await createCollector({ db: { dialect: "sqlite", client }, auth: { mode: "projectKey" } });
@@ -74,7 +63,7 @@ describe("heatmap rollup", () => {
   });
 
   it("is maintained at ingest and merges with raw edges to the same counts", async () => {
-    const client = open();
+    const client = new Database(":memory:");
     const app = await collectorOn(client);
     const projectId = await ingest(app, client, [
       click(1, T0 + 1000, 10, 10),
@@ -98,7 +87,7 @@ describe("heatmap rollup", () => {
   });
 
   it("filters by viewport bucket and reports every bucket's count", async () => {
-    const client = open();
+    const client = new Database(":memory:");
     const app = await collectorOn(client);
     const projectId = await ingest(app, client, [
       click(1, T0 + 1000, 10, 10),
@@ -116,7 +105,7 @@ describe("heatmap rollup", () => {
   });
 
   it("defaults to the last 7 whole days and returns the applied range", async () => {
-    const client = open();
+    const client = new Database(":memory:");
     const app = await collectorOn(client);
     const now = Date.now();
     const projectId = await ingest(app, client, [click(1, now - 8 * 24 * HOUR, 10, 10), click(2, now, 20, 20)]);
@@ -135,7 +124,7 @@ describe("heatmap rollup", () => {
   });
 
   it("migrates old events (bucket + rollup) and skips events without coordinates", async () => {
-    const client = open();
+    const client = new Database(":memory:");
     const app = await collectorOn(client);
     const projectId = await ingest(app, client, [click(1, T0 + 1000, 10, 10)]);
     // Rows written by an older collector (no viewport_bucket, rollup_state NULL), one click without coordinates.
