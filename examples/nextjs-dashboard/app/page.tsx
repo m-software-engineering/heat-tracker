@@ -19,6 +19,7 @@ export default function Page() {
   const [projectId, setProjectId] = useState("");
   const [siteOrigin, setSiteOrigin] = useState("");
   const [path, setPath] = useState("");
+  const [onboarded, setOnboarded] = useState<ProjectSummary>();
 
   const loadSession = useCallback(async () => {
     setSession(undefined);
@@ -35,10 +36,8 @@ export default function Page() {
     setSiteOrigin(params.get("site") ?? "");
   }, [loadSession]);
 
-  // First event for the onboarding key: continue to that project's pages.
-  const onProject = useCallback((found: ProjectSummary) => {
-    window.location.assign(projectHref(found.id, siteOf(found.name)));
-  }, []);
+  // First event for the onboarding key: Onboarding shows "Receiving events from …"; link on to its pages.
+  const onProject = useCallback((found: ProjectSummary) => setOnboarded(found), []);
 
   const unreachable = session?.error?.code === "HEAT_E_COLLECTOR_UNREACHABLE" ? session.error : undefined;
   const site = siteOrigin || undefined;
@@ -65,7 +64,12 @@ export default function Page() {
           <ProjectList
             collectorUrl={PROXY_URL}
             hrefFor={(p) => projectHref(p.id, siteOf(p.name))}
-            empty={<Onboarding publicCollectorUrl={session.publicCollectorUrl} onProject={onProject} />}
+            empty={
+              <>
+                <Onboarding publicCollectorUrl={session.publicCollectorUrl} onProject={onProject} />
+                {onboarded ? <a href={projectHref(onboarded.id, siteOf(onboarded.name))}>Open popular pages</a> : null}
+              </>
+            }
           />
         ) : null}
         {session?.signedIn && projectId && !path ? (
