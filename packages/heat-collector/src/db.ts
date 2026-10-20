@@ -1,6 +1,7 @@
 import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import type { Dialect } from "./schema";
-import { buildCreateIndexSql, buildCreateTableSql, createSchema } from "./schema";
+import { buildAddViewportBucketSql, buildCreateIndexSql, buildCreateTableSql, createSchema } from "./schema";
+import { migrateHeatmapMongo, migrateHeatmapSql } from "./heatmap-migrate";
 
 export type DbAdapterConfig =
   | {
@@ -141,6 +142,7 @@ export const autoMigrate = async (ctx: DbContext) => {
     await createMongoIndex(ctx.db.collection("events"), { projectId: 1, path: 1, ts: 1 });
     await createMongoIndex(ctx.db.collection("events"), { projectId: 1, path: 1, type: 1, ts: 1 });
     await createMongoIndex(ctx.db.collection("events"), { sessionId: 1, ts: 1 });
+    await migrateHeatmapMongo(ctx.db);
     return;
   }
 
@@ -154,7 +156,18 @@ export const autoMigrate = async (ctx: DbContext) => {
     if (ctx.dialect === "mysql" && isDuplicateKeyName(error)) return;
     throw error;
   });
+  await execute(ctx.db, buildAddViewportBucketSql(ctx.dialect)).catch((error: any) => {
+    if (isDuplicateColumn(error)) return;
+    throw error;
+  });
+  await migrateHeatmapSql(ctx, execute);
 };
+
+// MySQL ER_DUP_FIELDNAME, SQLite "duplicate column name" (Postgres uses IF NOT EXISTS).
+const isDuplicateColumn = (error: any) =>
+  error?.errno === 1060 ||
+  error?.cause?.errno === 1060 ||
+  /duplicate column/i.test(`${error?.message} ${error?.cause?.message}`);
 
 const isDuplicateKeyName = (error: any) =>
   error?.errno === 1061 || error?.code === "ER_DUP_KEYNAME" || error?.cause?.errno === 1061;

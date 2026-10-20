@@ -103,15 +103,19 @@ Event persistence behavior:
 - `scroll` stores depth as integer.
 - input events whose `masked` field contains non-mask characters are dropped as a safety guard.
 - metadata JSON stores viewport/device/meta (sanitized to remove text/value/content fields).
+- `events.viewport_bucket` stores the event's bucket (`meta.viewportBucket`, else the rounded viewport; `""` when none).
+- Each insert also increments `heatmap_rollup` (`src/heatmap-rollup.ts`): one row per (project, path, type, viewport bucket, hour, position) with a count. Positions keep pixel precision (`pos` 0 = none, 1 = x/y, 2 = scroll depth), so bucketing a rollup row gives exactly the raw rows' buckets. Events and rollup are written in two statements, not one transaction. MongoDB has no rollup.
+- Migration (`src/heatmap-migrate.ts`, run by `autoMigrate`, idempotent): adds `viewport_bucket` and fills it for older rows in Node batches, creates `heatmap_rollup` and backfills it from `events` with one `INSERT ... SELECT` when it is empty.
 
 Query flow (heatmap):
 
-1. Validate query + parse time range (`viewportBucket` must be `<w>x<h>`, else `HEAT_E_QUERY_INVALID` naming it).
-2. In parallel: a summary query (`GROUP BY type`: counts + max non-scroll `y`) and, unless `viewportBucket` is given, the viewport sources of the 10,000 most recent matching events (`VIEWPORT_SAMPLE_SIZE`) to pick the dominant bucket.
-3. One `GROUP BY (bx, by)` query buckets coordinates for the resulting grid; no raw event rows reach Node, so collector memory is constant in the number of matched events.
-4. Default behavior when `type` omitted: request `click`, fallback to `all` when no click rows.
-5. Return points (sorted by y, x) and metadata including `totalEvents`, `sampled: false`, plotted/ignored counts.
-6. `src/heatmap.golden.test.ts` pins the output to a recording of the pre-#26 Node path (SQLite always; Postgres/MySQL/MongoDB when `HEAT_TEST_*_URL` is set, as in `.github/workflows/heatmap-db.yml`). `bench/heatmap-bench.mjs` seeds 1 M Postgres events and gates p95 ≤ 500 ms and flat RSS (nightly and on PRs touching the query).
+1. Validate query + parse time range (`viewportBucket`/`viewport` must be `<w>x<h>`, else `HEAT_E_QUERY_INVALID` naming it). Without `from` and `to` the range is the last 7 days ending with the current hour (whole hours); `meta.range` returns `{ from, to, defaulted }`.
+2. SQL dialects split the range (`splitRange`): whole hours read `heatmap_rollup` (`SUM(cnt)`), partial edge hours read `events`; every query runs on each part and Node merges the grouped rows.
+3. In parallel: max `y` of positioned non-scroll rows and, unless `viewportBucket`/`viewport` is given, the stored buckets of the 10,000 most recent matching events (`VIEWPORT_SAMPLE_SIZE`, always raw) to pick the dominant bucket.
+4. Then type counts, per-bucket counts (`meta.viewportBuckets`, ignoring the `viewport` filter), the count of plottable events without a position (`meta.excluded.noCoordinates`, skipped on every database) and one `GROUP BY (bx, by)` query for the grid. No raw event rows reach Node.
+5. Default behavior when `type` omitted: request `click`, fallback to `all` when no click rows.
+6. Return points (sorted by y, x) and metadata including `totalEvents`, `sampled: false`, plotted/ignored/excluded counts.
+7. `src/heatmap.golden.test.ts` pins one recording for every database (equal to the pre-#26 MongoDB path, which already skipped rows without a position) (SQLite always; Postgres/MySQL/MongoDB when `HEAT_TEST_*_URL` is set, as in `.github/workflows/heatmap-db.yml`). `bench/heatmap-bench.mjs` seeds 1 M Postgres events as an older install would hold them, restarts the collector so the migration builds the rollup, warms up for 5 s and gates p95 ≤ 500 ms and flat RSS (nightly and on PRs touching the query).
 
 Query flow (sessions):
 

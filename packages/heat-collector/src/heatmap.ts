@@ -1,50 +1,29 @@
 import type { DbContext } from "./db";
 import { aggregateMongo } from "./heatmap-mongo";
 import { aggregateSql } from "./heatmap-sql";
-import type { EventQueryType, EventType, HeatmapBackend, HeatmapFilter, ViewportGroup } from "./heatmap-types";
+import type { EventQueryType, EventType, HeatmapBackend, HeatmapFilter } from "./heatmap-types";
+import { parseViewportBucket } from "./viewport-bucket";
 
-/**
- * The default viewport is the most common bucket among this many most recent events. Viewports live in
- * meta JSON, and parsing it for every event alone costs seconds at 1 M events (#26 bench).
- */
+/** The default viewport is the most common stored bucket among this many most recent events. */
 export const VIEWPORT_SAMPLE_SIZE = 10_000;
+
+/** Time range the heatmap covers; `defaulted` when the request gave neither `from` nor `to`. */
+export type HeatmapRange = { from: number; to: number; defaulted: boolean };
 
 export const HEATMAP_PLOTTABLE_TYPES: EventType[] = ["click", "move", "scroll"];
 const DEFAULT_VIEWPORT = { w: 1280, h: 720 };
 const NOT_PLOTTABLE_WARNING =
   "Events matched the filter but none are plottable. Use type=click|move|scroll or inspect /api/projects/:projectId/events.";
 
-export const parseViewportBucket = (bucket?: string) => {
-  if (!bucket) return null;
-  const [w, h] = bucket.split("x").map((n) => Number(n));
-  if (!w || !h) return null;
-  return { w, h };
-};
-
-const toViewportBucket = (w: number, h: number) => `${Math.round(w / 100) * 100}x${Math.round(h / 100) * 100}`;
-
-/** Same precedence as ingest-time meta: explicit `meta.viewportBucket`, then the rounded viewport. */
-export const pickBucket = (group: Omit<ViewportGroup, "count">) => {
-  if (typeof group.explicit === "string" && parseViewportBucket(group.explicit)) return group.explicit;
-  const w = Number(group.w);
-  const h = Number(group.h);
-  if (group.w != null && group.h != null && Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
-    return toViewportBucket(w, h);
-  }
-  return undefined;
-};
-
 const backendFor = (ctx: DbContext): HeatmapBackend =>
   ctx.dialect === "mongodb" ? aggregateMongo(ctx) : aggregateSql(ctx);
 
 const dominantBucket = async (backend: HeatmapBackend, filter: HeatmapFilter) => {
-  const counts = new Map<string, number>();
-  await backend.viewportGroups(filter, VIEWPORT_SAMPLE_SIZE, (group) => {
-    const bucket = pickBucket(group);
-    if (bucket) counts.set(bucket, (counts.get(bucket) || 0) + group.count);
-  });
+  const counts = Object.entries(await backend.recentBuckets(filter, VIEWPORT_SAMPLE_SIZE)).filter(([bucket]) =>
+    parseViewportBucket(bucket)
+  );
   // Highest count wins; ties break by bucket name so the result does not depend on row order.
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0];
+  return counts.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0]?.[0];
 };
 
 /**
@@ -55,17 +34,19 @@ const dominantBucket = async (backend: HeatmapBackend, filter: HeatmapFilter) =>
 export const aggregateHeatmap = async (
   ctx: DbContext,
   filter: HeatmapFilter,
-  options: { resolution: number; viewportBucket?: string; requestedType: EventQueryType }
+  options: { resolution: number; viewportBucket?: string; requestedType: EventQueryType; range: HeatmapRange }
 ) => {
   const backend = backendFor(ctx);
+  // Bucket counts ignore the viewport filter so the dashboard can offer every bucket.
+  const bucketCountsPromise = backend.bucketCounts({ ...filter, viewport: undefined });
   const { resolution } = options;
   // Phase 1 fixes the grid (max y, viewport); phase 2 counts types and buckets concurrently.
   const [observedY, dominant] = await Promise.all([
     backend.maxY(filter),
-    options.viewportBucket ? undefined : dominantBucket(backend, filter)
+    options.viewportBucket || filter.viewport ? undefined : dominantBucket(backend, filter)
   ]);
 
-  const preferredBucket = options.viewportBucket || dominant;
+  const preferredBucket = options.viewportBucket || filter.viewport || dominant;
   const viewport = parseViewportBucket(preferredBucket) || DEFAULT_VIEWPORT;
   const renderHeight = Math.max(viewport.h, observedY == null ? viewport.h : Math.round(observedY));
   const grid = {
@@ -75,7 +56,12 @@ export const aggregateHeatmap = async (
     renderHeight
   };
 
-  const [typeBreakdown, buckets] = await Promise.all([backend.typeCounts(filter), backend.buckets(filter, grid)]);
+  const [typeBreakdown, buckets, noCoordinates, bucketCounts] = await Promise.all([
+    backend.typeCounts(filter),
+    backend.buckets(filter, grid),
+    backend.noCoordinates(filter),
+    bucketCountsPromise
+  ]);
   const total = Object.values(typeBreakdown).reduce((sum, n) => sum + n, 0);
   const points = buckets
     .map(({ bx, by, count }) => ({
@@ -98,6 +84,13 @@ export const aggregateHeatmap = async (
       sampled: false,
       plotted,
       ignored: Math.max(0, total - plotted),
+      excluded: { noCoordinates },
+      range: options.range,
+      viewportFilter: filter.viewport ?? null,
+      viewportBuckets: Object.entries(bucketCounts)
+        .filter(([bucket]) => bucket !== "")
+        .map(([bucket, count]) => ({ bucket, count }))
+        .sort((a, b) => b.count - a.count || (a.bucket < b.bucket ? -1 : 1)),
       requestedType: options.requestedType,
       resolvedType: filter.type,
       bucket: preferredBucket || `${viewport.w}x${viewport.h}`,

@@ -66,16 +66,28 @@ export const goldenPayloads = () => {
   }));
 };
 
+// The events fall in one hour; this window covers it and the next as whole hours (served by the rollup).
+const WINDOW = { from: String(BASE_TS - 3_600_000), to: String(BASE_TS + 3_600_000) };
+
 /** Query strings exercised by the golden test, keyed by a stable name. */
 export const goldenQueries: Record<string, Record<string, string>> = {
-  defaultClick: { path: "/pricing" },
-  allTypes: { path: "/pricing", type: "all" },
-  scrollLowRes: { path: "/pricing", type: "scroll", resolution: "32" },
-  moveFixedBucket: { path: "/pricing", type: "move", viewportBucket: "1440x900" },
-  clickHighRes: { path: "/pricing", type: "click", resolution: "1024" },
-  fallbackToAll: { path: "/docs" },
-  explicitClickEmpty: { path: "/docs", type: "click" },
-  noEvents: { path: "/nowhere" },
+  defaultClick: { ...WINDOW, path: "/pricing" },
+  allTypes: { ...WINDOW, path: "/pricing", type: "all" },
+  scrollLowRes: { ...WINDOW, path: "/pricing", type: "scroll", resolution: "32" },
+  moveFixedBucket: { ...WINDOW, path: "/pricing", type: "move", viewportBucket: "1440x900" },
+  clickHighRes: { ...WINDOW, path: "/pricing", type: "click", resolution: "1024" },
+  fallbackToAll: { ...WINDOW, path: "/docs" },
+  explicitClickEmpty: { ...WINDOW, path: "/docs", type: "click" },
+  noEvents: { ...WINDOW, path: "/nowhere" },
+  // Starts mid-hour, so it is read from raw events only.
   timeWindow: { path: "/pricing", type: "all", from: String(BASE_TS + 10_000), to: String(BASE_TS + 40_000) },
-  wholeProject: { type: "all" }
+  wholeProject: { ...WINDOW, type: "all" },
+  mobileOnly: { ...WINDOW, path: "/pricing", type: "all", viewport: "400x800" },
+  mobileOnlyRaw: {
+    path: "/pricing",
+    type: "all",
+    viewport: "400x800",
+    from: String(BASE_TS),
+    to: String(BASE_TS + 100_000)
+  }
 };

@@ -13,6 +13,10 @@ import {
 } from "./validation";
 import { verifyJwt, type JwtConfig } from "./jwt";
 import { aggregateHeatmap } from "./heatmap";
+import { ROLLUP_HOUR_MS, upsertRollup } from "./heatmap-rollup";
+import { storedBucket } from "./viewport-bucket";
+
+const DEFAULT_HEATMAP_WINDOW_MS = 7 * 24 * ROLLUP_HOUR_MS;
 import type { EventQueryType } from "./heatmap-types";
 import { HeatTrackerError, INGEST_ERRORS, QUERY_ERRORS, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import { fieldErrors, payloadCause, queryCause, resolveRequestId, sendError } from "./http-errors";
@@ -359,8 +363,11 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_TO, timeCause("to", query));
     }
 
-    const from = fromValue ?? 0;
-    const to = toValue ?? Date.now();
+    // Neither bound given: the last 7 days, ending with the current hour (whole hours, so the rollup serves it).
+    const defaulted = fromValue === undefined && toValue === undefined;
+    const hourEnd = (Math.floor(Date.now() / ROLLUP_HOUR_MS) + 1) * ROLLUP_HOUR_MS;
+    const from = fromValue ?? (defaulted ? hourEnd - DEFAULT_HEATMAP_WINDOW_MS : 0);
+    const to = toValue ?? (defaulted ? hourEnd - 1 : Date.now());
 
     if (from > to) {
       return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_INVALID_TIME_RANGE, rangeCause(from, to), {
@@ -371,8 +378,9 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     const requestedType = (query.type ?? "click") as EventQueryType;
 
     try {
-      const filter = { projectId, type: requestedType, path: query.path, from, to };
-      const options = { resolution: query.resolution, viewportBucket: query.viewportBucket, requestedType };
+      const filter = { projectId, type: requestedType, path: query.path, viewport: query.viewport, from, to };
+      const range = { from, to, defaulted };
+      const options = { resolution: query.resolution, viewportBucket: query.viewportBucket, requestedType, range };
       let result = await aggregateHeatmap(dbContext, filter, options);
       let resolvedType = requestedType;
 
@@ -781,6 +789,7 @@ const insertEvents = async (ctx: DbContext, projectId: string, userId: string | 
       ts: event.ts,
       path: event.path,
       selector: event.selector ?? null,
+      viewportBucket: storedBucket(event.viewport, sanitizeEventMeta(event.meta)),
       metaJson: JSON.stringify({
         viewport: event.viewport,
         device: event.device,
@@ -828,8 +837,9 @@ const insertEvents = async (ctx: DbContext, projectId: string, userId: string | 
     return;
   }
 
-  const { events } = ctx.schema as any;
+  const { events, heatmapRollup } = ctx.schema as any;
   await ctx.db.insert(events).values(rows);
+  await upsertRollup(ctx.db, ctx.dialect as "pg" | "mysql" | "sqlite", heatmapRollup, rows);
 };
 
 const listProjectEvents = async (
