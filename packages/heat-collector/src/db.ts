@@ -1,3 +1,4 @@
+import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import type { Dialect } from "./schema";
 import { buildCreateTableSql, createSchema } from "./schema";
 
@@ -46,7 +47,7 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
     const { drizzle } = await import("drizzle-orm/node-postgres");
     const { Pool } = await import("pg");
     if (!config.client && !config.connectionString) {
-      throw new Error("Postgres config requires connectionString or client");
+      throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_CONFIG, 'dialect "pg" has no connectionString or client');
     }
     const client = config.client ?? new Pool({ connectionString: config.connectionString });
     const db = drizzle({ client });
@@ -57,7 +58,7 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
     const { drizzle } = await import("drizzle-orm/mysql2");
     const mysql = await import("mysql2/promise");
     if (!config.client && !config.connectionString) {
-      throw new Error("MySQL config requires connectionString or client");
+      throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_CONFIG, 'dialect "mysql" has no connectionString or client');
     }
     const client = config.client ?? mysql.createPool(config.connectionString || "");
     const db = drizzle({ client });
@@ -71,7 +72,7 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
 
     const { MongoClient } = await import("mongodb");
     if (!config.client && !config.connectionString) {
-      throw new Error("MongoDB config requires connectionString or client");
+      throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_CONFIG, 'dialect "mongodb" has no connectionString or client');
     }
 
     const client = config.client ?? new MongoClient(config.connectionString || "");
@@ -177,5 +178,5 @@ const execute = async (db: any, statement: any) => {
   if (typeof db.query === "function") {
     return db.query(statement);
   }
-  throw new Error("Unsupported db execute method");
+  throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_EXECUTE, "db has no execute(), run(), or query() method");
 };

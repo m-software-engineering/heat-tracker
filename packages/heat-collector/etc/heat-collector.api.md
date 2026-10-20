@@ -5,6 +5,11 @@
 ```ts
 
 import express from 'express';
+import { formatHeatError } from '@m-software-engineering/heat-errors';
+import { HeatError } from '@m-software-engineering/heat-errors';
+import { HeatErrorCode } from '@m-software-engineering/heat-errors';
+import { HeatTrackerError } from '@m-software-engineering/heat-errors';
+import { isHeatError } from '@m-software-engineering/heat-errors';
 
 // Warning: (ae-forgotten-export) The symbol "JwtConfig" needs to be exported by the entry point index.d.ts
 //
@@ -23,6 +28,7 @@ export type Collector = {
     ingestRouter: express.Router;
     apiRouter: express.Router;
     metrics: Metrics;
+    notFoundHandler: express.RequestHandler;
 };
 
 // @public (undocumented)
@@ -76,9 +82,19 @@ export type DbAdapterConfig = {
 // @public (undocumented)
 export type Dialect = "pg" | "mysql" | "sqlite" | "mongodb";
 
+export { formatHeatError }
+
+export { HeatError }
+
+export { HeatErrorCode }
+
+export { HeatTrackerError }
+
+export { isHeatError }
+
 // Warnings were encountered during analysis:
 //
-// dist/index.d.ts:71:5 - (ae-forgotten-export) The symbol "Metrics" needs to be exported by the entry point index.d.ts
+// dist/index.d.ts:72:5 - (ae-forgotten-export) The symbol "Metrics" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

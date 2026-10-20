@@ -2,7 +2,7 @@ import express, { type NextFunction, type Request, type Response } from "express
 import crypto from "crypto";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { autoMigrate, createDb, type DbAdapterConfig, type DbContext } from "./db";
-import { createLogger, type Logger } from "./logger";
+import { createLogger } from "./logger";
 import { createMetrics, type Metrics } from "./metrics";
 import {
   eventsQuerySchema,
@@ -12,6 +12,8 @@ import {
   sessionsQuerySchema
 } from "./validation";
 import { verifyJwt, type JwtConfig } from "./jwt";
+import { HeatTrackerError, INGEST_ERRORS, QUERY_ERRORS, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
+import { fieldErrors, payloadCause, queryCause, resolveRequestId, sendError } from "./http-errors";
 
 export type AuthConfig = { mode: "projectKey" } | ({ mode: "jwt" } & JwtConfig) | ({ mode: "both" } & JwtConfig);
 
@@ -34,24 +36,20 @@ export type Collector = {
   ingestRouter: express.Router;
   apiRouter: express.Router;
   metrics: Metrics;
+  /**
+   * Opt-in JSON 404 (`HEAT_E_ROUTE_NOT_FOUND`). Not mounted by `router`, so host routes registered
+   * after it keep working; mount it last: `app.use(collector.notFoundHandler)`.
+   */
+  notFoundHandler: express.RequestHandler;
 };
 
 type EventType = "click" | "move" | "scroll" | "pageview" | "custom" | "input" | "keyboard";
 type EventQueryType = "all" | EventType;
 type RequestWithContext = Request & { requestId?: string; startedAtMs?: number };
+type TimeQuery = { from?: string; to?: string };
 
 type RateBucket = { count: number; resetAt: number };
 type RateLimitResult = { limited: boolean; remaining: number; resetAt: number; limit: number };
-type SendErrorOptions = {
-  status: number;
-  code: string;
-  error: string;
-  message: string;
-  details?: unknown;
-  logLevel?: "warn" | "error";
-  context?: Record<string, unknown>;
-  headers?: Record<string, string>;
-};
 
 const DEFAULT_LIMIT = { windowMs: 10000, max: 120 };
 const HEAT_COLLECTOR_HEADER_VALUE = "heat-collector";
@@ -125,49 +123,16 @@ const sanitizeEventMeta = (meta: any) => {
 
 const isMongo = (ctx: DbContext) => ctx.dialect === "mongodb";
 
-const resolveRequestId = (req: Request) => {
-  return (req as RequestWithContext).requestId || "unknown";
-};
-
 const setBaseResponseHeaders = (res: Response, rid: string) => {
   res.setHeader("X-Request-Id", rid);
   res.setHeader("X-Heat-Collector", HEAT_COLLECTOR_HEADER_VALUE);
   res.setHeader("X-Content-Type-Options", "nosniff");
 };
 
-const sendError = (logger: Logger, req: Request, res: Response, options: SendErrorOptions) => {
-  const rid = resolveRequestId(req);
-  if (options.headers) {
-    for (const [key, value] of Object.entries(options.headers)) {
-      res.setHeader(key, value);
-    }
-  }
+const timeCause = (param: "from" | "to", query: TimeQuery) =>
+  `${param}: received ${JSON.stringify(query[param])} (expected epoch milliseconds or an ISO date)`;
 
-  const payload = {
-    error: options.error,
-    code: options.code,
-    message: options.message,
-    requestId: rid,
-    ...(options.details !== undefined ? { details: options.details } : {})
-  };
-
-  const level = options.logLevel || "warn";
-  const context = {
-    requestId: rid,
-    status: options.status,
-    code: options.code,
-    ...(options.context || {}),
-    ...(options.details !== undefined ? { details: options.details } : {})
-  };
-
-  if (level === "error") {
-    logger.error(options.message, context);
-  } else {
-    logger.warn(options.message, context);
-  }
-
-  return res.status(options.status).json(payload);
-};
+const rangeCause = (from: number, to: number) => `from=${from} is later than to=${to}`;
 
 const markNoStore = (res: Response) => {
   res.setHeader("Cache-Control", "no-store");
@@ -266,23 +231,14 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
     const status = Number(err.status || err.statusCode);
     if (err.type === "entity.too.large" || status === 413) {
-      sendError(logger, req, res, {
-        status: 413,
-        code: "payload_too_large",
-        error: "payload too large",
-        message: "Request body exceeded the configured ingestion size limit.",
-        context: { limit: maxBody }
+      sendError(logger, req, res, INGEST_ERRORS.HEAT_E_PAYLOAD_TOO_LARGE, `body exceeds maxBodyBytes=${maxBody}`, {
+        details: { limitBytes: maxBody }
       });
       return;
     }
 
     if (err.type === "entity.parse.failed" || err instanceof SyntaxError) {
-      sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_json",
-        error: "invalid json",
-        message: "Request body must be valid JSON."
-      });
+      sendError(logger, req, res, INGEST_ERRORS.HEAT_E_INVALID_JSON, "body could not be parsed as JSON");
       return;
     }
 
@@ -295,12 +251,22 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     const projectKey = req.header("x-project-key");
 
+    // express.json() skips other media types and leaves an empty body; say so instead of a schema error.
+    const contentType = req.headers["content-type"];
+    if (!contentType || !req.is("application/json")) {
+      return sendError(
+        logger,
+        req,
+        res,
+        INGEST_ERRORS.HEAT_E_UNSUPPORTED_MEDIA_TYPE,
+        contentType
+          ? `Content-Type is ${JSON.stringify(contentType)}, expected "application/json"`
+          : 'Content-Type header is missing, expected "application/json"'
+      );
+    }
+
     if (!projectKey) {
-      return sendError(logger, req, res, {
-        status: 401,
-        code: "missing_project_key",
-        error: "missing project key",
-        message: "Request rejected because header x-project-key is required.",
+      return sendError(logger, req, res, INGEST_ERRORS.HEAT_E_PROJECT_KEY_MISSING, "header x-project-key is missing", {
         context: { ip }
       });
     }
@@ -312,14 +278,18 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
     if (limitStatus.limited) {
       const retryAfterSeconds = Math.max(1, Math.ceil((limitStatus.resetAt - Date.now()) / 1000));
-      return sendError(logger, req, res, {
-        status: 429,
-        code: "rate_limited",
-        error: "rate limit exceeded",
-        message: "Too many ingest requests for this project key and IP in the current window.",
-        headers: { "Retry-After": String(retryAfterSeconds) },
-        context: { projectKey, ip, retryAfterSeconds, windowMs: limiter.windowMs, max: limiter.max }
-      });
+      return sendError(
+        logger,
+        req,
+        res,
+        INGEST_ERRORS.HEAT_E_RATE_LIMITED,
+        `more than ${limiter.max} requests in ${limiter.windowMs}ms; retry in ${retryAfterSeconds}s`,
+        {
+          headers: { "Retry-After": String(retryAfterSeconds) },
+          details: { retryAfterSeconds, windowMs: limiter.windowMs, max: limiter.max },
+          context: { projectKey, ip }
+        }
+      );
     }
 
     const token = req.header("authorization")?.replace(/^Bearer /i, "");
@@ -328,38 +298,36 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       if (config.auth.mode === "jwt" || config.auth.mode === "both") {
         if (!token) {
           if (config.auth.mode === "jwt") {
-            return sendError(logger, req, res, {
-              status: 401,
-              code: "missing_jwt",
-              error: "missing jwt",
-              message: "Request rejected because Authorization: Bearer <jwt> is required.",
-              context: { projectKey }
-            });
+            return sendError(
+              logger,
+              req,
+              res,
+              INGEST_ERRORS.HEAT_E_JWT_MISSING,
+              "header Authorization: Bearer <jwt> is missing",
+              {
+                context: { projectKey }
+              }
+            );
           }
         } else {
           const payload = await verifyJwt(token, config.auth);
           jwtSub = payload.sub;
         }
       }
-    } catch (err: any) {
-      return sendError(logger, req, res, {
-        status: 401,
-        code: "invalid_jwt",
-        error: "invalid jwt",
-        message: "JWT validation failed.",
-        context: { projectKey, error: err }
-      });
+    } catch (err) {
+      const known = err instanceof HeatTrackerError && err.code in INGEST_ERRORS;
+      const definition = known
+        ? INGEST_ERRORS[err.code as keyof typeof INGEST_ERRORS]
+        : INGEST_ERRORS.HEAT_E_JWT_MALFORMED;
+      const cause = known ? (err as HeatTrackerError).cause : "token could not be decoded";
+      return sendError(logger, req, res, definition, cause, { context: { projectKey }, original: err });
     }
 
     const parseResult = ingestSchema.safeParse(req.body);
     if (!parseResult.success) {
       metrics.rejectedEventCount += 1;
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_payload",
-        error: "invalid payload",
-        message: "Request body did not match the expected ingestion schema.",
-        details: parseResult.error.flatten(),
+      return sendError(logger, req, res, INGEST_ERRORS.HEAT_E_PAYLOAD_SCHEMA, payloadCause(parseResult.error), {
+        details: { fieldErrors: fieldErrors(parseResult.error) },
         context: { projectKey }
       });
     }
@@ -372,12 +340,8 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
         const hookResult = ingestSchema.safeParse(payload);
         if (!hookResult.success) {
           metrics.rejectedEventCount += 1;
-          return sendError(logger, req, res, {
-            status: 400,
-            code: "invalid_hook_payload",
-            error: "invalid hook payload",
-            message: "onBeforeInsert must return a valid ingestion payload.",
-            details: hookResult.error.flatten(),
+          return sendError(logger, req, res, INGEST_ERRORS.HEAT_E_HOOK_PAYLOAD, payloadCause(hookResult.error), {
+            details: { fieldErrors: fieldErrors(hookResult.error) },
             context: { projectKey }
           });
         }
@@ -408,15 +372,12 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
         projectId,
         sessionId: payload.session.id
       });
-    } catch (err: any) {
+    } catch (err) {
       metrics.ingestErrorCount += 1;
-      return sendError(logger, req, res, {
-        status: 500,
-        code: "ingest_failed",
-        error: "ingest failed",
-        message: "Unexpected error while persisting ingestion payload.",
+      return sendError(logger, req, res, INGEST_ERRORS.HEAT_E_INGEST_FAILED, "database write failed", {
         logLevel: "error",
-        context: { projectKey, error: err, durationMs: Date.now() - started }
+        context: { projectKey, durationMs: Date.now() - started },
+        original: err
       });
     }
   });
@@ -424,12 +385,8 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
   apiRouter.get("/api/projects/:projectId/heatmap", async (req, res) => {
     const parseResult = heatmapQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_query",
-        error: "invalid query",
-        message: "Invalid heatmap query parameters.",
-        details: parseResult.error.flatten()
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_INVALID, queryCause(parseResult.error, req.query), {
+        details: { fieldErrors: fieldErrors(parseResult.error) }
       });
     }
 
@@ -438,34 +395,20 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
     const fromValue = parseTime(query.from);
     if (query.from && fromValue === undefined) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_from",
-        error: "invalid query",
-        message: "Query param 'from' must be a unix timestamp in milliseconds or a valid date string."
-      });
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_FROM, timeCause("from", query));
     }
 
     const toValue = parseTime(query.to);
     if (query.to && toValue === undefined) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_to",
-        error: "invalid query",
-        message: "Query param 'to' must be a unix timestamp in milliseconds or a valid date string."
-      });
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_TO, timeCause("to", query));
     }
 
     const from = fromValue ?? 0;
     const to = toValue ?? Date.now();
 
     if (from > to) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_time_range",
-        error: "invalid query",
-        message: "Query param 'from' must be less than or equal to 'to'.",
-        context: { from, to }
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_INVALID_TIME_RANGE, rangeCause(from, to), {
+        details: { from, to }
       });
     }
 
@@ -504,21 +447,17 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       });
 
       return res.json(result);
-    } catch (err: any) {
-      return sendError(logger, req, res, {
-        status: 500,
-        code: "heatmap_query_failed",
-        error: "heatmap query failed",
-        message: "Unexpected error while querying heatmap data.",
+    } catch (err) {
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_HEATMAP_QUERY_FAILED, "database read failed", {
         logLevel: "error",
         context: {
           projectId,
           requestedType,
           path: query.path,
           from,
-          to,
-          error: err
-        }
+          to
+        },
+        original: err
       });
     }
   });
@@ -526,12 +465,8 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
   apiRouter.get("/api/projects/:projectId/events", async (req, res) => {
     const parseResult = eventsQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_query",
-        error: "invalid query",
-        message: "Invalid events query parameters.",
-        details: parseResult.error.flatten()
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_INVALID, queryCause(parseResult.error, req.query), {
+        details: { fieldErrors: fieldErrors(parseResult.error) }
       });
     }
 
@@ -540,33 +475,19 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
     const fromValue = parseTime(query.from);
     if (query.from && fromValue === undefined) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_from",
-        error: "invalid query",
-        message: "Query param 'from' must be a unix timestamp in milliseconds or a valid date string."
-      });
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_FROM, timeCause("from", query));
     }
 
     const toValue = parseTime(query.to);
     if (query.to && toValue === undefined) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_to",
-        error: "invalid query",
-        message: "Query param 'to' must be a unix timestamp in milliseconds or a valid date string."
-      });
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_TO, timeCause("to", query));
     }
 
     const type = (query.type ?? "all") as EventQueryType;
 
     if (fromValue !== undefined && toValue !== undefined && fromValue > toValue) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_time_range",
-        error: "invalid query",
-        message: "Query param 'from' must be less than or equal to 'to'.",
-        context: { from: fromValue, to: toValue }
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_INVALID_TIME_RANGE, rangeCause(fromValue, toValue), {
+        details: { from: fromValue, to: toValue }
       });
     }
 
@@ -594,12 +515,8 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
           requestedType: type
         }
       });
-    } catch (err: any) {
-      return sendError(logger, req, res, {
-        status: 500,
-        code: "events_query_failed",
-        error: "events query failed",
-        message: "Unexpected error while querying project events.",
+    } catch (err) {
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_EVENTS_QUERY_FAILED, "database read failed", {
         logLevel: "error",
         context: {
           projectId,
@@ -608,9 +525,9 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
           limit: query.limit,
           offset: query.offset,
           from: fromValue,
-          to: toValue,
-          error: err
-        }
+          to: toValue
+        },
+        original: err
       });
     }
   });
@@ -618,12 +535,8 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
   apiRouter.get("/api/projects/:projectId/sessions", async (req, res) => {
     const parseResult = sessionsQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_query",
-        error: "invalid query",
-        message: "Invalid sessions query parameters.",
-        details: parseResult.error.flatten()
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_INVALID, queryCause(parseResult.error, req.query), {
+        details: { fieldErrors: fieldErrors(parseResult.error) }
       });
     }
 
@@ -632,31 +545,17 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
 
     const from = parseTime(query.from);
     if (query.from && from === undefined) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_from",
-        error: "invalid query",
-        message: "Query param 'from' must be a unix timestamp in milliseconds or a valid date string."
-      });
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_FROM, timeCause("from", query));
     }
 
     const to = parseTime(query.to);
     if (query.to && to === undefined) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_to",
-        error: "invalid query",
-        message: "Query param 'to' must be a unix timestamp in milliseconds or a valid date string."
-      });
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_TO, timeCause("to", query));
     }
 
     if (from !== undefined && to !== undefined && from > to) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_time_range",
-        error: "invalid query",
-        message: "Query param 'from' must be less than or equal to 'to'.",
-        context: { from, to }
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_INVALID_TIME_RANGE, rangeCause(from, to), {
+        details: { from, to }
       });
     }
 
@@ -675,14 +574,11 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
           projectId
         }
       });
-    } catch (err: any) {
-      return sendError(logger, req, res, {
-        status: 500,
-        code: "sessions_query_failed",
-        error: "sessions query failed",
-        message: "Unexpected error while querying sessions.",
+    } catch (err) {
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_SESSIONS_QUERY_FAILED, "database read failed", {
         logLevel: "error",
-        context: { projectId, query, error: err }
+        context: { projectId, query },
+        original: err
       });
     }
   });
@@ -690,12 +586,8 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
   apiRouter.get("/api/sessions/:sessionId", async (req, res) => {
     const parseResult = sessionEventsQuerySchema.safeParse(req.query);
     if (!parseResult.success) {
-      return sendError(logger, req, res, {
-        status: 400,
-        code: "invalid_query",
-        error: "invalid query",
-        message: "Invalid session events query parameters.",
-        details: parseResult.error.flatten()
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_QUERY_INVALID, queryCause(parseResult.error, req.query), {
+        details: { fieldErrors: fieldErrors(parseResult.error) }
       });
     }
 
@@ -718,14 +610,11 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
           offset: query.offset
         }
       });
-    } catch (err: any) {
-      return sendError(logger, req, res, {
-        status: 500,
-        code: "session_detail_failed",
-        error: "session detail failed",
-        message: "Unexpected error while querying session detail.",
+    } catch (err) {
+      return sendError(logger, req, res, QUERY_ERRORS.HEAT_E_SESSION_DETAIL_FAILED, "database read failed", {
         logLevel: "error",
-        context: { sessionId, query, error: err }
+        context: { sessionId, query },
+        original: err
       });
     }
   });
@@ -742,7 +631,17 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
   router.use(ingestRouter);
   router.use(apiRouter);
 
-  return { router, ingestRouter, apiRouter, metrics };
+  const notFoundHandler: express.RequestHandler = (req, res) => {
+    sendError(
+      logger,
+      req,
+      res,
+      QUERY_ERRORS.HEAT_E_ROUTE_NOT_FOUND,
+      `no route for ${req.method} ${req.originalUrl.split("?")[0]}`
+    );
+  };
+
+  return { router, ingestRouter, apiRouter, metrics, notFoundHandler };
 };
 
 const ensureProjectAndUser = async (
@@ -766,7 +665,7 @@ const ensureProjectAndUser = async (
 
     const projectId = typeof project.id === "string" && project.id ? project.id : String(project._id || "");
     if (!projectId) {
-      throw new Error("Project id is missing in MongoDB project document");
+      throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_PROJECT_ID, `projects document for key has no id or _id`);
     }
 
     const externalId = jwtSub ?? payload.user?.id;

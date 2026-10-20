@@ -10,6 +10,9 @@
     "packages/heat-collector": {
       "project": ["src/**/*.ts"]
     },
+    "packages/heat-errors": {
+      "project": ["src/**/*.ts", "scripts/*.mjs"]
+    },
     "examples/express-collector": {
       "project": ["src/**/*.ts"]
     },

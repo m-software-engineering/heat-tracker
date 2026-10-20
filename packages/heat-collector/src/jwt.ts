@@ -1,4 +1,9 @@
 import crypto from "crypto";
+import { HeatTrackerError, INGEST_ERRORS } from "@m-software-engineering/heat-errors";
+
+function fail(code: keyof typeof INGEST_ERRORS, cause: string): never {
+  throw new HeatTrackerError(INGEST_ERRORS[code], cause);
+}
 
 export type JwtConfig = {
   jwksUrl: string;
@@ -44,17 +49,30 @@ const decodeJson = <T>(input: string): T => {
   return JSON.parse(decoded) as T;
 };
 
+/** A token with a kid must match that exact key; only kid-less tokens use the first key. */
+const pickKey = (keys: Record<string, Jwk>, kid?: string): Jwk | null =>
+  kid ? (keys[kid] ?? null) : (Object.values(keys)[0] ?? null);
+
 const getJwk = async (jwksUrl: string, kid?: string): Promise<Jwk | null> => {
   const entry = cache[jwksUrl];
   const now = Date.now();
   if (entry && now - entry.fetchedAt < 5 * 60 * 1000) {
-    if (kid && entry.keys[kid]) return entry.keys[kid];
-    return Object.values(entry.keys)[0] || null;
+    return pickKey(entry.keys, kid);
   }
 
-  const res = await fetch(jwksUrl);
+  let res: Response;
+  try {
+    res = await fetch(jwksUrl);
+  } catch (err) {
+    throw new HeatTrackerError(INGEST_ERRORS.HEAT_E_AUTH_JWKS_UNAVAILABLE, "JWKS request failed: network error", {
+      original: err,
+      internal: { jwksUrl }
+    });
+  }
   if (!res.ok) {
-    throw new Error(`JWKS fetch failed: ${res.status}`);
+    throw new HeatTrackerError(INGEST_ERRORS.HEAT_E_AUTH_JWKS_UNAVAILABLE, `JWKS returned HTTP ${res.status}`, {
+      internal: { jwksUrl }
+    });
   }
   const data = (await res.json()) as { keys: Jwk[] };
   const keys: Record<string, Jwk> = {};
@@ -62,26 +80,35 @@ const getJwk = async (jwksUrl: string, kid?: string): Promise<Jwk | null> => {
     if (key.kid) keys[key.kid] = key;
   }
   cache[jwksUrl] = { fetchedAt: now, keys };
-  if (kid && keys[kid]) return keys[kid];
-  return Object.values(keys)[0] || null;
+  return pickKey(keys, kid);
 };
 
 export const verifyJwt = async (token: string, config: JwtConfig): Promise<JwtPayload> => {
   const [headerB64, payloadB64, signatureB64] = token.split(".");
   if (!headerB64 || !payloadB64 || !signatureB64) {
-    throw new Error("Invalid JWT format");
+    fail("HEAT_E_JWT_MALFORMED", "token does not have 3 dot-separated segments");
   }
 
-  const header = decodeJson<JwtHeader>(headerB64);
-  const payload = decodeJson<JwtPayload>(payloadB64);
+  let header: JwtHeader;
+  let payload: JwtPayload;
+  try {
+    header = decodeJson<JwtHeader>(headerB64);
+    payload = decodeJson<JwtPayload>(payloadB64);
+  } catch {
+    return fail("HEAT_E_JWT_MALFORMED", "header or payload segment is not base64url JSON");
+  }
 
   if (header.alg !== "RS256") {
-    throw new Error(`Unsupported JWT alg: ${header.alg}`);
+    fail("HEAT_E_JWT_ALG", `alg is ${JSON.stringify(header.alg)}, expected "RS256"`);
   }
 
   const jwk = await getJwk(config.jwksUrl, header.kid);
   if (!jwk) {
-    throw new Error("JWKS key not found");
+    throw new HeatTrackerError(
+      INGEST_ERRORS.HEAT_E_JWKS_KEY_NOT_FOUND,
+      `no JWKS key for kid ${JSON.stringify(header.kid ?? null)}`,
+      { internal: { jwksUrl: config.jwksUrl } }
+    );
   }
 
   const data = Buffer.from(`${headerB64}.${payloadB64}`);
@@ -89,25 +116,28 @@ export const verifyJwt = async (token: string, config: JwtConfig): Promise<JwtPa
   const keyObject = crypto.createPublicKey({ key: jwk as any, format: "jwk" });
   const valid = crypto.verify("RSA-SHA256", data, keyObject, signature);
   if (!valid) {
-    throw new Error("JWT signature invalid");
+    fail("HEAT_E_JWT_BAD_SIGNATURE", `RS256 signature does not verify with kid ${JSON.stringify(jwk.kid)}`);
   }
 
   const now = Math.floor(Date.now() / 1000);
   if (payload.exp && payload.exp < now) {
-    throw new Error("JWT expired");
+    fail("HEAT_E_JWT_EXPIRED", `exp=${payload.exp} is before now=${now}`);
   }
   if (payload.nbf && payload.nbf > now) {
-    throw new Error("JWT not active");
+    fail("HEAT_E_JWT_NOT_ACTIVE", `nbf=${payload.nbf} is after now=${now}`);
   }
 
   if (config.issuer && payload.iss !== config.issuer) {
-    throw new Error("JWT issuer mismatch");
+    fail(
+      "HEAT_E_JWT_ISSUER",
+      `iss is ${JSON.stringify(payload.iss ?? null)}, expected ${JSON.stringify(config.issuer)}`
+    );
   }
   if (config.audience) {
     const aud = payload.aud;
     const ok = Array.isArray(aud) ? aud.includes(config.audience) : aud === config.audience;
     if (!ok) {
-      throw new Error("JWT audience mismatch");
+      fail("HEAT_E_JWT_AUDIENCE", `aud is ${JSON.stringify(aud ?? null)}, expected ${JSON.stringify(config.audience)}`);
     }
   }
 

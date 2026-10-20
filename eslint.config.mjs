@@ -45,7 +45,11 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ["packages/heat-sdk/vitest.config.ts", "packages/heat-collector/vitest.config.ts"]
+          allowDefaultProject: [
+            "packages/heat-sdk/vitest.config.ts",
+            "packages/heat-collector/vitest.config.ts",
+            "packages/heat-errors/vitest.config.ts"
+          ]
         },
         tsconfigRootDir: import.meta.dirname
       },

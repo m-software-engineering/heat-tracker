@@ -33,6 +33,9 @@ const collector = await createCollector({
 
 const app = express();
 app.use(collector.router);
+// ...your own routes, including under /api...
+// Optional: JSON 404 { error: HeatError } with code HEAT_E_ROUTE_NOT_FOUND. Mount it last.
+app.use(collector.notFoundHandler);
 
 app.listen(3000, () => {
   console.log("Collector listening on http://localhost:3000");
@@ -106,18 +109,39 @@ Query endpoints also send:
 - `Cache-Control: no-store`
 - `X-Total-Count` or endpoint-specific count headers.
 
-Error payload format is consistent across routes:
+Error payload format is consistent across routes (full catalog: [docs/errors.md](../../docs/errors.md)):
 
 ```json
 {
-  "error": "invalid query",
+  "error": {
+    "code": "HEAT_E_QUERY_INVALID",
+    "message": "A query parameter is invalid.",
+    "cause": "resolution: received \"1\" (Number must be greater than or equal to 8)",
+    "fix": "Correct the parameters listed in details.fieldErrors.",
+    "docs": "https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md#heat_e_query_invalid",
+    "status": 400,
+    "requestId": "...",
+    "details": { "fieldErrors": { "resolution": "Number must be greater than or equal to 8" } }
+  },
   "code": "invalid_query",
-  "message": "Invalid heatmap query parameters.",
-  "requestId": "..."
+  "message": "A query parameter is invalid.",
+  "requestId": "...",
+  "details": { "fieldErrors": { "resolution": "Number must be greater than or equal to 8" } }
 }
 ```
 
-Validation failures include a `details` object.
+Top-level `code`, `message`, `requestId`, and `details` are deprecated and will be removed in the next major version; read `error.code`, `error.message`, `error.requestId`, and `error.details` instead. Responses that still carry them send `Deprecation: true` and a `Link` to the [migration section](../../docs/errors.md#migrating-from-legacy-fields), and the collector logs one deprecation warning per process.
+
+**Breaking:** the old top-level `error` string was removed; `error` is now the object.
+
+```js
+// before
+showToast(body.error); // "invalid jwt"
+// after
+showToast(body.error.message); // "The JWT has expired."
+```
+
+A JWKS download failure now returns HTTP 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with `Retry-After: 30` (it used to be 401 `invalid_jwt`).
 
 ### Heatmap query behavior notes
 

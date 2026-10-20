@@ -68,6 +68,10 @@ Optional fields:
 - `sampling`: sampling rate (0..1)
 - `privacy`: selector masking and blocking options
 - `capture`: capture-level controls
+- `onError(err)`: receives every ingest error as a `HeatError` (`code`, `message`, `cause`, `fix`, `docs`, `requestId?`)
+- `debug`: logs each error code once per page load; the SDK is silent otherwise
+
+`init()` throws a `HeatTrackerError` (`HEAT_E_CONFIG_MISSING`, `HEAT_E_NOT_BROWSER`). See [docs/errors.md](../../docs/errors.md).
 
 ### Tracker methods
 

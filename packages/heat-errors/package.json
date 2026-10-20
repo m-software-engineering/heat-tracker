@@ -1,0 +1,50 @@
+{
+  "name": "@m-software-engineering/heat-errors",
+  "version": "0.0.0",
+  "description": "Structured HEAT_E_* error catalog shared by heat-tracker packages",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m-software-engineering/heat-tracker.git",
+    "directory": "packages/heat-errors"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "docs:errors": "corepack pnpm build && node scripts/generate-docs.mjs",
+    "pack:check": "publint --pack npm && attw --pack . && api-extractor run --verbose",
+    "api:check": "api-extractor run --verbose",
+    "api:local": "api-extractor run --local --verbose"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.5",
+    "@vitest/coverage-v8": "4.1.11",
+    "typescript": "^5.5.4",
+    "vitest": "4.1.11"
+  }
+}

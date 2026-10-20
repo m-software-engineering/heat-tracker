@@ -31,7 +31,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "build": "tsup src/index.ts --format esm,cjs --dts-resolve --clean",
     "dev": "tsup src/index.ts --format esm,cjs --dts --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings=0",
@@ -41,7 +41,13 @@
     "api:check": "api-extractor run --verbose",
     "api:local": "api-extractor run --local --verbose"
   },
+  "tsup": {
+    "noExternal": [
+      "@m-software-engineering/heat-errors"
+    ]
+  },
   "devDependencies": {
+    "@m-software-engineering/heat-errors": "workspace:*",
     "@vitest/coverage-v8": "4.1.11",
     "jsdom": "^24.0.0",
     "typescript": "^5.5.4",
