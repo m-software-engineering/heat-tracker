@@ -38,7 +38,7 @@ const parseUrl = (connectionString: string) => {
 };
 
 /** `host:port` only: never user, password, path, or query. */
-const targetHost = ({ dialect, connectionString, file }: MigrationTarget) => {
+export const targetHost = ({ dialect, connectionString, file }: MigrationTarget) => {
   if (dialect === "sqlite") return `sqlite file ${file || ":memory:"}`;
   if (!connectionString) return "no DATABASE_URL";
   const url = parseUrl(connectionString);

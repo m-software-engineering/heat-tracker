@@ -7,7 +7,21 @@ export const QUERY_ERRORS = {
     status: 404,
     legacyCode: "not_found",
     message: "The collector has no route for this method and path.",
-    fix: "Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics."
+    fix: "Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/projects/by-key/:projectKey, /api/sessions/:sessionId, /api/metrics, or GET /healthz."
+  },
+  HEAT_E_ADMIN_TOKEN_MISSING: {
+    code: "HEAT_E_ADMIN_TOKEN_MISSING",
+    status: 401,
+    legacyCode: "admin_token_missing",
+    message: "The read API request has no admin token.",
+    fix: "Send Authorization: Bearer <admin token>. Show the token with `docker compose exec collector heat-collector token` and paste it in the dashboard."
+  },
+  HEAT_E_ADMIN_TOKEN_INVALID: {
+    code: "HEAT_E_ADMIN_TOKEN_INVALID",
+    status: 401,
+    legacyCode: "admin_token_invalid",
+    message: "The admin token does not match this collector.",
+    fix: "Show the current token with `docker compose exec collector heat-collector token` and paste it again in the dashboard."
   },
   HEAT_E_QUERY_INVALID: {
     code: "HEAT_E_QUERY_INVALID",
@@ -56,6 +70,13 @@ export const QUERY_ERRORS = {
     status: 500,
     legacyCode: "sessions_query_failed",
     message: "The collector could not read sessions.",
+    fix: "Search collector logs for the requestId and check database connectivity."
+  },
+  HEAT_E_PROJECT_QUERY_FAILED: {
+    code: "HEAT_E_PROJECT_QUERY_FAILED",
+    status: 500,
+    legacyCode: "project_query_failed",
+    message: "The collector could not read the project.",
     fix: "Search collector logs for the requestId and check database connectivity."
   },
   HEAT_E_SESSION_DETAIL_FAILED: {
