@@ -1,0 +1,94 @@
+name: Heatmap DB
+
+# Heatmap aggregation runs in the database (#26). This checks it on real engines: the golden test
+# on Postgres, MySQL and MongoDB, and the 1 M-event Postgres bench (p95 <= 500 ms, flat RSS).
+on:
+  pull_request:
+    paths:
+      - "packages/heat-collector/src/heatmap*.ts"
+      - "packages/heat-collector/src/__fixtures__/heatmap-*"
+      - "packages/heat-collector/src/schema.ts"
+      - "packages/heat-collector/src/db.ts"
+      - "packages/heat-collector/bench/**"
+      - ".github/workflows/heatmap-db.yml"
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  heatmap-db:
+    name: Golden (pg, mysql, mongo) + bench (pg)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: heat
+          POSTGRES_PASSWORD: heat
+          POSTGRES_DB: heat_tracker
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U heat" --health-interval 5s --health-timeout 5s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: heat_tracker
+          MYSQL_USER: heat
+          MYSQL_PASSWORD: heat
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot" --health-interval 5s --health-timeout 5s
+          --health-retries 30
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'" --health-interval 5s --health-timeout 5s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.26.0
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Golden test on Postgres, MySQL and MongoDB
+        run: pnpm -C packages/heat-collector test:golden
+        env:
+          HEAT_TEST_PG_URL: postgres://heat:heat@127.0.0.1:5432/heat_tracker
+          HEAT_TEST_MYSQL_URL: mysql://heat:heat@127.0.0.1:3306/heat_tracker
+          HEAT_TEST_MONGO_URL: mongodb://127.0.0.1:27017/
+
+      - name: Build collector
+        run: pnpm -C packages/heat-errors build && pnpm -C packages/heat-collector build
+
+      - name: Bench 1 M events on Postgres
+        run: pnpm -C packages/heat-collector bench:heatmap
+        env:
+          DATABASE_URL: postgres://heat:heat@127.0.0.1:5432/heat_tracker

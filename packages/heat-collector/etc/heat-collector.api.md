@@ -29,6 +29,7 @@ export type Collector = {
     apiRouter: express.Router;
     metrics: Metrics;
     notFoundHandler: express.RequestHandler;
+    close: () => void;
 };
 
 // @public (undocumented)
@@ -36,6 +37,9 @@ export type CollectorConfig = {
     db: DbAdapterConfig;
     auth: AuthConfig;
     autoMigrate?: boolean;
+    heatmap?: {
+        rollupCatchUpIntervalMs?: number;
+    };
     ingestion?: {
         maxBodyBytes?: number;
         rateLimit?: {
@@ -94,7 +98,7 @@ export { isHeatError }
 
 // Warnings were encountered during analysis:
 //
-// dist/index.d.ts:72:5 - (ae-forgotten-export) The symbol "Metrics" needs to be exported by the entry point index.d.ts
+// dist/index.d.ts:79:5 - (ae-forgotten-export) The symbol "Metrics" needs to be exported by the entry point index.d.ts
 
 // (No @packageDocumentation comment for this package)
 

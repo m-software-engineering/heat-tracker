@@ -62,9 +62,10 @@ Error propagation:
 
 Key modules:
 
-- `src/collector.ts`: route handlers, auth flow, persistence orchestration, heatmap/event/session query shaping.
+- `src/collector.ts`: route handlers, auth flow, persistence orchestration, event/session query shaping.
+- `src/heatmap.ts`: heatmap aggregation in the database (`aggregateHeatmap`), viewport bucket choice, response shape. Dialect backends: `src/heatmap-sql.ts` (Postgres/MySQL/SQLite `GROUP BY` on bucketed coordinates, IEEE-double arithmetic so buckets equal the old Node path) and `src/heatmap-mongo.ts` (aggregation pipelines). `src/meta-json.ts` parses stored `metaJson`.
 - `src/db.ts`: adapter factory + auto-migrations/index creation.
-- `src/schema.ts`: dialect-specific table schemas + CREATE TABLE statements.
+- `src/schema.ts`: dialect-specific table schemas + CREATE TABLE statements + the `events_project_path_type_ts_idx` heatmap index statement (MySQL uses a `path(255)` prefix and ignores ER_DUP_KEYNAME on re-run).
 - `src/validation.ts`: Zod schemas for ingest and query validation.
 - `notFoundHandler` (returned by `createCollector`): opt-in JSON 404; deliberately not mounted inside `router` so it cannot shadow host routes.
 - `src/http-errors.ts`: `sendError` (wire shape `{ error: HeatError }` + deprecated legacy fields, `Deprecation`/`Link` headers, once-per-process deprecation warning, catalog-driven `Retry-After`, `err` logged as code + cause + internal context with no stack, masked `projectKey`/truncated `ip` in logs, original error logged as `err` only), zod `fieldErrors` and `cause` builders.
@@ -102,13 +103,19 @@ Event persistence behavior:
 - `scroll` stores depth as integer.
 - input events whose `masked` field contains non-mask characters are dropped as a safety guard.
 - metadata JSON stores viewport/device/meta (sanitized to remove text/value/content fields).
+- `events.viewport_bucket` stores the event's bucket (`meta.viewportBucket`, else the rounded viewport; `""` when none).
+- Each insert also increments `heatmap_rollup` (`src/heatmap-rollup.ts`): one row per (project, path, type, viewport bucket, hour, position) with a count. Positions keep pixel precision (`pos` 0 = none, 1 = x/y, 2 = scroll depth), so bucketing a rollup row gives exactly the raw rows' buckets. Events (marked `rollup_state = 1`) and their rollup increments are written in one transaction (`insertEventsWithRollup`), so a failed rollup write rolls back the events (ingest answers `HEAT_E_INGEST_FAILED`). MongoDB has no rollup yet (#54).
+- Migration (`src/heatmap-migrate.ts`, run by `autoMigrate`, re-runnable): adds `viewport_bucket` and `rollup_state`, creates `heatmap_rollup`, then `backfillRollup` counts rows whose `rollup_state` is NULL (written before the rollup existed). Each batch of 5,000 is locked (`FOR UPDATE SKIP LOCKED`; SQLite: an IMMEDIATE transaction), gets its bucket, is upserted into the rollup and marked 1 in one transaction. Ingest marks its own rows, so concurrent ingest and several migrating collectors never double-count (`heatmap-rollup-safety.test.ts`, also on Postgres in CI). To rebuild: empty `heatmap_rollup`, set `rollup_state` to NULL, restart.
 
 Query flow (heatmap):
 
-1. Validate query + parse time range.
-2. Query rows by project/type/path/range.
-3. Default behavior when `type` omitted: request `click`, fallback to `all` when no click rows.
-4. Aggregate into resolution buckets and return metadata including plotted/ignored counts.
+1. Validate query + parse time range (`viewportBucket`/`viewport` must be `<w>x<h>`, else `HEAT_E_QUERY_INVALID` naming it). Without `from` and `to` the range is the last 7 days ending with the current hour (whole hours); `meta.range` returns `{ from, to, defaulted }`.
+2. SQL dialects split the range (`splitRange`): whole hours read `heatmap_rollup` (`SUM(cnt)`), partial edge hours read `events`; every query runs on each part and Node merges the grouped rows.
+3. In parallel: max `y` of positioned non-scroll rows and, unless `viewportBucket`/`viewport` is given, the stored buckets of the 10,000 most recent matching events (`VIEWPORT_SAMPLE_SIZE`, always raw) to pick the dominant bucket.
+4. Then type counts, per-bucket counts (`meta.viewportBuckets`, ignoring the `viewport` filter), the count of plottable events without a position (`meta.excluded.noCoordinates`, skipped on every database) and one `GROUP BY (bx, by)` query for the grid. No raw event rows reach Node.
+5. Default behavior when `type` omitted: request `click`, fallback to `all` when no click rows.
+6. Return points (sorted by y, x) and metadata including `totalEvents`, `sampled: false`, plotted/ignored/excluded counts.
+7. `src/heatmap.golden.test.ts` pins one recording for every database (equal to the pre-#26 MongoDB path, which already skipped rows without a position) (SQLite always; Postgres/MySQL/MongoDB when `HEAT_TEST_*_URL` is set, as in `.github/workflows/heatmap-db.yml`). `bench/heatmap-bench.mjs` seeds 1 M Postgres events as an older install would hold them, restarts the collector so the migration builds the rollup, warms up for 5 s and gates p95 ≤ 500 ms and flat RSS (nightly and on PRs touching the query).
 
 Query flow (sessions):
 
@@ -191,7 +198,7 @@ When adding new event types:
 
 1. Update `eventSchema` union.
 2. Update `insertEvents` handling.
-3. Decide plottable behavior in `buildHeatmap`.
+3. Decide plottable behavior in `src/heatmap-sql.ts` / `src/heatmap-mongo.ts` (and re-record the golden file only for intended output changes).
 4. Add tests for ingest + query + fallback behavior.
 
 ## 9) Anti-patterns and risks

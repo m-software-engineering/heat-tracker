@@ -117,7 +117,15 @@ export const heatmapQuerySchema = z.object({
   to: z.string().optional(),
   type: z.enum(["all", "click", "move", "scroll", "pageview", "custom", "input", "keyboard"]).optional(),
   resolution: z.coerce.number().int().min(8).max(1024).optional().default(128),
-  viewportBucket: z.string().optional()
+  viewportBucket: z
+    .string()
+    .regex(/^[1-9]\d{0,4}x[1-9]\d{0,4}$/, "expected <width>x<height> in CSS pixels, e.g. 1440x900")
+    .optional(),
+  // Only events stored with this bucket are counted (and it sets the grid like viewportBucket).
+  viewport: z
+    .string()
+    .regex(/^[1-9]\d{0,4}x[1-9]\d{0,4}$/, "expected <width>x<height> in CSS pixels, e.g. 390x800")
+    .optional()
 });
 
 export const eventsQuerySchema = z.object({

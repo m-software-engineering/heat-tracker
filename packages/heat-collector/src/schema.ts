@@ -5,6 +5,7 @@ import * as sqliteCore from "drizzle-orm/sqlite-core";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnyMySqlTable } from "drizzle-orm/mysql-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
+import { createRollupTable } from "./heatmap-rollup";
 
 export type Dialect = "pg" | "mysql" | "sqlite" | "mongodb";
 
@@ -13,6 +14,7 @@ export type Schema = {
   users: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
   sessions: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
   events: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
+  heatmapRollup: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
 };
 
 /** Creates the Drizzle table definitions for the configured storage dialect. */
@@ -22,7 +24,8 @@ export const createSchema = (dialect: Dialect): Schema => {
       projects: "projects",
       users: "users",
       sessions: "sessions",
-      events: "events"
+      events: "events",
+      heatmapRollup: "heatmap_rollup"
     };
   }
 
@@ -82,15 +85,23 @@ export const createSchema = (dialect: Dialect): Schema => {
         x: integer("x"),
         y: integer("y"),
         scrollDepth: integer("scroll_depth"),
-        metaJson: text("meta_json")
+        metaJson: text("meta_json"),
+        viewportBucket: text("viewport_bucket"),
+        rollupState: integer("rollup_state")
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
+        projectPathTypeTsIdx: index("events_project_path_type_ts_idx").on(
+          table.projectId,
+          table.path,
+          table.type,
+          table.ts
+        ),
         sessionTsIdx: index("events_session_ts_idx").on(table.sessionId, table.ts)
       })
     );
 
-    return { projects, users, sessions, events };
+    return { projects, users, sessions, events, heatmapRollup: createRollupTable(dialect) };
   }
 
   if (dialect === "mysql") {
@@ -149,15 +160,23 @@ export const createSchema = (dialect: Dialect): Schema => {
         x: int("x"),
         y: int("y"),
         scrollDepth: int("scroll_depth"),
-        metaJson: text("meta_json")
+        metaJson: text("meta_json"),
+        viewportBucket: text("viewport_bucket"),
+        rollupState: int("rollup_state")
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
+        projectPathTypeTsIdx: index("events_project_path_type_ts_idx").on(
+          table.projectId,
+          table.path,
+          table.type,
+          table.ts
+        ),
         sessionTsIdx: index("events_session_ts_idx").on(table.sessionId, table.ts)
       })
     );
 
-    return { projects, users, sessions, events };
+    return { projects, users, sessions, events, heatmapRollup: createRollupTable(dialect) };
   }
 
   const { sqliteTable, text, integer, index } = sqliteCore;
@@ -215,15 +234,23 @@ export const createSchema = (dialect: Dialect): Schema => {
       x: integer("x"),
       y: integer("y"),
       scrollDepth: integer("scroll_depth"),
-      metaJson: text("meta_json")
+      metaJson: text("meta_json"),
+      viewportBucket: text("viewport_bucket"),
+      rollupState: integer("rollup_state")
     },
     (table: any) => ({
       projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
+      projectPathTypeTsIdx: index("events_project_path_type_ts_idx").on(
+        table.projectId,
+        table.path,
+        table.type,
+        table.ts
+      ),
       sessionTsIdx: index("events_session_ts_idx").on(table.sessionId, table.ts)
     })
   );
 
-  return { projects, users, sessions, events };
+  return { projects, users, sessions, events, heatmapRollup: createRollupTable(dialect) };
 };
 
 /** Builds the idempotent table-creation statements for a SQL dialect. */
@@ -266,15 +293,19 @@ export const buildCreateTableSql = (dialect: Dialect) => {
         x INTEGER,
         y INTEGER,
         scroll_depth INTEGER,
-        meta_json TEXT
+        meta_json TEXT,
+        viewport_bucket TEXT,
+        rollup_state INTEGER
       );`
     };
   }
 
+  // `key` is a reserved word in MySQL, so it must be quoted there (Postgres accepts it bare).
+  const keyColumn = sql.raw(dialect === "mysql" ? "`key`" : "key");
   return {
     projects: sql`CREATE TABLE IF NOT EXISTS projects (
       id VARCHAR(64) PRIMARY KEY,
-      key VARCHAR(255) NOT NULL UNIQUE,
+      ${keyColumn} VARCHAR(255) NOT NULL UNIQUE,
       name VARCHAR(255) NOT NULL,
       created_at BIGINT NOT NULL
     );`,
@@ -308,7 +339,47 @@ export const buildCreateTableSql = (dialect: Dialect) => {
       x INT,
       y INT,
       scroll_depth INT,
-      meta_json TEXT
+      meta_json TEXT,
+      viewport_bucket VARCHAR(32),
+      rollup_state INT
     );`
   };
+};
+
+/** Name of the heatmap filter index (project, path, type, ts), created by `autoMigrate`. */
+export const HEATMAP_INDEX = "events_project_path_type_ts_idx";
+
+/**
+ * Builds the heatmap index statement. MySQL has no `IF NOT EXISTS` for indexes (the caller ignores
+ * ER_DUP_KEYNAME) and needs a prefix on `path`, which is VARCHAR(1024).
+ */
+export const buildCreateIndexSql = (dialect: Dialect) => {
+  if (dialect === "mysql") {
+    return sql.raw(`CREATE INDEX ${HEATMAP_INDEX} ON events (project_id, path(255), type, ts)`);
+  }
+  return sql.raw(`CREATE INDEX IF NOT EXISTS ${HEATMAP_INDEX} ON events (project_id, path, type, ts)`);
+};
+
+/** Finds rows not yet counted in the rollup (catch-up); partial where the dialect supports it. */
+export const buildCreatePendingIndexSql = (dialect: Dialect) =>
+  sql.raw(
+    dialect === "mysql"
+      ? "CREATE INDEX events_rollup_pending_idx ON events (rollup_state, project_id)"
+      : "CREATE INDEX IF NOT EXISTS events_rollup_pending_idx ON events (project_id) WHERE rollup_state IS NULL"
+  );
+
+/**
+ * Adds a #26 column to `events` tables created before it existed; callers ignore "duplicate column".
+ * `viewport_bucket` is the stored bucket; `rollup_state` is 1 once the row is counted in `heatmap_rollup`.
+ */
+export const buildAddEventColumnSql = (dialect: Dialect, column: "viewport_bucket" | "rollup_state") => {
+  const type =
+    column === "rollup_state"
+      ? dialect === "mysql"
+        ? "INT"
+        : "INTEGER"
+      : dialect === "mysql"
+        ? "VARCHAR(32)"
+        : "TEXT";
+  return sql.raw(`ALTER TABLE events ADD COLUMN ${dialect === "pg" ? "IF NOT EXISTS " : ""}${column} ${type}`);
 };
