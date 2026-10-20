@@ -27,18 +27,30 @@ End-to-end stack for product analytics heatmaps and session analysis: browser SD
 ## Quick start (self-hosted, Docker)
 
 1. `git clone https://github.com/m-software-engineering/heat-tracker.git && cd heat-tracker`
-2. `docker compose up -d` (Postgres, collector on port 4000, dashboard on port 3000).
+2. `docker compose -f docker-compose.yml -f compose.dev.yml up -d --build` (builds the images from this checkout, then starts Postgres, the collector on port 4000 and the dashboard on port 3000).
 3. Copy the admin token from the block printed by `docker compose logs collector`. Show it again any time with `docker compose exec collector heat-collector token`.
 4. Open http://localhost:3000 and paste the token once.
 5. Copy the snippet into your site. The dashboard shows "Waiting for your first event…" until the first visit arrives, then "Receiving events from <your site>".
 
-> The images are pulled from `ghcr.io/m-software-engineering` at a pinned version. To build them from this checkout instead: `docker compose -f docker-compose.yml -f compose.dev.yml up --build`.
+> **Images are not published yet.** `docker-compose.yml` pins `ghcr.io/m-software-engineering/heat-collector` and `heat-dashboard` at `0.4.0`, but the pull path (plain `docker compose up -d`, no build) only works after the first release that publishes those images to GHCR. Until then, a plain `docker compose up` fails with `403 Forbidden` / `denied` while pulling. Use the `-f compose.dev.yml` command in step 2.
 
 - Data (Postgres and the admin token) lives in named volumes, so `docker compose down` / `up` keeps it.
 - **Full reset:** `docker compose down -v`. **This deletes all recorded data and the admin token.**
 - The read API (`/api/*`) needs `Authorization: Bearer <admin token>`. The dashboard keeps the token in an HttpOnly cookie and calls the collector from its server, so the token never reaches browser JavaScript. Ingest stays authenticated by project key.
-- For TLS, put a reverse proxy in front of ports 3000 and 4000, and set `HEAT_PUBLIC_COLLECTOR_URL` (collector and dashboard) to the public collector URL.
 - If the dashboard says "Can't reach the collector", check `docker compose ps`.
+
+### Settings (`.env` next to `docker-compose.yml`, all optional)
+
+| Variable                       | Default                 | Meaning                                                                                                                    |
+| ------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `HEAT_PUBLIC_COLLECTOR_URL`    | `http://localhost:4000` | Collector URL as visitors' browsers reach it; goes into the snippet.                                                       |
+| `HEAT_DASHBOARD_URL`           | `http://localhost:3000` | Shown in the collector's startup block.                                                                                    |
+| `HEAT_ADMIN_TOKEN`             | generated               | Fixed admin token (at least 32 characters) instead of the one generated into the volume.                                   |
+| `HEAT_TRUST_PROXY`             | off                     | `true`, a hop count, or addresses/subnets of your reverse proxy.                                                           |
+| `HEAT_DASHBOARD_SECURE_COOKIE` | `false`                 | `true` forces the `Secure` `__Host-heat_admin` cookie (automatic when the request is HTTPS or `X-Forwarded-Proto: https`). |
+| `POSTGRES_PASSWORD`            | `heat`                  | Database password (the database is not published outside the compose network).                                             |
+
+`.env` files are excluded from the Docker build context. For TLS, put a reverse proxy in front of ports 3000 and 4000, set `HEAT_PUBLIC_COLLECTOR_URL` to the public collector URL, and forward `Host`/`X-Forwarded-Proto`. **Cookie caveat:** over plain HTTP the cookie is `heat_admin`, and browsers share cookies across ports, so any other app on the same host name (e.g. another service on `localhost:8080`) receives it. Serve the dashboard over HTTPS on its own host name for the `__Host-` cookie.
 
 ## Quick setup (local development)
 

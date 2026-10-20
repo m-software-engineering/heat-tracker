@@ -39,6 +39,16 @@ export const DASHBOARD_ERRORS: {
         readonly message: "The dashboard can't reach the collector.";
         readonly fix: "Check that the collector container is running: `docker compose ps`.";
     };
+    readonly HEAT_E_DASHBOARD_CONTENT_TYPE: {
+        readonly code: "HEAT_E_DASHBOARD_CONTENT_TYPE";
+        readonly message: "The dashboard session request is not JSON.";
+        readonly fix: "Send the token as JSON with `Content-Type: application/json`, for example `{\"token\":\"…\"}`.";
+    };
+    readonly HEAT_E_DASHBOARD_ORIGIN: {
+        readonly code: "HEAT_E_DASHBOARD_ORIGIN";
+        readonly message: "The dashboard session request came from another site.";
+        readonly fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.";
+    };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";
         readonly message: "The dashboard could not read heatmap data from the collector.";

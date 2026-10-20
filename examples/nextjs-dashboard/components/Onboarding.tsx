@@ -32,21 +32,31 @@ export default function Onboarding({ publicCollectorUrl, onProject }: Props) {
   useEffect(() => {
     if (!projectKey) return;
     let stopped = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = (ms: number) => {
+      clearTimeout(timer);
+      // Paused while the tab is hidden; visibilitychange resumes it.
+      if (!stopped && !document.hidden) timer = setTimeout(poll, ms);
+    };
     const poll = async () => {
       const res = await fetch(`/api/collector/api/projects/by-key/${encodeURIComponent(projectKey)}`).catch(() => null);
       const body = res?.ok ? await res.json().catch(() => null) : null;
       if (stopped) return;
       if (body?.project) {
+        stopped = true;
         setProject(body.project);
         onProject(body.project);
         return;
       }
-      timer = setTimeout(poll, POLL_MS);
+      schedule(POLL_MS);
     };
-    let timer = setTimeout(poll, 0);
+    const onVisibility = () => schedule(0);
+    document.addEventListener("visibilitychange", onVisibility);
+    schedule(0);
     return () => {
       stopped = true;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [projectKey, onProject]);
 

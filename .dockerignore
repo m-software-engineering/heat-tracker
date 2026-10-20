@@ -9,3 +9,7 @@ playwright-report
 test-results
 **/*.db
 **/*.log
+.env
+.env.*
+**/.env
+**/.env.*

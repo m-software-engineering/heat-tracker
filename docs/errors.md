@@ -368,6 +368,16 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The dashboard can't reach the collector.
 - Fix: Check that the collector container is running: `docker compose ps`.
 
+## HEAT_E_DASHBOARD_CONTENT_TYPE
+
+- Message: The dashboard session request is not JSON.
+- Fix: Send the token as JSON with `Content-Type: application/json`, for example `{"token":"…"}`.
+
+## HEAT_E_DASHBOARD_ORIGIN
+
+- Message: The dashboard session request came from another site.
+- Fix: Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.
+
 ## HEAT_E_DASHBOARD_FETCH
 
 - Message: The dashboard could not read heatmap data from the collector.
