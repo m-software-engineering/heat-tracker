@@ -1,7 +1,8 @@
 import { DASHBOARD_ERRORS, createHeatError, formatHeatError } from "@m-software-engineering/heat-errors";
 
 /**
- * Decides whether a site lets the dashboard frame it, from the site's response headers.
+ * Decides whether a site lets the dashboard frame it, from the site's response headers. Since #59 the dashboard
+ * frames every allowlisted page and only the SDK handshake decides what is shown; this verdict is a logged detail.
  * Browsers hide a blocked cross-origin frame from the parent (it looks like any other cross-origin
  * frame), so the dashboard asks its own server route to fetch the page and read these headers.
  *
@@ -14,8 +15,8 @@ export type VerifiedFrame = { verified: true; blocked: boolean; detail: string; 
 
 /**
  * No verdict because the site did not answer in time or could not be reached from the dashboard server.
- * The browser enforces framing anyway, so the dashboard fails open: it loads the page with
- * HEAT_E_FRAME_CHECK_INCONCLUSIVE and falls back to the blocked state if the frame does not load.
+ * The browser enforces framing anyway, so the dashboard fails open: it frames the page and lets the SDK handshake
+ * decide (lib/frame-handshake.ts, HEAT_E_FRAME_NO_RESPONSE after 8 s without one).
  */
 export type InconclusiveFrame = {
   verified: false;

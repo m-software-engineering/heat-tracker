@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { build } from "tsup";
 import { createCollector } from "../../packages/heat-collector/src/collector";
 import { checkFrame } from "../../examples/nextjs-dashboard/lib/frame-policy";
+import { frameSrcPolicy } from "../../examples/nextjs-dashboard/lib/frame-handshake";
 
 const listen = (app: express.Express) =>
   new Promise<{ port: number; close: () => Promise<void> }>((resolve) => {
@@ -81,20 +82,36 @@ export const startOverlayStack = async () => {
   site.get("/blocked", (_req, res) =>
     res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(SITE_PAGE)
   );
+  site.get("/xfo", (_req, res) => res.set("X-Frame-Options", "DENY").type("html").send(SITE_PAGE));
   // Never answers: the frame check times out and the iframe never loads.
   site.get("/hang", () => {});
-  site.use("/sdk", express.static(path.resolve(__dirname, "../../packages/heat-sdk/dist")));
+  const sdk = express.static(path.resolve(__dirname, "../../packages/heat-sdk/dist"));
+  site.use("/sdk", sdk);
   site.use(collector.router);
   const siteServer = await listen(site);
   const siteOrigin = `http://127.0.0.1:${siteServer.port}`;
   const downOrigin = await deadOrigin();
 
+  // A second allowlisted origin: /moved on the site redirects here, and it hosts a sibling frame for forgery tests.
+  const other = express();
+  other.get("/landing", (_req, res) => res.type("html").send(SITE_PAGE));
+  other.use("/sdk", sdk);
+  const otherServer = await listen(other);
+  const otherOrigin = `http://127.0.0.1:${otherServer.port}`;
+  site.get("/moved", (_req, res) => res.redirect(302, `${otherOrigin}/landing`));
+  const allowlist = [siteOrigin, downOrigin, otherOrigin];
+
   const dashboard = express();
+  dashboard.use((_req, res, next) => {
+    res.set("Content-Security-Policy", frameSrcPolicy(allowlist));
+    next();
+  });
   const css = readFileSync(path.resolve(__dirname, "../../examples/nextjs-dashboard/app/globals.css"), "utf8");
   dashboard.get("/harness.js", (_req, res) => res.type("js").send(bundle));
   dashboard.get("/globals.css", (_req, res) => res.type("css").send(css));
   dashboard.get("/api/frame-check", async (req, res) => {
-    res.json(await checkFrame(String(req.query.url), String(req.query.origin), [siteOrigin, downOrigin]));
+    const verdict = await checkFrame(String(req.query.url), String(req.query.origin), allowlist);
+    res.json({ ...verdict, allowedOrigins: allowlist });
   });
   dashboard.get("/api/frame-check-slow", (_req, res) => {
     setTimeout(() => res.json({ verified: true, blocked: false, detail: "too late" }), 4_000).unref();
@@ -120,9 +137,11 @@ export const startOverlayStack = async () => {
   return {
     dbFile,
     siteUrl: siteOrigin,
+    otherUrl: otherOrigin,
     dashboardUrl: `http://localhost:${dashboardServer.port}`,
     close: async () => {
       await siteServer.close();
+      await otherServer.close();
       await dashboardServer.close();
     }
   };

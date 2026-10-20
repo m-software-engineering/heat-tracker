@@ -29,10 +29,15 @@ export const DASHBOARD_ERRORS: {
         readonly message: "The dashboard could not verify that this site may be shown in a frame, so the page is not loaded.";
         readonly fix: "Check that the dashboard server can reach the site and that the site responds within 3 seconds, then reload this page.";
     };
-    readonly HEAT_E_FRAME_CHECK_INCONCLUSIVE: {
-        readonly code: "HEAT_E_FRAME_CHECK_INCONCLUSIVE";
-        readonly message: "We couldn't check whether this site allows framing. If the page stays blank, the site likely blocks it.";
-        readonly fix: "Check that the dashboard server can reach the site and that the site responds within 2.5 seconds, then reload this page.";
+    readonly HEAT_E_FRAME_NO_RESPONSE: {
+        readonly code: "HEAT_E_FRAME_NO_RESPONSE";
+        readonly message: "This page didn't respond. It may block framing or be offline.";
+        readonly fix: "Check that the page loads the heat-tracker SDK, is online, and allows framing with `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>`, then reload this page.";
+    };
+    readonly HEAT_E_FRAME_REDIRECTED: {
+        readonly code: "HEAT_E_FRAME_REDIRECTED";
+        readonly message: "This page redirected to <url>. The heatmap is hidden because it wouldn't line up.";
+        readonly fix: "Open the heatmap for the page it redirects to, or remove the redirect for the dashboard.";
     };
     readonly HEAT_E_FRAME_ORIGIN_INVALID: {
         readonly code: "HEAT_E_FRAME_ORIGIN_INVALID";

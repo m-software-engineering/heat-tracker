@@ -32,6 +32,7 @@ await tracker.flush();
 2. Built-in listeners collect events such as clicks, movement, scrolling, and page views.
 3. Events are queued and flushed in batches to the collector endpoint.
 4. Optional methods (`identify`, `track`, `setAuthToken`) enrich and control payloads.
+5. When the page is shown in a frame, `init` posts `{ type: "heat-tracker:frame-hello", href: location.href }` to the parent window, so the heat-tracker dashboard knows the page really loaded and where it ended up. This happens even when Do Not Track or sampling turns tracking off; the message carries no events.
 
 ## Coordinate model
 

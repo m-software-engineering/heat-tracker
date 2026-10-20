@@ -2,6 +2,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { test, expect } from "@playwright/test";
 import { GET } from "../examples/nextjs-dashboard/app/api/frame-check/route";
+import { middleware } from "../examples/nextjs-dashboard/middleware";
 import { MAX_REDIRECTS, allowedSiteOrigins, checkFrame } from "../examples/nextjs-dashboard/lib/frame-policy";
 
 const quiet = () => {
@@ -183,4 +184,16 @@ test.describe("GET /api/frame-check", () => {
       site.close();
     }
   });
+});
+
+test("the dashboard middleware sends CSP frame-src with the allowlist (#59)", () => {
+  const saved = process.env.HEAT_DASHBOARD_SITE_ORIGINS;
+  process.env.HEAT_DASHBOARD_SITE_ORIGINS = "https://shop.example.com, https://www.example.com";
+  try {
+    expect(middleware().headers.get("content-security-policy")).toBe(
+      "frame-src https://shop.example.com https://www.example.com"
+    );
+  } finally {
+    process.env.HEAT_DASHBOARD_SITE_ORIGINS = saved;
+  }
 });

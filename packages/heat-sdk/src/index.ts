@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { HeatTrackerError, SDK_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import { announceToParentFrame } from "./frame-handshake";
 import { createErrorReporter, ingestHttpError, ingestNetworkError, type ReportError } from "./errors";
 
 export type { HeatError, HeatErrorCode } from "@m-software-engineering/heat-errors";
@@ -959,6 +960,7 @@ export const init = (config: InitConfig): Tracker => {
   if (typeof window === "undefined") {
     throw new HeatTrackerError(SDK_ERRORS.HEAT_E_NOT_BROWSER, 'typeof window is "undefined"');
   }
+  announceToParentFrame();
 
   if (resolved.privacy.respectDoNotTrack && navigator.doNotTrack === "1") {
     return createNoopTracker();

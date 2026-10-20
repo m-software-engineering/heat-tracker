@@ -41,6 +41,8 @@ Core structure in `src/index.ts`:
 - **Navigation capture**:
   - A shared History API patch manager fans out navigation notifications to all active pageview trackers and restores methods when the last tracker shuts down.
 
+- **Frame handshake** (`src/frame-handshake.ts`): when framed, `init` posts `{ type: "heat-tracker:frame-hello", href }` to `window.parent` (target `*`, before the DNT/sampling gates, never throws) so the reference dashboard can tell a real page from a blocked or error frame (#59).
+
 Boundaries:
 
 - Browser globals required (`window`, DOM, history, storage, navigator).

@@ -135,21 +135,6 @@ test("controls persist in the URL, keyboard works, and the table is the text alt
   ).toBeVisible();
 });
 
-test("blocked framing shows HEAT_E_FRAME_BLOCKED within 3 s with the exact fix", async ({ page }) => {
-  const started = Date.now();
-  await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/blocked`);
-  const alert = page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]');
-  await expect(alert).toBeVisible({ timeout: 3000 });
-  expect(Date.now() - started).toBeLessThanOrEqual(3000);
-  await expect(alert).toContainText(
-    `Add \`Content-Security-Policy: frame-ancestors 'self' ${stack.dashboardUrl}\` on your site`
-  );
-  await expect(alert.getByRole("link")).toHaveAttribute("href", /docs\/errors\.md#heat_e_frame_blocked$/);
-  await expect(page.locator("iframe")).toHaveCount(0);
-  // Fallback: the heatmap still renders on the blank canvas.
-  await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
-});
-
 test("a frame check that does not answer in time fails closed: no iframe, could-not-verify notice", async ({
   page
 }) => {
@@ -160,53 +145,6 @@ test("a frame check that does not answer in time fails closed: no iframe, could-
   await expect(alert).toContainText("frame check timed out");
   await expect(page.locator("iframe")).toHaveCount(0);
   await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
-});
-
-const UNVERIFIED_TEXT =
-  "We couldn't check whether this site allows framing. If the page stays blank, the site likely blocks it.";
-
-test.describe("inconclusive frame check fails open (#59)", () => {
-  test("site times out: the iframe is loaded with the could-not-check notice", async ({ page }) => {
-    await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/hang`);
-    const notice = page.getByTestId("frame-unverified");
-    await expect(notice).toBeVisible({ timeout: 4000 });
-    await expect(notice).toHaveText(UNVERIFIED_TEXT);
-    await expect(notice).toHaveAttribute("data-code", "HEAT_E_FRAME_CHECK_INCONCLUSIVE");
-    await expect(page.locator("iframe")).toHaveAttribute("src", `${stack.siteUrl}/hang`);
-    await expect(page.locator('[data-code="HEAT_E_FRAME_CHECK_UNVERIFIED"]')).toHaveCount(0);
-    await expect(page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]')).toHaveCount(0);
-  });
-
-  test("site unreachable from the server: the iframe is loaded with the could-not-check notice", async ({ page }) => {
-    await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/pricing&site=down`);
-    const notice = page.getByTestId("frame-unverified");
-    await expect(notice).toBeVisible({ timeout: 4000 });
-    await expect(notice).toHaveText(UNVERIFIED_TEXT);
-    await expect(page.locator("iframe")).toHaveCount(1);
-    await expect(page.locator('[data-code="HEAT_E_FRAME_CHECK_UNVERIFIED"]')).toHaveCount(0);
-  });
-
-  test("an iframe that has not loaded within 8 s switches to the blocked state", async ({ page }) => {
-    await page.clock.install();
-    await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/hang`);
-    await expect(page.getByTestId("frame-unverified")).toBeVisible({ timeout: 4000 });
-    await expect(page.locator("iframe")).toHaveCount(1);
-    // Fake clock (it runs in real time until advanced): the notice appears well before 8 s, then jump 8 s ahead.
-    await expect(page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]')).toHaveCount(0);
-    await page.clock.runFor(8_000);
-    const alert = page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]');
-    await expect(alert).toBeVisible();
-    await expect(alert).toContainText("did not load within 8 s");
-    await expect(page.locator("iframe")).toHaveCount(0);
-    await expect(page.getByTestId("frame-unverified")).toHaveCount(0);
-  });
-
-  test("a verified check shows no notice", async ({ page }) => {
-    await openDashboard(page, "path=/pricing");
-    await expect(page.locator("iframe")).toHaveCount(1);
-    await expect(page.getByTestId("frame-unverified")).toHaveCount(0);
-    await expect(page.locator("[role=alert]")).toHaveCount(0);
-  });
 });
 
 test("empty page says so and names the period", async ({ page }) => {

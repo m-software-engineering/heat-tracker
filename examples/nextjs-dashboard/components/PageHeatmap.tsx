@@ -15,9 +15,10 @@ import {
   type BucketCount,
   type ViewState
 } from "../lib/view-state";
-import FrameBlockedNotice from "./FrameBlockedNotice";
+import { HANDSHAKE_TIMEOUT_MS } from "../lib/frame-handshake";
+import { useFrameHandshake } from "../lib/use-frame-handshake";
 import FrameCheckFailedNotice from "./FrameCheckFailedNotice";
-import FrameUnverifiedNotice from "./FrameUnverifiedNotice";
+import { FrameNoResponseNotice, FrameRedirectedNotice } from "./FrameHandshakeNotice";
 import HeatmapControls from "./HeatmapControls";
 import HeatmapLegend from "./HeatmapLegend";
 import SiteNotAllowedNotice from "./SiteNotAllowedNotice";
@@ -31,14 +32,14 @@ type Props = {
   path: string;
   /** Server route that reads the site's framing headers (see app/api/frame-check). */
   frameCheckUrl?: string;
-  /** After an inconclusive check, how long the frame may take to load before the blocked state is shown. */
-  frameLoadTimeoutMs?: number;
+  /** How long the framed page may take to send its SDK handshake before "didn't respond" is shown. */
+  handshakeTimeoutMs?: number;
 };
+
+type CheckResponse = FrameVerdict & { allowedOrigins?: string[] };
 
 const DAY_MS = 86_400_000;
 const FRAME_CHECK_BUDGET_MS = 3_000;
-/** Inconclusive check: a frame that has not loaded by then is treated as blocked. */
-export const FRAME_LOAD_TIMEOUT_MS = 8_000;
 
 const useViewState = () => {
   const [state, setState] = useState<ViewState>(() =>
@@ -57,7 +58,7 @@ const useViewState = () => {
 };
 
 const useFrameVerdict = (pageUrl: string, frameCheckUrl: string) => {
-  const [verdict, setVerdict] = useState<FrameVerdict | null>(null);
+  const [verdict, setVerdict] = useState<CheckResponse | null>(null);
   useEffect(() => {
     setVerdict(null);
     if (!pageUrl) return;
@@ -67,7 +68,7 @@ const useFrameVerdict = (pageUrl: string, frameCheckUrl: string) => {
     let active = true;
     fetch(`${frameCheckUrl}?${query}`, { signal: controller.signal })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`frame check returned ${res.status}`))))
-      .then((body: FrameVerdict) => active && setVerdict(body))
+      .then((body: CheckResponse) => active && setVerdict(body))
       // The dashboard's own route gave no answer (client budget, error): fail closed and do not load the page.
       // A slow or unreachable site is reported by the route itself as inconclusive (fail open).
       .catch((err: Error) => {
@@ -90,26 +91,35 @@ export default function PageHeatmap({
   siteOrigin,
   path,
   frameCheckUrl = "/api/frame-check",
-  frameLoadTimeoutMs = FRAME_LOAD_TIMEOUT_MS
+  handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS
 }: Props) {
   const [state, update] = useViewState();
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [error, setError] = useState<HeatError | null>(null);
-  const [frameLoaded, setFrameLoaded] = useState(false);
   const [rendered, setRendered] = useState(false);
   const [scale, setScale] = useState(1);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const frameRef = useRef<HTMLIFrameElement>(null);
 
   const pageUrl = siteOrigin ? new URL(path, siteOrigin).toString() : "";
   const verdict = useFrameVerdict(pageUrl, frameCheckUrl);
   const inconclusive = verdict !== null && isInconclusive(verdict);
-  // Inconclusive check and the frame did not load in time: most likely blocked by the browser.
-  const [loadTimedOut, setLoadTimedOut] = useState(false);
   const notAllowed = verdict?.verified === false && verdict.reason === "not-allowed";
   const refused = verdict?.verified === false && !inconclusive && !notAllowed;
-  const blocked = verdict?.blocked === true || (inconclusive && loadTimedOut);
-  const framed = Boolean(pageUrl) && (verdict?.verified === true || inconclusive) && !blocked;
+  // Allowlisted page: always framed, whatever its headers say. Only the SDK handshake proves it is showing
+  // (the iframe's load event fires for Chromium's error page too); the header verdict is logged as a detail.
+  const framed = Boolean(pageUrl) && (verdict?.verified === true || inconclusive);
+  const handshake = useFrameHandshake(
+    frameRef,
+    pageUrl,
+    framed,
+    verdict?.allowedOrigins ?? [],
+    handshakeTimeoutMs,
+    verdict?.detail ?? ""
+  );
+  const answered = handshake.status === "ok" || handshake.status === "redirected";
+  const showHeatmap = state.showHeatmap && handshake.status !== "redirected";
   // Bucket counts ignore the viewport filter, so the last response always has every option's count.
   const [buckets, setBuckets] = useState<BucketCount[] | null>(null);
   const options = useMemo(() => (buckets ? viewportOptions(buckets) : null), [buckets]);
@@ -118,17 +128,6 @@ export default function PageHeatmap({
   const chosen = state.viewport ? options?.find((o) => o.viewport === state.viewport) : busiest;
   // The whole class is filtered; the busiest bucket goes first, so it sets the frame width.
   const filterBucket = chosen && chosen.count > 0 ? chosen.buckets.join(",") : undefined;
-
-  useEffect(() => {
-    setFrameLoaded(false);
-    setLoadTimedOut(false);
-  }, [pageUrl]);
-
-  useEffect(() => {
-    if (!inconclusive || frameLoaded) return;
-    const timer = setTimeout(() => setLoadTimedOut(true), frameLoadTimeoutMs);
-    return () => clearTimeout(timer);
-  }, [inconclusive, frameLoaded, frameLoadTimeoutMs]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -206,7 +205,11 @@ export default function PageHeatmap({
   const areas = useMemo(() => (data ? topAreas(data.points, data.meta.viewport) : []), [data]);
 
   return (
-    <section className="page-heatmap" aria-label={`Click heatmap for ${path}`}>
+    <section
+      className="page-heatmap"
+      aria-label={`Click heatmap for ${path}`}
+      data-frame-state={framed ? handshake.status : "none"}
+    >
       <HeatmapControls state={state} activeViewport={activeViewport} options={options} onChange={update} />
       <p className="ph-summary" aria-live="polite" data-testid="heatmap-summary">
         {data ? summary : "Loading heatmap…"}
@@ -226,17 +229,8 @@ export default function PageHeatmap({
       )}
       {notAllowed && <SiteNotAllowedNotice siteOrigin={new URL(siteOrigin).origin} />}
       {refused && <FrameCheckFailedNotice reason={verdict.detail} />}
-      {inconclusive && !blocked && <FrameUnverifiedNotice />}
-      {blocked && verdict && (
-        <FrameBlockedNotice
-          reason={
-            verdict.verified
-              ? verdict.detail
-              : `the page did not load within ${frameLoadTimeoutMs / 1000} s after ${verdict.detail}`
-          }
-          dashboardOrigin={window.location.origin}
-        />
-      )}
+      {framed && handshake.status === "no-response" && <FrameNoResponseNotice pageUrl={pageUrl} />}
+      {framed && handshake.status === "redirected" && <FrameRedirectedNotice href={handshake.href} />}
       <TopAreasTable areas={areas} visible={state.view === "table"} caption={summary} />
       <div
         className="ph-scroller"
@@ -257,16 +251,19 @@ export default function PageHeatmap({
                 sandbox="allow-same-origin allow-scripts"
                 tabIndex={-1}
                 scrolling="no"
-                style={{ width, height, pointerEvents: "none" }}
-                onLoad={() => setFrameLoaded(true)}
+                ref={frameRef}
+                // Hidden until the page answers, so Chromium's error page never shows through.
+                style={{ width, height, pointerEvents: "none", visibility: answered ? "visible" : "hidden" }}
               />
             )}
-            {(!data || (framed && !frameLoaded) || (pageUrl && !verdict)) && (
+            {(!data || (framed && handshake.status === "waiting") || (pageUrl && !verdict)) && (
               <div className="ph-skeleton" aria-hidden="true" />
             )}
             <canvas
               ref={canvasRef}
-              className={rendered && state.showHeatmap ? "ph-canvas ready" : "ph-canvas"}
+              className={rendered && showHeatmap ? "ph-canvas ready" : "ph-canvas"}
+              // A redirected page would not line up with the clicks: hide the heatmap.
+              hidden={handshake.status === "redirected"}
               style={{ width, height, ["--heat-opacity" as string]: state.opacity / 100 }}
               aria-hidden="true"
               data-testid="heatmap-canvas"

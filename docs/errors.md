@@ -297,10 +297,15 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The dashboard could not verify that this site may be shown in a frame, so the page is not loaded.
 - Fix: Check that the dashboard server can reach the site and that the site responds within 3 seconds, then reload this page.
 
-## HEAT_E_FRAME_CHECK_INCONCLUSIVE
+## HEAT_E_FRAME_NO_RESPONSE
 
-- Message: We couldn't check whether this site allows framing. If the page stays blank, the site likely blocks it.
-- Fix: Check that the dashboard server can reach the site and that the site responds within 2.5 seconds, then reload this page.
+- Message: This page didn't respond. It may block framing or be offline.
+- Fix: Check that the page loads the heat-tracker SDK, is online, and allows framing with `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>`, then reload this page.
+
+## HEAT_E_FRAME_REDIRECTED
+
+- Message: This page redirected to <url>. The heatmap is hidden because it wouldn't line up.
+- Fix: Open the heatmap for the page it redirects to, or remove the redirect for the dashboard.
 
 ## HEAT_E_FRAME_ORIGIN_INVALID
 
