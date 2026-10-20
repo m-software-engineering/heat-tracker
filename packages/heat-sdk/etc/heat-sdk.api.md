@@ -71,6 +71,7 @@ export type InitConfig = {
         version?: string;
         env?: string;
     };
+    dashboardOrigins?: string[];
     session?: {
         idleTimeoutMs?: number;
         persist?: "tab" | "browser";

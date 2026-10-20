@@ -32,6 +32,7 @@ await tracker.flush();
 2. Built-in listeners collect events such as clicks, movement, scrolling, and page views.
 3. Events are queued and flushed in batches to the collector endpoint.
 4. Optional methods (`identify`, `track`, `setAuthToken`) enrich and control payloads.
+5. If you set `dashboardOrigins` (the dashboard's snippet fills it in) and the page is shown in a frame, `init` posts `{ type: "heat-tracker:frame-hello", href: origin + pathname }` to each listed origin, using that origin as the exact `targetOrigin` (never `*`), so the heat-tracker dashboard knows the page really loaded and where it ended up. The query string and hash are never sent. Without the option nothing is sent. The pathname goes through the same privacy rules as event paths (`;matrix` params dropped, email-looking segments become `[email]`). Nothing is sent when Do Not Track is on; sampling does not stop it, since it carries no events.
 
 ## Coordinate model
 
@@ -75,6 +76,7 @@ Optional fields:
   `maskTextSelectors` text in the title is replaced by `•••`, at most 200 characters)
 - `onError(err)`: receives every ingest error as a `HeatError` (`code`, `message`, `cause`, `fix`, `docs`, `requestId?`)
 - `debug`: logs each error code once per page load; the SDK is silent otherwise
+- `dashboardOrigins`: origins of heat-tracker dashboards that may show this page in a frame, e.g. `["https://heat.example.com"]`. When framed, the SDK sends each of them only `origin + pathname` (never the query or hash), with that origin as the exact `postMessage` target, the path masked by the privacy rules, and nothing with Do Not Track on. Omit it and nothing is sent. The dashboard's onboarding snippet fills it in.
 
 `init()` throws a `HeatTrackerError` (`HEAT_E_CONFIG_MISSING`, `HEAT_E_NOT_BROWSER`). See [docs/errors.md](../../docs/errors.md).
 

@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { test, expect } from "@playwright/test";
 import { GET } from "../examples/nextjs-dashboard/app/api/frame-check/route";
+import { middleware } from "../examples/nextjs-dashboard/middleware";
 import { MAX_REDIRECTS, allowedSiteOrigins, checkFrame } from "../examples/nextjs-dashboard/lib/frame-policy";
 
 const quiet = () => {
@@ -42,7 +45,7 @@ test.describe("allowedSiteOrigins (HEAT_DASHBOARD_SITE_ORIGINS)", () => {
 });
 
 const listen = (handler: http.RequestListener) =>
-  new Promise<{ origin: string; hits: string[]; close: () => void }>((resolve) => {
+  new Promise<{ origin: string; hits: string[]; close: () => void; closeAll: () => void }>((resolve) => {
     const hits: string[] = [];
     const server = http.createServer((req, res) => {
       hits.push(req.url ?? "");
@@ -52,7 +55,11 @@ const listen = (handler: http.RequestListener) =>
       resolve({
         origin: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
         hits,
-        close: () => server.close()
+        close: () => server.close(),
+        closeAll: () => {
+          server.close();
+          server.closeAllConnections();
+        }
       })
     );
   });
@@ -64,7 +71,8 @@ test.describe("checkFrame redirects", () => {
     try {
       const verdict = await checkFrame(`${site.origin}/go`, "http://dash.test", [site.origin]);
       expect(verdict).toMatchObject({ allowed: false, blocked: false });
-      expect(verdict.reason).toContain(`redirects to ${internal.origin}`);
+      expect(verdict).toMatchObject({ verified: false, reason: "not-allowed" });
+      expect(verdict.detail).toContain(`redirects to ${internal.origin}`);
       expect(internal.hits).toEqual([]);
     } finally {
       internal.close();
@@ -81,7 +89,7 @@ test.describe("checkFrame redirects", () => {
     );
     try {
       const verdict = await checkFrame(`${site.origin}/go`, "http://dash.test", [site.origin, other.origin]);
-      expect(verdict).toEqual({ blocked: true, reason: "X-Frame-Options DENY" });
+      expect(verdict).toEqual({ verified: true, blocked: true, detail: "X-Frame-Options DENY" });
       expect(site.hits).toEqual(["/go", "/next"]);
       expect(other.hits).toEqual(["/final"]);
     } finally {
@@ -96,8 +104,37 @@ test.describe("checkFrame redirects", () => {
     const site = await listen((_q, r) => r.writeHead(302, { location: `/hop-${++hop}` }).end());
     try {
       const verdict = await checkFrame(`${site.origin}/`, "http://dash.test", [site.origin]);
-      expect(verdict).toMatchObject({ blocked: false, verified: false });
+      expect(verdict).toMatchObject({ blocked: false, verified: false, reason: "redirect" });
       expect(site.hits).toHaveLength(MAX_REDIRECTS + 1);
+    } finally {
+      site.close();
+    }
+  });
+});
+
+test.describe("checkFrame inconclusive results fail open (#59)", () => {
+  test("a site that does not answer in time is { blocked: false, verified: false, reason: 'timeout' }", async () => {
+    const site = await listen(() => {});
+    try {
+      const verdict = await checkFrame(`${site.origin}/hang`, "http://dash.test", [site.origin], 200);
+      expect(verdict).toMatchObject({ blocked: false, verified: false, reason: "timeout" });
+    } finally {
+      site.closeAll();
+    }
+  });
+
+  test("an unreachable site is { blocked: false, verified: false, reason: 'unreachable' }", async () => {
+    const dead = await listen(() => {});
+    dead.closeAll();
+    const verdict = await checkFrame(`${dead.origin}/`, "http://dash.test", [dead.origin]);
+    expect(verdict).toMatchObject({ blocked: false, verified: false, reason: "unreachable" });
+  });
+
+  test("a verified result carries no reason", async () => {
+    const site = await listen((_q, r) => r.end("ok"));
+    try {
+      const verdict = await checkFrame(`${site.origin}/`, "http://dash.test", [site.origin]);
+      expect(verdict).toEqual({ verified: true, blocked: false, detail: "no framing restriction" });
     } finally {
       site.close();
     }
@@ -149,4 +186,23 @@ test.describe("GET /api/frame-check", () => {
       site.close();
     }
   });
+});
+
+test("the dashboard middleware sends CSP frame-src with the allowlist (#59)", () => {
+  const saved = process.env.HEAT_DASHBOARD_SITE_ORIGINS;
+  process.env.HEAT_DASHBOARD_SITE_ORIGINS = "https://shop.example.com, https://www.example.com";
+  try {
+    expect(middleware().headers.get("content-security-policy")).toBe(
+      "frame-src https://shop.example.com https://www.example.com"
+    );
+  } finally {
+    process.env.HEAT_DASHBOARD_SITE_ORIGINS = saved;
+  }
+});
+
+test("the dashboard's privacy-rules.ts is byte-identical to the SDK's and the collector's (#59 B)", () => {
+  const read = (file: string) => readFileSync(path.resolve(__dirname, "..", file), "utf8");
+  const sdk = read("packages/heat-sdk/src/privacy-rules.ts");
+  expect(read("examples/nextjs-dashboard/lib/privacy-rules.ts")).toBe(sdk);
+  expect(read("packages/heat-collector/src/privacy-rules.ts")).toBe(sdk);
 });

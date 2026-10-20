@@ -29,6 +29,16 @@ export const DASHBOARD_ERRORS: {
         readonly message: "The dashboard could not verify that this site may be shown in a frame, so the page is not loaded.";
         readonly fix: "Check that the dashboard server can reach the site and that the site responds within 3 seconds, then reload this page.";
     };
+    readonly HEAT_E_FRAME_NO_RESPONSE: {
+        readonly code: "HEAT_E_FRAME_NO_RESPONSE";
+        readonly message: "This page didn't respond. Check that the heat-tracker snippet is installed with this dashboard in dashboardOrigins, that the site allows framing, and that Do Not Track is off in this browser.";
+        readonly fix: "Install the snippet from the dashboard (it sets `dashboardOrigins` to this dashboard's origin), make sure the site is online and sends `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>`, turn Do Not Track off in this browser (the SDK sends no handshake with it on), then reload this page.";
+    };
+    readonly HEAT_E_FRAME_REDIRECTED: {
+        readonly code: "HEAT_E_FRAME_REDIRECTED";
+        readonly message: "This page redirected to <url>. The heatmap is hidden because it wouldn't line up.";
+        readonly fix: "Open the heatmap for the page it redirects to, or remove the redirect for the dashboard.";
+    };
     readonly HEAT_E_FRAME_ORIGIN_INVALID: {
         readonly code: "HEAT_E_FRAME_ORIGIN_INVALID";
         readonly message: "An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.";

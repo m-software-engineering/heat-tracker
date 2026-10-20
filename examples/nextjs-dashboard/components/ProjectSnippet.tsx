@@ -31,7 +31,7 @@ export default function ProjectSnippet({ publicCollectorUrl, projectId, collecto
   }, [collectorUrl, projectId]);
 
   if (!projectKey) return null;
-  const snippet = trackingSnippet(publicCollectorUrl, projectKey);
+  const snippet = trackingSnippet(publicCollectorUrl, projectKey, window.location.origin);
   return (
     <div className="onboarding-card">
       <p>

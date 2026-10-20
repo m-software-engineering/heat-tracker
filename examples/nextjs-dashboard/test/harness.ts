@@ -35,9 +35,14 @@ if (!projectId) {
     collectorUrl: window.location.origin,
     projectId,
     // site=unlisted: a reachable origin that is not on the dashboard's allowlist.
+    // site=down: an allowlisted origin with nothing listening (the frame check cannot reach it).
     siteOrigin: String(
       (window as unknown as Record<string, string>)[
-        params.get("site") === "unlisted" ? "__UNLISTED_ORIGIN__" : "__SITE_ORIGIN__"
+        params.get("site") === "unlisted"
+          ? "__UNLISTED_ORIGIN__"
+          : params.get("site") === "down"
+            ? "__DOWN_ORIGIN__"
+            : "__SITE_ORIGIN__"
       ]
     ),
     path: params.get("path") ?? "/",

@@ -61,7 +61,7 @@ export default function Onboarding({ publicCollectorUrl, onProject }: Props) {
   }, [projectKey, onProject]);
 
   if (!projectKey) return null;
-  const snippet = trackingSnippet(publicCollectorUrl, projectKey);
+  const snippet = trackingSnippet(publicCollectorUrl, projectKey, window.location.origin);
 
   const copy = async () => {
     await navigator.clipboard.writeText(snippet);

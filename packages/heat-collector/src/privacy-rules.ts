@@ -1,7 +1,8 @@
 /**
  * Shared privacy rules for stored paths (#25, Margot on #64). This file is kept byte-identical in
- * packages/heat-collector/src/privacy-rules.ts and packages/heat-sdk/src/privacy-rules.ts (a test checks it);
- * both sides run the cases in fixtures/privacy-cases.json.
+ * packages/heat-collector/src/privacy-rules.ts, packages/heat-sdk/src/privacy-rules.ts and
+ * examples/nextjs-dashboard/lib/privacy-rules.ts (frame handshake, #59; tests check it);
+ * the packages run the cases in fixtures/privacy-cases.json.
  */
 // Margot's final rule (#64). The lists are frozen: a new case needs a fixture and its own issue.
 // 1. A token (split on - _ [ ] . + space, camelCase and digit/letter boundaries) is one of these:

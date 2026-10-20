@@ -135,21 +135,6 @@ test("controls persist in the URL, keyboard works, and the table is the text alt
   ).toBeVisible();
 });
 
-test("blocked framing shows HEAT_E_FRAME_BLOCKED within 3 s with the exact fix", async ({ page }) => {
-  const started = Date.now();
-  await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/blocked`);
-  const alert = page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]');
-  await expect(alert).toBeVisible({ timeout: 3000 });
-  expect(Date.now() - started).toBeLessThanOrEqual(3000);
-  await expect(alert).toContainText(
-    `Add \`Content-Security-Policy: frame-ancestors 'self' ${stack.dashboardUrl}\` on your site`
-  );
-  await expect(alert.getByRole("link")).toHaveAttribute("href", /docs\/errors\.md#heat_e_frame_blocked$/);
-  await expect(page.locator("iframe")).toHaveCount(0);
-  // Fallback: the heatmap still renders on the blank canvas.
-  await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
-});
-
 test("a frame check that does not answer in time fails closed: no iframe, could-not-verify notice", async ({
   page
 }) => {

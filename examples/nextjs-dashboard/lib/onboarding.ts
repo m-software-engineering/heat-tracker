@@ -23,11 +23,12 @@ export const scriptString = (value: string) =>
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
 
-export const trackingSnippet = (publicCollectorUrl: string, projectKey: string) =>
+/** `dashboardOrigin` is this dashboard's own origin: the SDK sends its frame handshake only there (#59). */
+export const trackingSnippet = (publicCollectorUrl: string, projectKey: string, dashboardOrigin: string) =>
   [
     '<script type="module">',
     `  import { init } from "https://cdn.jsdelivr.net/npm/@m-software-engineering/heat-sdk@${SDK_VERSION}/+esm";`,
-    `  init({ endpoint: ${scriptString(`${publicCollectorUrl}/ingest`)}, projectKey: ${scriptString(projectKey)} });`,
+    `  init({ endpoint: ${scriptString(`${publicCollectorUrl}/ingest`)}, projectKey: ${scriptString(projectKey)}, dashboardOrigins: [${scriptString(dashboardOrigin)}] });`,
     "</script>"
   ].join("\n");
 

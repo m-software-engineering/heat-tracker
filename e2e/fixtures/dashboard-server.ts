@@ -5,14 +5,30 @@ import { tmpdir } from "node:os";
 import { build } from "tsup";
 import { createCollector } from "../../packages/heat-collector/src/collector";
 import { checkFrame } from "../../examples/nextjs-dashboard/lib/frame-policy";
+import { frameSrcPolicy } from "../../examples/nextjs-dashboard/lib/frame-handshake";
 
 const listen = (app: express.Express) =>
   new Promise<{ port: number; close: () => Promise<void> }>((resolve) => {
     const server = app.listen(0, () => {
       const port = (server.address() as { port: number }).port;
-      resolve({ port, close: () => new Promise((done) => server.close(() => done())) });
+      resolve({
+        port,
+        close: () =>
+          new Promise((done) => {
+            server.close(() => done());
+            // /hang requests never finish on their own.
+            server.closeAllConnections();
+          })
+      });
     });
   });
+
+/** An origin with nothing listening: bind a port, then release it. */
+const deadOrigin = async () => {
+  const server = await listen(express());
+  await server.close();
+  return `http://127.0.0.1:${server.port}`;
+};
 
 /** Bundles the dashboard test harness (React + PageHeatmap) once per run with tsup. */
 export const bundleHarness = async () => {
@@ -35,7 +51,7 @@ export const bundleHarness = async () => {
   return readFileSync(path.join(outDir, "harness.global.js"), "utf8");
 };
 
-const SITE_PAGE = `<!doctype html>
+const SITE_PAGE_TEMPLATE = `<!doctype html>
 <html lang="en">
   <head><meta charset="utf-8" /><title>Pricing</title>
     <style>body { margin: 0; height: 2000px; font-family: sans-serif; }
@@ -46,10 +62,17 @@ const SITE_PAGE = `<!doctype html>
     <button id="buy">Buy</button>
     <script type="module">
       import { init } from "/sdk/index.mjs";
-      window.__tracker__ = init({ endpoint: location.origin + "/ingest", projectKey: "overlay-key" });
+      window.__tracker__ = init({ endpoint: location.origin + "/ingest", projectKey: "overlay-key"/*DASHBOARD_ORIGINS*/ });
     </script>
   </body>
 </html>`;
+
+/** The tracked page; `dashboardOrigins` lists the dashboard unless `withDashboard` is false (#59). */
+const sitePage = (dashboardOrigin: string, withDashboard = true) =>
+  SITE_PAGE_TEMPLATE.replace(
+    "/*DASHBOARD_ORIGINS*/",
+    withDashboard ? `, dashboardOrigins: [${JSON.stringify(dashboardOrigin)}]` : ""
+  );
 
 /**
  * Two origins share one collector: the tracked site (127.0.0.1) and the dashboard (localhost), so
@@ -61,25 +84,56 @@ export const startOverlayStack = async () => {
   const collector = await createCollector({ db: { dialect: "sqlite", file: dbFile }, auth: { mode: "projectKey" } });
   const bundle = await bundleHarness();
 
+  // Known once the dashboard listens (before any page is requested).
+  let dashboardOrigin = "";
   const site = express();
-  site.get(["/pricing", "/empty", "/nopos", "/nopos-many"], (_req, res) => res.type("html").send(SITE_PAGE));
-  site.get("/blocked", (_req, res) =>
-    res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(SITE_PAGE)
+  // Runs the SDK without dashboardOrigins: it must not send the handshake.
+  site.get("/no-dashboard-origins", (_req, res) => res.type("html").send(sitePage(dashboardOrigin, false)));
+  site.get(["/pricing", "/empty", "/nopos", "/nopos-many"], (_req, res) =>
+    res.type("html").send(sitePage(dashboardOrigin))
   );
-  site.use("/sdk", express.static(path.resolve(__dirname, "../../packages/heat-sdk/dist")));
+  site.get("/blocked", (_req, res) =>
+    res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(sitePage(dashboardOrigin))
+  );
+  site.get("/xfo", (_req, res) => res.set("X-Frame-Options", "DENY").type("html").send(sitePage(dashboardOrigin)));
+  // Never answers: the frame check times out and the iframe never loads.
+  site.get("/hang", () => {});
+  const sdk = express.static(path.resolve(__dirname, "../../packages/heat-sdk/dist"));
+  site.use("/sdk", sdk);
   site.use(collector.router);
   const siteServer = await listen(site);
   const siteOrigin = `http://127.0.0.1:${siteServer.port}`;
+  const downOrigin = await deadOrigin();
+
+  // A second allowlisted origin: /moved on the site redirects here, and it hosts a sibling frame for forgery tests.
+  const other = express();
+  other.get("/landing", (_req, res) => res.type("html").send(sitePage(dashboardOrigin)));
+  other.use("/sdk", sdk);
+  const otherServer = await listen(other);
+  const otherOrigin = `http://127.0.0.1:${otherServer.port}`;
+  // Paths with PII (#59 B): an email segment and a ;jsessionid matrix param.
+  site.get(/^\/pii\//, (_req, res) => res.type("html").send(sitePage(dashboardOrigin)));
+  other.get(/^\/u\//, (_req, res) => res.type("html").send(sitePage(dashboardOrigin)));
+  site.get("/pii-moved", (_req, res) =>
+    res.redirect(302, `${otherOrigin}/u/jane.roe@example.com;jsessionid=SECRET456/home`)
+  );
+  site.get("/moved", (_req, res) => res.redirect(302, `${otherOrigin}/landing`));
+  const allowlist = [siteOrigin, downOrigin, otherOrigin];
 
   const dashboard = express();
+  dashboard.use((_req, res, next) => {
+    res.set("Content-Security-Policy", frameSrcPolicy(allowlist));
+    next();
+  });
   const css = readFileSync(path.resolve(__dirname, "../../examples/nextjs-dashboard/app/globals.css"), "utf8");
   dashboard.get("/harness.js", (_req, res) => res.type("js").send(bundle));
   dashboard.get("/globals.css", (_req, res) => res.type("css").send(css));
   dashboard.get("/api/frame-check", async (req, res) => {
-    res.json(await checkFrame(String(req.query.url), String(req.query.origin), [siteOrigin]));
+    const verdict = await checkFrame(String(req.query.url), String(req.query.origin), allowlist);
+    res.json({ ...verdict, allowedOrigins: allowlist });
   });
   dashboard.get("/api/frame-check-slow", (_req, res) => {
-    setTimeout(() => res.json({ blocked: false, reason: "too late" }), 4_000).unref();
+    setTimeout(() => res.json({ verified: true, blocked: false, detail: "too late" }), 4_000).unref();
   });
   // Static page: the harness reads project/path from location.search; only server-known values are injected.
   const page =
@@ -92,18 +146,22 @@ export const startOverlayStack = async () => {
       .type("js")
       .send(
         `window.__SITE_ORIGIN__ = ${JSON.stringify(siteOrigin)};` +
-          `window.__UNLISTED_ORIGIN__ = ${JSON.stringify(`http://localhost:${siteServer.port}`)};`
+          `window.__UNLISTED_ORIGIN__ = ${JSON.stringify(`http://localhost:${siteServer.port}`)};` +
+          `window.__DOWN_ORIGIN__ = ${JSON.stringify(downOrigin)};`
       )
   );
   dashboard.use(collector.router);
   const dashboardServer = await listen(dashboard);
+  dashboardOrigin = `http://localhost:${dashboardServer.port}`;
 
   return {
     dbFile,
     siteUrl: siteOrigin,
-    dashboardUrl: `http://localhost:${dashboardServer.port}`,
+    otherUrl: otherOrigin,
+    dashboardUrl: dashboardOrigin,
     close: async () => {
       await siteServer.close();
+      await otherServer.close();
       await dashboardServer.close();
     }
   };
