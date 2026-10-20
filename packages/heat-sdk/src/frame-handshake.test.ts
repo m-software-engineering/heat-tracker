@@ -1,10 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { FRAME_HELLO_TYPE, announceToParentFrame } from "./frame-handshake";
 
-const framedWindow = (postMessage: (...args: unknown[]) => void) =>
+const framedWindow = (
+  postMessage: (...args: unknown[]) => void,
+  { pathname = "/pricing", doNotTrack = null as string | null } = {}
+) =>
   ({
     parent: { postMessage },
-    location: { href: "https://shop.test/pricing?token=secret#frag", origin: "https://shop.test", pathname: "/pricing" }
+    navigator: { doNotTrack },
+    location: { href: `https://shop.test${pathname}?token=secret#frag`, origin: "https://shop.test", pathname }
   }) as unknown as Window;
 
 describe("announceToParentFrame", () => {
@@ -15,6 +19,23 @@ describe("announceToParentFrame", () => {
     const [message] = postMessage.mock.calls[0];
     expect(message).toEqual({ type: FRAME_HELLO_TYPE, href: "https://shop.test/pricing" });
     expect(JSON.stringify(message)).not.toMatch(/token|secret|frag|\?|#/);
+  });
+
+  it("masks emails and strips ;matrix params in the path with the shared privacy rules", () => {
+    const postMessage = vi.fn();
+    announceToParentFrame(
+      ["https://dash.test"],
+      framedWindow(postMessage, { pathname: "/pii/john.doe@example.com;jsessionid=SECRET123/orders" })
+    );
+    const [message] = postMessage.mock.calls[0];
+    expect(message).toEqual({ type: FRAME_HELLO_TYPE, href: "https://shop.test/pii/[email]/orders" });
+    expect(JSON.stringify(message)).not.toMatch(/john|example\.com|jsessionid|SECRET123/);
+  });
+
+  it("sends nothing when Do Not Track is on", () => {
+    const postMessage = vi.fn();
+    announceToParentFrame(["https://dash.test"], framedWindow(postMessage, { doNotTrack: "1" }));
+    expect(postMessage).not.toHaveBeenCalled();
   });
 
   it("posts once per dashboard origin, with that exact origin as targetOrigin (never *)", () => {

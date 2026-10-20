@@ -8,7 +8,7 @@ let stack: Stack;
 let projectId: string;
 
 const NO_RESPONSE =
-  "This page didn't respond. Check that the heat-tracker snippet is installed with this dashboard in `dashboardOrigins`, and that the site allows framing.";
+  "This page didn't respond. Check that the heat-tracker snippet is installed with this dashboard in dashboardOrigins, that the site allows framing, and that Do Not Track is off in this browser.";
 const HELLO = "heat-tracker:frame-hello";
 
 test.beforeAll(async ({ browser }) => {
@@ -51,6 +51,7 @@ const expectNoResponse = async (page: Page, pagePath: string, origin = stack.sit
   await expect(notice).toBeVisible();
   await expect(notice).toHaveAttribute("data-code", "HEAT_E_FRAME_NO_RESPONSE");
   await expect(notice.locator("p")).toHaveText(NO_RESPONSE);
+  await expect(notice.locator("p code")).toHaveText("dashboardOrigins");
   const link = notice.getByRole("link", { name: "Open page in new tab" });
   await expect(link).toHaveAttribute("href", `${origin}${pagePath}`);
   await expect(link).toHaveAttribute("rel", "noopener noreferrer");
@@ -125,6 +126,45 @@ test("a cross-origin redirect hides the heatmap and names the URL as text", asyn
   );
   await expect(page.getByTestId("heatmap-canvas")).toBeHidden();
   await expect(page.getByTestId("frame-no-response")).toHaveCount(0);
+});
+
+test.describe("the hello path goes through the privacy rules (#59 B)", () => {
+  const RAW = /john\.doe|jane\.roe|example\.com|jsessionid|SECRET/;
+
+  test("a path with an email and ;jsessionid matches its masked form: handshake ok", async ({ page }) => {
+    const logs = warnings(page);
+    await page.goto(
+      `${stack.dashboardUrl}/?project=${projectId}&path=${encodeURIComponent("/pii/john.doe@example.com;jsessionid=SECRET123")}`
+    );
+    await expect(page.locator("section.page-heatmap")).toHaveAttribute("data-frame-state", "ok");
+    await expect(page.getByTestId("frame-redirected")).toHaveCount(0);
+    expect(logs.join("\n")).not.toMatch(RAW);
+  });
+
+  test("a redirect to a path with PII shows only the masked URL, in the notice and in the console", async ({
+    page
+  }) => {
+    const logs = warnings(page);
+    await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/pii-moved`);
+    const notice = page.getByTestId("frame-redirected");
+    await expect(notice).toHaveText(
+      `This page redirected to ${stack.otherUrl}/u/[email]/home. The heatmap is hidden because it wouldn't line up.`
+    );
+    await expect.poll(() => logs.join("\n")).toContain(`${stack.otherUrl}/u/[email]/home`);
+    expect(logs.join("\n")).not.toMatch(RAW);
+    expect(await page.locator("section.page-heatmap").innerText()).not.toMatch(RAW);
+  });
+
+  test("no hello when Do Not Track is on: no-response", async ({ page }) => {
+    // Every frame, the cross-origin page included, reports DNT on.
+    await page
+      .context()
+      .addInitScript(() =>
+        Object.defineProperty(Navigator.prototype, "doNotTrack", { configurable: true, get: () => "1" })
+      );
+    await openAndWait(page, "path=/pricing");
+    await expectNoResponse(page, "/pricing");
+  });
 });
 
 test.describe("forged handshakes are ignored", () => {

@@ -1,8 +1,12 @@
 /**
  * Handshake between the framed page and the dashboard (#59). The heat-tracker SDK posts
- * `{ type: FRAME_HELLO_TYPE, href: location.href }` to its parent on init. The iframe's `load` event cannot be
- * used instead: Chromium fires it for its own error page when framing is refused or the site is offline.
+ * `{ type: FRAME_HELLO_TYPE, href: origin + masked pathname }` (no query or hash; pathname through the shared
+ * privacy rules) on init, only to the origins in its `dashboardOrigins` and never when Do Not Track is on.
+ * The iframe's `load` event cannot be used instead: Chromium fires it for its own error page when framing is
+ * refused or the site is offline.
  */
+import { sanitizePathname } from "./privacy-rules";
+
 export const FRAME_HELLO_TYPE = "heat-tracker:frame-hello";
 
 /** No valid hello by then: the page blocks framing (X-Frame-Options, CSP), is offline, or does not run the SDK. */
@@ -39,9 +43,18 @@ export const readHello = (
   const actual = new URL(data.href);
   // The origin of the message is authoritative; the href must agree with it.
   if (actual.origin !== event.origin) return { kind: "ignored" };
-  return actual.host === expected.host && actual.pathname === expected.pathname
-    ? { kind: "ok", href: data.href }
-    : { kind: "redirected", href: data.href };
+  // The SDK masks its path; compare against the masked expected path, and mask again in case an older or
+  // hostile sender did not, so the raw value is never shown or logged.
+  const href = maskedUrl(actual.href);
+  return actual.host === expected.host && sanitizePathname(actual.pathname) === sanitizePathname(expected.pathname)
+    ? { kind: "ok", href }
+    : { kind: "redirected", href };
+};
+
+/** `origin + pathname` with the shared privacy rules applied (no query or hash): safe to show or log. */
+export const maskedUrl = (url: string) => {
+  const parsed = new URL(url);
+  return `${parsed.origin}${sanitizePathname(parsed.pathname)}`;
 };
 
 /** `frame-src` for the dashboard: only allowlisted site origins may be framed ('none' when the list is empty). */

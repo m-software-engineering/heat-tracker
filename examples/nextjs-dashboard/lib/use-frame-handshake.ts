@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState, type RefObject } from "react";
 import { DASHBOARD_ERRORS, createHeatError, formatHeatError } from "@m-software-engineering/heat-errors";
-import { readHello } from "./frame-handshake";
+import { maskedUrl, readHello } from "./frame-handshake";
 
 // Layout effect: the listener is on before the browser can start loading the iframe, so a fast page's hello is
 // never missed. Plain effect on the server, where neither runs.
@@ -15,7 +15,8 @@ export type HandshakeState =
 /**
  * Waits for the framed page's hello (see lib/frame-handshake.ts). After `timeoutMs` without a valid one the state is
  * `no-response`; the listener stays on, so a page that answers late still recovers. Details (`detail`, the URLs)
- * go to the console only, never into the visible notice.
+ * go to the console only, never into the visible notice, and URLs are
+ * always masked (`maskedUrl`): the raw path is never shown or logged.
  */
 export const useFrameHandshake = (
   frameRef: RefObject<HTMLIFrameElement | null>,
@@ -39,7 +40,10 @@ export const useFrameHandshake = (
         // eslint-disable-next-line no-console -- devtools-only diagnostics
         console.warn(
           formatHeatError(
-            createHeatError(DASHBOARD_ERRORS.HEAT_E_FRAME_REDIRECTED, `expected ${pageUrl}, got ${result.href}`)
+            createHeatError(
+              DASHBOARD_ERRORS.HEAT_E_FRAME_REDIRECTED,
+              `expected ${maskedUrl(pageUrl)}, got ${result.href}`
+            )
           )
         );
         setState({ status: "redirected", href: result.href });
@@ -54,7 +58,7 @@ export const useFrameHandshake = (
           formatHeatError(
             createHeatError(
               DASHBOARD_ERRORS.HEAT_E_FRAME_NO_RESPONSE,
-              `no handshake from ${pageUrl} within ${timeoutMs / 1000} s; frame check: ${detail}`
+              `no handshake from ${maskedUrl(pageUrl)} within ${timeoutMs / 1000} s; frame check: ${detail}`
             )
           )
         );

@@ -2,7 +2,8 @@ import { DASHBOARD_ERRORS, createHeatError, formatHeatError } from "@m-software-
 
 /**
  * Decides whether a site lets the dashboard frame it, from the site's response headers. Since #59 the dashboard
- * frames every allowlisted page and only the SDK handshake decides what is shown; this verdict is a logged detail.
+ * shows HEAT_E_FRAME_BLOCKED at once when this verdict is `blocked`; otherwise it frames the page and the SDK
+ * handshake decides what is shown, and this verdict's `detail` is only logged (console.warn) on no response.
  * Browsers hide a blocked cross-origin frame from the parent (it looks like any other cross-origin
  * frame), so the dashboard asks its own server route to fetch the page and read these headers.
  *

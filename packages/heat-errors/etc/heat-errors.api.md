@@ -31,8 +31,8 @@ export const DASHBOARD_ERRORS: {
     };
     readonly HEAT_E_FRAME_NO_RESPONSE: {
         readonly code: "HEAT_E_FRAME_NO_RESPONSE";
-        readonly message: "This page didn't respond. Check that the heat-tracker snippet is installed with this dashboard in `dashboardOrigins`, and that the site allows framing.";
-        readonly fix: "Install the snippet from the dashboard (it sets `dashboardOrigins` to this dashboard's origin), make sure the site is online and sends `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>`, then reload this page.";
+        readonly message: "This page didn't respond. Check that the heat-tracker snippet is installed with this dashboard in dashboardOrigins, that the site allows framing, and that Do Not Track is off in this browser.";
+        readonly fix: "Install the snippet from the dashboard (it sets `dashboardOrigins` to this dashboard's origin), make sure the site is online and sends `Content-Security-Policy: frame-ancestors 'self' <dashboard origin>`, turn Do Not Track off in this browser (the SDK sends no handshake with it on), then reload this page.";
     };
     readonly HEAT_E_FRAME_REDIRECTED: {
         readonly code: "HEAT_E_FRAME_REDIRECTED";

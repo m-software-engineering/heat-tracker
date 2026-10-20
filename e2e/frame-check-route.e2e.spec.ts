@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { test, expect } from "@playwright/test";
@@ -196,4 +198,11 @@ test("the dashboard middleware sends CSP frame-src with the allowlist (#59)", ()
   } finally {
     process.env.HEAT_DASHBOARD_SITE_ORIGINS = saved;
   }
+});
+
+test("the dashboard's privacy-rules.ts is byte-identical to the SDK's and the collector's (#59 B)", () => {
+  const read = (file: string) => readFileSync(path.resolve(__dirname, "..", file), "utf8");
+  const sdk = read("packages/heat-sdk/src/privacy-rules.ts");
+  expect(read("examples/nextjs-dashboard/lib/privacy-rules.ts")).toBe(sdk);
+  expect(read("packages/heat-collector/src/privacy-rules.ts")).toBe(sdk);
 });

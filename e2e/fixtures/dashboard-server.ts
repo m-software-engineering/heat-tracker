@@ -111,6 +111,12 @@ export const startOverlayStack = async () => {
   other.use("/sdk", sdk);
   const otherServer = await listen(other);
   const otherOrigin = `http://127.0.0.1:${otherServer.port}`;
+  // Paths with PII (#59 B): an email segment and a ;jsessionid matrix param.
+  site.get(/^\/pii\//, (_req, res) => res.type("html").send(sitePage(dashboardOrigin)));
+  other.get(/^\/u\//, (_req, res) => res.type("html").send(sitePage(dashboardOrigin)));
+  site.get("/pii-moved", (_req, res) =>
+    res.redirect(302, `${otherOrigin}/u/jane.roe@example.com;jsessionid=SECRET456/home`)
+  );
   site.get("/moved", (_req, res) => res.redirect(302, `${otherOrigin}/landing`));
   const allowlist = [siteOrigin, downOrigin, otherOrigin];
 
