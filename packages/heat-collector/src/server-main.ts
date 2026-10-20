@@ -1,8 +1,9 @@
 import express, { type RequestHandler } from "express";
 import type { Server } from "node:http";
 import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
-import { readStoredToken, resolveAdminToken, startupBanner } from "./admin-token";
+import { envAdminToken, readStoredToken, resolveAdminToken, startupBanner } from "./admin-token";
 import { createCollector } from "./collector";
+import { createLogger } from "./logger";
 import { connectDb, dbConfigFromEnv, type ServerEnv } from "./server-db";
 
 export type ServerIo = { out: (line: string) => void };
@@ -30,7 +31,7 @@ const ingestCors: RequestHandler = (req, res, next) => {
 /** `heat-collector token`: prints the stored (or env) admin token and nothing else. */
 const printToken = (env: ServerEnv, io: ServerIo) => {
   const dataDir = env.HEAT_DATA_DIR || DEFAULT_DATA_DIR;
-  const token = env.HEAT_ADMIN_TOKEN?.trim() || readStoredToken(dataDir);
+  const token = envAdminToken(env.HEAT_ADMIN_TOKEN) || readStoredToken(dataDir);
   if (!token) {
     throw new HeatTrackerError(
       SERVER_ERRORS.HEAT_E_ADMIN_TOKEN_STORE,
@@ -40,18 +41,50 @@ const printToken = (env: ServerEnv, io: ServerIo) => {
   io.out(token);
 };
 
+/**
+ * HEAT_TRUST_PROXY → Express `trust proxy`: `true`/`false`, a hop count, or comma-separated
+ * addresses/subnets (`loopback`, `10.0.0.0/8`). Invalid values fail with HEAT_E_SERVER_CONFIG.
+ */
+export const parseTrustProxy = (raw: string | undefined): boolean | number | string[] | undefined => {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  if (/^(true|false)$/i.test(value)) return value.toLowerCase() === "true";
+  if (/^\d+$/.test(value)) return Number(value);
+  const entries = value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  try {
+    express().set("trust proxy", entries);
+  } catch (err) {
+    throw new HeatTrackerError(
+      SERVER_ERRORS.HEAT_E_SERVER_CONFIG,
+      `HEAT_TRUST_PROXY=${JSON.stringify(value)} is not true, false, a hop count, or a list of addresses`,
+      { original: err }
+    );
+  }
+  return entries;
+};
+
+const LOG_LEVELS = ["debug", "info", "warn", "error"] as const;
+type LogLevel = (typeof LOG_LEVELS)[number];
+const logLevel = (raw: string | undefined): LogLevel =>
+  (LOG_LEVELS as readonly string[]).includes(raw ?? "") ? (raw as LogLevel) : "warn";
+
 const serve = async (env: ServerEnv, io: ServerIo): Promise<Server> => {
-  const db = await connectDb(dbConfigFromEnv(env));
+  const trustProxy = parseTrustProxy(env.HEAT_TRUST_PROXY);
+  const level = logLevel(env.HEAT_LOG_LEVEL);
+  const db = await connectDb(dbConfigFromEnv(env), createLogger(level));
   const { token } = resolveAdminToken(env.HEAT_DATA_DIR || DEFAULT_DATA_DIR, env.HEAT_ADMIN_TOKEN);
   const collector = await createCollector({
     db: { dialect: db.dialect, db: db.db } as any,
     auth: { mode: "projectKey" },
     admin: { token },
-    logging: { level: (env.HEAT_LOG_LEVEL as "info") || "warn" }
+    logging: { level }
   });
   const app = express();
   app.disable("x-powered-by");
-  if (env.HEAT_TRUST_PROXY) app.set("trust proxy", env.HEAT_TRUST_PROXY);
+  if (trustProxy !== undefined) app.set("trust proxy", trustProxy);
   app.use(ingestCors);
   app.use(collector.router);
   app.use(collector.notFoundHandler);

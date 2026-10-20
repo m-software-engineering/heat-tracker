@@ -39,6 +39,16 @@ export const DASHBOARD_ERRORS: {
         readonly message: "The dashboard can't reach the collector.";
         readonly fix: "Check that the collector container is running: `docker compose ps`.";
     };
+    readonly HEAT_E_DASHBOARD_CONTENT_TYPE: {
+        readonly code: "HEAT_E_DASHBOARD_CONTENT_TYPE";
+        readonly message: "The dashboard session request is not JSON.";
+        readonly fix: "Send the token as JSON with `Content-Type: application/json`, for example `{\"token\":\"…\"}`.";
+    };
+    readonly HEAT_E_DASHBOARD_ORIGIN: {
+        readonly code: "HEAT_E_DASHBOARD_ORIGIN";
+        readonly message: "The dashboard session request came from another site.";
+        readonly fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.";
+    };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";
         readonly message: "The dashboard could not read heatmap data from the collector.";
@@ -412,6 +422,26 @@ export const SERVER_ERRORS: {
         readonly code: "HEAT_E_DB_UNREACHABLE";
         readonly message: "The collector could not connect to the database.";
         readonly fix: "Check that the database is running and reachable at the host and port in DATABASE_URL, for example with `docker compose ps postgres`.";
+    };
+    readonly HEAT_E_DB_CONNECTION_LOST: {
+        readonly code: "HEAT_E_DB_CONNECTION_LOST";
+        readonly message: "An idle database connection was closed; the collector reconnects on the next query.";
+        readonly fix: "Nothing to do after a database restart. If it repeats, check database health and the network between collector and database (`docker compose ps postgres`).";
+    };
+    readonly HEAT_E_ADMIN_TOKEN_FILE_INVALID: {
+        readonly code: "HEAT_E_ADMIN_TOKEN_FILE_INVALID";
+        readonly message: "The admin token file holds no token.";
+        readonly fix: "Delete it so a new token is generated on the next start: `docker compose run --rm collector rm /data/admin-token`, then `docker compose up -d` and paste the new token in the dashboard.";
+    };
+    readonly HEAT_E_ADMIN_TOKEN_WEAK: {
+        readonly code: "HEAT_E_ADMIN_TOKEN_WEAK";
+        readonly message: "HEAT_ADMIN_TOKEN is too short to be safe.";
+        readonly fix: "Use at least 32 random characters, for example `openssl rand -base64 32`, or unset HEAT_ADMIN_TOKEN to use the generated token.";
+    };
+    readonly HEAT_E_SERVER_CONFIG: {
+        readonly code: "HEAT_E_SERVER_CONFIG";
+        readonly message: "A heat-collector environment variable has an invalid value.";
+        readonly fix: "Correct the variable named in the cause; see the heat-collector README for accepted values.";
     };
     readonly HEAT_E_ADMIN_TOKEN_STORE: {
         readonly code: "HEAT_E_ADMIN_TOKEN_STORE";

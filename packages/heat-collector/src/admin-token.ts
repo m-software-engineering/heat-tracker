@@ -6,6 +6,9 @@ import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-er
 export const TOKEN_FILE_NAME = "admin-token";
 export const SHOW_TOKEN_COMMAND = "docker compose exec collector heat-collector token";
 
+/** Minimum length for a HEAT_ADMIN_TOKEN chosen by the operator (generated tokens are 54 chars). */
+export const MIN_ADMIN_TOKEN_LENGTH = 32;
+
 export type AdminTokenSource = "env" | "file" | "generated";
 
 const tokenPath = (dataDir: string) => path.join(dataDir, TOKEN_FILE_NAME);
@@ -20,16 +23,37 @@ const storeError = (action: string, file: string, err: unknown) =>
     original: err
   });
 
-/** The stored token, or undefined when none was written yet. */
+/**
+ * The stored token, or undefined when none was written yet. A file that exists but holds no token
+ * (empty or whitespace, e.g. an interrupted write) is HEAT_E_ADMIN_TOKEN_FILE_INVALID: it is never
+ * silently replaced, because the dashboard may still hold the old token.
+ */
 export const readStoredToken = (dataDir: string): string | undefined => {
   const file = tokenPath(dataDir);
+  let value: string;
   try {
-    const value = readFileSync(file, "utf8").trim();
-    return value || undefined;
+    value = readFileSync(file, "utf8").trim();
   } catch (err) {
     if (errnoCode(err) === "ENOENT") return undefined;
     throw storeError("reading", file, err);
   }
+  if (!value) {
+    throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_ADMIN_TOKEN_FILE_INVALID, `${file} is empty`);
+  }
+  return value;
+};
+
+/** HEAT_ADMIN_TOKEN, trimmed and checked for length; undefined when unset or blank. */
+export const envAdminToken = (raw: string | undefined): string | undefined => {
+  const token = raw?.trim();
+  if (!token) return undefined;
+  if (token.length < MIN_ADMIN_TOKEN_LENGTH) {
+    throw new HeatTrackerError(
+      SERVER_ERRORS.HEAT_E_ADMIN_TOKEN_WEAK,
+      `HEAT_ADMIN_TOKEN has ${token.length} characters; at least ${MIN_ADMIN_TOKEN_LENGTH} are required`
+    );
+  }
+  return token;
 };
 
 /**
@@ -40,7 +64,8 @@ export const resolveAdminToken = (
   dataDir: string,
   envToken: string | undefined
 ): { token: string; source: AdminTokenSource } => {
-  if (envToken?.trim()) return { token: envToken.trim(), source: "env" };
+  const fromEnv = envAdminToken(envToken);
+  if (fromEnv) return { token: fromEnv, source: "env" };
   const stored = readStoredToken(dataDir);
   if (stored) return { token: stored, source: "file" };
   const token = `heat_admin_${crypto.randomBytes(32).toString("base64url")}`;

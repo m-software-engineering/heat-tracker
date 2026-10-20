@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import request from "supertest";
-import { mkdtempSync, readFileSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { runServer } from "./server-main";
+import { parseTrustProxy, runServer } from "./server-main";
 
 const servers: Server[] = [];
 afterEach(async () => {
@@ -69,8 +69,44 @@ describe("heat-collector server", () => {
   });
 
   it("prefers HEAT_ADMIN_TOKEN over the stored file", async () => {
-    const { output } = await start({ ...sqliteEnv(), HEAT_ADMIN_TOKEN: "from-env" });
-    expect(tokenIn(output)).toBe("from-env");
+    const strong = "x".repeat(32);
+    const { output } = await start({ ...sqliteEnv(), HEAT_ADMIN_TOKEN: strong });
+    expect(tokenIn(output)).toBe(strong);
+  });
+
+  it("rejects a HEAT_ADMIN_TOKEN shorter than 32 characters with HEAT_E_ADMIN_TOKEN_WEAK", async () => {
+    const err = await runServer([], { ...sqliteEnv(), HEAT_ADMIN_TOKEN: "short-token" }, { out: () => {} }).catch(
+      (e) => e
+    );
+    expect(err.code).toBe("HEAT_E_ADMIN_TOKEN_WEAK");
+    expect(err.cause).toBe("HEAT_ADMIN_TOKEN has 11 characters; at least 32 are required");
+    expect(err.cause).not.toContain("short-token");
+  });
+
+  it.each(["", "   \n"])(
+    "fails with HEAT_E_ADMIN_TOKEN_FILE_INVALID (not EEXIST) for a token file %j",
+    async (body) => {
+      const env = sqliteEnv();
+      writeFileSync(path.join(env.HEAT_DATA_DIR, "admin-token"), body);
+      for (const argv of [[], ["token"]]) {
+        const err = await runServer(argv, env, { out: () => {} }).catch((e) => e);
+        expect(err.code).toBe("HEAT_E_ADMIN_TOKEN_FILE_INVALID");
+        expect(err.fix).toContain("rm /data/admin-token");
+      }
+    }
+  );
+
+  it("accepts HEAT_TRUST_PROXY=true and reports bad values as HEAT_E_SERVER_CONFIG, not a database error", async () => {
+    expect(parseTrustProxy("true")).toBe(true);
+    expect(parseTrustProxy("FALSE")).toBe(false);
+    expect(parseTrustProxy("2")).toBe(2);
+    expect(parseTrustProxy("loopback, 10.0.0.0/8")).toEqual(["loopback", "10.0.0.0/8"]);
+    await start({ ...sqliteEnv(), HEAT_TRUST_PROXY: "true" });
+    const err = await runServer([], { ...sqliteEnv(), HEAT_TRUST_PROXY: "yes please" }, { out: () => {} }).catch(
+      (e) => e
+    );
+    expect(err.code).toBe("HEAT_E_SERVER_CONFIG");
+    expect(err.cause).toContain("HEAT_TRUST_PROXY");
   });
 
   it("fails fast with HEAT_E_DB_CONFIG when DATABASE_URL is missing", async () => {

@@ -311,6 +311,26 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The collector could not connect to the database.
 - Fix: Check that the database is running and reachable at the host and port in DATABASE_URL, for example with `docker compose ps postgres`.
 
+## HEAT_E_DB_CONNECTION_LOST
+
+- Message: An idle database connection was closed; the collector reconnects on the next query.
+- Fix: Nothing to do after a database restart. If it repeats, check database health and the network between collector and database (`docker compose ps postgres`).
+
+## HEAT_E_ADMIN_TOKEN_FILE_INVALID
+
+- Message: The admin token file holds no token.
+- Fix: Delete it so a new token is generated on the next start: `docker compose run --rm collector rm /data/admin-token`, then `docker compose up -d` and paste the new token in the dashboard.
+
+## HEAT_E_ADMIN_TOKEN_WEAK
+
+- Message: HEAT_ADMIN_TOKEN is too short to be safe.
+- Fix: Use at least 32 random characters, for example `openssl rand -base64 32`, or unset HEAT_ADMIN_TOKEN to use the generated token.
+
+## HEAT_E_SERVER_CONFIG
+
+- Message: A heat-collector environment variable has an invalid value.
+- Fix: Correct the variable named in the cause; see the heat-collector README for accepted values.
+
 ## HEAT_E_ADMIN_TOKEN_STORE
 
 - Message: The collector could not read or write the admin token file.
@@ -375,6 +395,16 @@ console.log(body.error.message); // "The JWT has expired."
 
 - Message: The dashboard can't reach the collector.
 - Fix: Check that the collector container is running: `docker compose ps`.
+
+## HEAT_E_DASHBOARD_CONTENT_TYPE
+
+- Message: The dashboard session request is not JSON.
+- Fix: Send the token as JSON with `Content-Type: application/json`, for example `{"token":"…"}`.
+
+## HEAT_E_DASHBOARD_ORIGIN
+
+- Message: The dashboard session request came from another site.
+- Fix: Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.
 
 ## HEAT_E_DASHBOARD_FETCH
 

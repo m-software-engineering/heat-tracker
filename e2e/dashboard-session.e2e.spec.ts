@@ -38,11 +38,11 @@ test.afterAll(async () => {
   await new Promise((done) => server.close(done));
 });
 
-const post = (token: string) =>
+const post = (token: string, headers: Record<string, string> = {}) =>
   session.POST(
     new Request(`${DASHBOARD}/api/session`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", origin: DASHBOARD, host: "localhost:3000", ...headers },
       body: JSON.stringify({ token })
     })
   );
@@ -64,9 +64,60 @@ test("the right token goes into an HttpOnly cookie and never back into the respo
   expect(res.status).toBe(200);
   const cookie = res.headers.get("set-cookie")!;
   expect(cookie).toMatch(/^heat_admin=/);
+  expect(cookie).toContain("Path=/");
+  expect(cookie).not.toContain("Secure");
   expect(cookie).toContain("HttpOnly");
   expect(cookie).toContain("SameSite=Strict");
   expect(await res.text()).not.toContain(adminToken);
+});
+
+test("POST /api/session requires JSON and a same-origin Origin, and sets no cookie otherwise", async () => {
+  const form = await post(adminToken, { "content-type": "application/x-www-form-urlencoded" });
+  expect(form.status).toBe(415);
+  expect((await form.json()).error.code).toBe("HEAT_E_DASHBOARD_CONTENT_TYPE");
+  expect(form.headers.get("set-cookie")).toBeNull();
+
+  const crossSite = await post(adminToken, { origin: "https://evil.example" });
+  expect(crossSite.status).toBe(403);
+  expect((await crossSite.json()).error).toMatchObject({
+    code: "HEAT_E_DASHBOARD_ORIGIN",
+    cause: 'Origin "https://evil.example" is not http://localhost:3000'
+  });
+  expect(crossSite.headers.get("set-cookie")).toBeNull();
+
+  const noOrigin = await session.POST(
+    new Request(`${DASHBOARD}/api/session`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: adminToken })
+    })
+  );
+  expect(noOrigin.status).toBe(403);
+  expect(noOrigin.headers.get("set-cookie")).toBeNull();
+});
+
+test("over HTTPS (or HEAT_DASHBOARD_SECURE_COOKIE=true) the cookie is __Host-heat_admin; Secure", async () => {
+  const proxied = await post(adminToken, {
+    origin: "https://dash.example",
+    "x-forwarded-host": "dash.example",
+    "x-forwarded-proto": "https"
+  });
+  expect(proxied.headers.get("set-cookie")).toMatch(
+    /^__Host-heat_admin=.*; Path=\/; HttpOnly; SameSite=Strict; Max-Age=\d+; Secure$/
+  );
+
+  process.env.HEAT_DASHBOARD_SECURE_COOKIE = "true";
+  try {
+    const forced = await post(adminToken);
+    expect(forced.headers.get("set-cookie")).toMatch(/^__Host-heat_admin=.*; Secure$/);
+    // A plain cookie is ignored once secure cookies are on.
+    const plain = await proxy("api/projects/by-key/pk_e2e", `heat_admin=${encodeURIComponent(adminToken)}`);
+    expect(plain.status).toBe(401);
+    const secure = await proxy("api/projects/by-key/pk_e2e", `__Host-heat_admin=${encodeURIComponent(adminToken)}`);
+    expect(secure.status).toBe(200);
+  } finally {
+    delete process.env.HEAT_DASHBOARD_SECURE_COOKIE;
+  }
 });
 
 test("the proxy adds the token, and the project appears after its first ingest", async () => {

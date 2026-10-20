@@ -6,6 +6,7 @@ import {
   errorResponse,
   publicCollectorUrl,
   readAdminToken,
+  rejectUnsafePost,
   unreachableError
 } from "../../../lib/collector-proxy";
 
@@ -30,12 +31,14 @@ export async function GET(request: Request) {
   const body = await probe.json().catch(() => null);
   return Response.json(
     { signedIn: false, ...urls, error: body?.error },
-    { headers: { ...noStore, "Set-Cookie": clearedAdminCookie() } }
+    { headers: { ...noStore, "Set-Cookie": clearedAdminCookie(request) } }
   );
 }
 
 /** POST `{ token }`: checks it against the collector, then stores it in the HttpOnly cookie. */
 export async function POST(request: Request) {
+  const rejected = rejectUnsafePost(request);
+  if (rejected) return rejected;
   const body = await request.json().catch(() => null);
   const token = typeof body?.token === "string" ? body.token.trim() : "";
   const probe = await collectorGet("/api/metrics", token);
@@ -47,6 +50,6 @@ export async function POST(request: Request) {
   return Response.json({ signedIn: true }, { headers: { ...noStore, "Set-Cookie": adminCookie(request, token) } });
 }
 
-export async function DELETE() {
-  return Response.json({ signedIn: false }, { headers: { ...noStore, "Set-Cookie": clearedAdminCookie() } });
+export async function DELETE(request: Request) {
+  return Response.json({ signedIn: false }, { headers: { ...noStore, "Set-Cookie": clearedAdminCookie(request) } });
 }

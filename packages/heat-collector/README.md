@@ -248,6 +248,8 @@ heat-collector token   # prints the admin token again
 | `HEAT_LOG_LEVEL`   | `warn`             | Request logs appear at `info`.                                                                                                        |
 | `HEAT_TRUST_PROXY` | —                  | Express `trust proxy` value when behind a reverse proxy.                                                                              |
 
+A database host that does not resolve fails with `HEAT_E_DB_UNREACHABLE` naming `ENOTFOUND`. A dropped idle Postgres connection (database restart) is logged as `HEAT_E_DB_CONNECTION_LOST` and the pool reconnects on the next query; the process keeps running. An empty `admin-token` file fails with `HEAT_E_ADMIN_TOKEN_FILE_INVALID` (delete it to regenerate).
+
 At startup it prints one block with the dashboard URL, the admin token, and the command to show it again. `/ingest` answers CORS preflights from any origin (ingest stays authenticated by project key); the read API sends no CORS headers.
 
 ## Production migration command
