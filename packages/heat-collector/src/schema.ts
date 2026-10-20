@@ -5,6 +5,7 @@ import * as sqliteCore from "drizzle-orm/sqlite-core";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import type { AnyMySqlTable } from "drizzle-orm/mysql-core";
 import type { AnySQLiteTable } from "drizzle-orm/sqlite-core";
+import { createRollupTable } from "./heatmap-rollup";
 
 export type Dialect = "pg" | "mysql" | "sqlite" | "mongodb";
 
@@ -13,6 +14,7 @@ export type Schema = {
   users: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
   sessions: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
   events: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
+  heatmapRollup: AnyPgTable | AnyMySqlTable | AnySQLiteTable | string;
 };
 
 /** Creates the Drizzle table definitions for the configured storage dialect. */
@@ -22,7 +24,8 @@ export const createSchema = (dialect: Dialect): Schema => {
       projects: "projects",
       users: "users",
       sessions: "sessions",
-      events: "events"
+      events: "events",
+      heatmapRollup: "heatmap_rollup"
     };
   }
 
@@ -82,7 +85,8 @@ export const createSchema = (dialect: Dialect): Schema => {
         x: integer("x"),
         y: integer("y"),
         scrollDepth: integer("scroll_depth"),
-        metaJson: text("meta_json")
+        metaJson: text("meta_json"),
+        viewportBucket: text("viewport_bucket")
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
@@ -96,7 +100,7 @@ export const createSchema = (dialect: Dialect): Schema => {
       })
     );
 
-    return { projects, users, sessions, events };
+    return { projects, users, sessions, events, heatmapRollup: createRollupTable(dialect) };
   }
 
   if (dialect === "mysql") {
@@ -155,7 +159,8 @@ export const createSchema = (dialect: Dialect): Schema => {
         x: int("x"),
         y: int("y"),
         scrollDepth: int("scroll_depth"),
-        metaJson: text("meta_json")
+        metaJson: text("meta_json"),
+        viewportBucket: text("viewport_bucket")
       },
       (table: any) => ({
         projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
@@ -169,7 +174,7 @@ export const createSchema = (dialect: Dialect): Schema => {
       })
     );
 
-    return { projects, users, sessions, events };
+    return { projects, users, sessions, events, heatmapRollup: createRollupTable(dialect) };
   }
 
   const { sqliteTable, text, integer, index } = sqliteCore;
@@ -227,7 +232,8 @@ export const createSchema = (dialect: Dialect): Schema => {
       x: integer("x"),
       y: integer("y"),
       scrollDepth: integer("scroll_depth"),
-      metaJson: text("meta_json")
+      metaJson: text("meta_json"),
+      viewportBucket: text("viewport_bucket")
     },
     (table: any) => ({
       projectPathTsIdx: index("events_project_path_ts_idx").on(table.projectId, table.path, table.ts),
@@ -241,7 +247,7 @@ export const createSchema = (dialect: Dialect): Schema => {
     })
   );
 
-  return { projects, users, sessions, events };
+  return { projects, users, sessions, events, heatmapRollup: createRollupTable(dialect) };
 };
 
 /** Builds the idempotent table-creation statements for a SQL dialect. */
@@ -284,7 +290,8 @@ export const buildCreateTableSql = (dialect: Dialect) => {
         x INTEGER,
         y INTEGER,
         scroll_depth INTEGER,
-        meta_json TEXT
+        meta_json TEXT,
+        viewport_bucket TEXT
       );`
     };
   }
@@ -328,7 +335,8 @@ export const buildCreateTableSql = (dialect: Dialect) => {
       x INT,
       y INT,
       scroll_depth INT,
-      meta_json TEXT
+      meta_json TEXT,
+      viewport_bucket VARCHAR(32)
     );`
   };
 };
@@ -346,3 +354,11 @@ export const buildCreateIndexSql = (dialect: Dialect) => {
   }
   return sql.raw(`CREATE INDEX IF NOT EXISTS ${HEATMAP_INDEX} ON events (project_id, path, type, ts)`);
 };
+
+/** Adds `events.viewport_bucket` (#26) to tables created before it existed; callers ignore "duplicate column". */
+export const buildAddViewportBucketSql = (dialect: Dialect) =>
+  sql.raw(
+    dialect === "pg"
+      ? "ALTER TABLE events ADD COLUMN IF NOT EXISTS viewport_bucket TEXT"
+      : `ALTER TABLE events ADD COLUMN viewport_bucket ${dialect === "mysql" ? "VARCHAR(32)" : "TEXT"}`
+  );

@@ -120,6 +120,11 @@ export const heatmapQuerySchema = z.object({
   viewportBucket: z
     .string()
     .regex(/^[1-9]\d{0,4}x[1-9]\d{0,4}$/, "expected <width>x<height> in CSS pixels, e.g. 1440x900")
+    .optional(),
+  // Only events stored with this bucket are counted (and it sets the grid like viewportBucket).
+  viewport: z
+    .string()
+    .regex(/^[1-9]\d{0,4}x[1-9]\d{0,4}$/, "expected <width>x<height> in CSS pixels, e.g. 390x800")
     .optional()
 });
 

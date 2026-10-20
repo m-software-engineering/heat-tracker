@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createCollector } from "./collector";
 import { autoMigrate, createDb } from "./db";
-import { pickBucket } from "./heatmap";
+import { pickBucket } from "./viewport-bucket";
 import { HEATMAP_INDEX } from "./schema";
 
 const KEY = "heatmap-key";

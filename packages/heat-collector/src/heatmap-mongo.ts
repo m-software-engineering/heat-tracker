@@ -1,16 +1,22 @@
 import type { DbContext } from "./db";
 import type { HeatmapBackend, HeatmapFilter, HeatmapGrid } from "./heatmap-types";
-import { safeParseMetaJson } from "./meta-json";
 
 const match = (filter: HeatmapFilter) => {
   const query: Record<string, unknown> = { projectId: filter.projectId, ts: { $gte: filter.from, $lte: filter.to } };
   if (filter.type !== "all") query.type = filter.type;
   if (filter.path) query.path = filter.path;
+  if (filter.viewport) query.viewportBucket = filter.viewport;
   return query;
 };
 
-// Documents omit absent coordinates, so non-numeric x/y are skipped (the old path's NaN check).
+// Documents omit absent coordinates; rows without a position are skipped, as in the SQL backend.
 const isScroll = { $and: [{ $eq: ["$type", "scroll"] }, { $gt: ["$scrollDepth", null] }] };
+const positioned = { $or: [isScroll, { $and: [{ $isNumber: "$x" }, { $isNumber: "$y" }] }] };
+
+const countBy = async (events: any, query: Record<string, unknown>, field: string) => {
+  const rows = await events.aggregate([{ $match: query }, { $group: { _id: field, count: { $sum: 1 } } }]).toArray();
+  return Object.fromEntries(rows.map((row: any) => [String(row._id ?? ""), row.count]));
+};
 
 const bucketOf = (value: unknown, size: number, max: number) => ({
   $min: [max, { $max: [0, { $floor: { $divide: [value, size] } }] }]
@@ -20,36 +26,37 @@ export const aggregateMongo = (ctx: DbContext): HeatmapBackend => {
   const events = ctx.db.collection("events");
 
   return {
-    typeCounts: async (filter) => {
-      const rows = await events
-        .aggregate([{ $match: match(filter) }, { $group: { _id: "$type", count: { $sum: 1 } } }])
-        .toArray();
-      return Object.fromEntries(rows.map((row: any) => [String(row._id ?? "unknown"), row.count]));
+    typeCounts: (filter) => countBy(events, match(filter), "$type"),
+
+    bucketCounts: (filter) => countBy(events, match(filter), "$viewportBucket"),
+
+    noCoordinates: async (filter) => {
+      const query: Record<string, unknown> = { ...match(filter), $expr: { $not: [positioned] } };
+      if (filter.type === "all") query.type = { $in: ["click", "move", "scroll"] };
+      else if (!["click", "move", "scroll"].includes(filter.type)) return 0;
+      return events.countDocuments(query);
     },
 
     maxY: async (filter) => {
       const rows = await events
         .aggregate([
-          { $match: match(filter) },
-          { $group: { _id: null, maxY: { $max: { $cond: [isScroll, null, "$y"] } } } }
+          { $match: { ...match(filter), $expr: { $and: [positioned, { $not: [isScroll] }] } } },
+          { $group: { _id: null, maxY: { $max: "$y" } } }
         ])
         .toArray();
       return typeof rows[0]?.maxY === "number" ? rows[0].maxY : null;
     },
 
-    // Mongo stores meta as a JSON string the pipeline cannot parse, so the sampled viewports are
-    // parsed in Node from a projected cursor, one document at a time.
-    viewportGroups: async (filter, limit, visit) => {
-      const cursor = events
-        .find(match(filter), { projection: { _id: 0, metaJson: 1 } })
-        .sort({ ts: -1 })
-        .limit(limit);
-      for await (const doc of cursor) {
-        const meta = safeParseMetaJson(doc.metaJson);
-        const nested = meta.meta as Record<string, unknown> | undefined;
-        const viewport = meta.viewport as Record<string, unknown> | undefined;
-        visit({ explicit: nested?.viewportBucket, w: viewport?.w, h: viewport?.h, count: 1 });
-      }
+    recentBuckets: async (filter, limit) => {
+      const rows = await events
+        .aggregate([
+          { $match: match(filter) },
+          { $sort: { ts: -1 } },
+          { $limit: limit },
+          { $group: { _id: "$viewportBucket", count: { $sum: 1 } } }
+        ])
+        .toArray();
+      return Object.fromEntries(rows.map((row: any) => [String(row._id ?? ""), row.count]));
     },
 
     buckets: async (filter, grid: HeatmapGrid) => {

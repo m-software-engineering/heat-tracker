@@ -9,13 +9,13 @@ import { createCollector } from "./collector";
 import type { DbAdapterConfig } from "./db";
 import { goldenPayloads, goldenQueries } from "./__fixtures__/heatmap-fixture";
 
-// The golden file was recorded from the pre-#26 in-Node aggregation. SQL rows carry NULL
-// coordinates (counted at 0,0) while Mongo documents omit them (skipped), hence two families.
+// One recording for every database: events without a position are skipped everywhere (#26).
+// Points were first recorded from the pre-#26 in-Node aggregation; only the no-position rows differ.
 const GOLDEN_FILE = path.join(__dirname, "__fixtures__", "heatmap-golden.json");
 const golden = JSON.parse(readFileSync(GOLDEN_FILE, "utf8")) as Record<string, Record<string, unknown>>;
 const record = process.env.HEAT_GOLDEN_RECORD;
 
-type Target = { name: string; family: "sql" | "mongo"; db: () => Promise<DbAdapterConfig> };
+type Target = { name: string; db: () => Promise<DbAdapterConfig> };
 const KEY = "golden-key";
 
 const openMongo = async (url: string) => {
@@ -30,7 +30,6 @@ const openMongo = async (url: string) => {
 const targets: Target[] = [
   {
     name: "sqlite",
-    family: "sql",
     db: async () => {
       const client = new Database(path.join(mkdtempSync(path.join(tmpdir(), "heat-golden-")), "g.db"));
       return { dialect: "sqlite", client };
@@ -41,11 +40,10 @@ const targets: Target[] = [
 if (process.env.HEAT_TEST_PG_URL) {
   targets.push({
     name: "pg",
-    family: "sql",
     db: async () => {
       const { Pool } = await import("pg");
       const client = new Pool({ connectionString: process.env.HEAT_TEST_PG_URL });
-      await client.query("DROP TABLE IF EXISTS events, sessions, users, projects");
+      await client.query("DROP TABLE IF EXISTS events, sessions, users, projects, heatmap_rollup");
       return { dialect: "pg", client };
     }
   });
@@ -54,11 +52,10 @@ if (process.env.HEAT_TEST_PG_URL) {
 if (process.env.HEAT_TEST_MYSQL_URL) {
   targets.push({
     name: "mysql",
-    family: "sql",
     db: async () => {
       const mysql = await import("mysql2/promise");
       const client = mysql.createPool(process.env.HEAT_TEST_MYSQL_URL || "");
-      await client.query("DROP TABLE IF EXISTS events, sessions, users, projects");
+      await client.query("DROP TABLE IF EXISTS events, sessions, users, projects, heatmap_rollup");
       return { dialect: "mysql", client };
     }
   });
@@ -68,7 +65,6 @@ const mongoClients: Array<{ close: () => Promise<void> }> = [];
 if (process.env.HEAT_TEST_MONGO_URL) {
   targets.push({
     name: "mongodb",
-    family: "mongo",
     db: async () => {
       const { client, db } = await openMongo(process.env.HEAT_TEST_MONGO_URL || "");
       mongoClients.push(client);
@@ -113,10 +109,10 @@ describe.each(targets)("heatmap golden ($name)", (target) => {
     }
 
     if (record) {
-      golden[target.family] = results;
+      golden.all = results;
       writeFileSync(GOLDEN_FILE, `${JSON.stringify(golden, null, 2)}\n`);
     }
-    expect(results).toEqual(golden[target.family]);
+    expect(results).toEqual(golden.all);
   }, 60_000);
 });
 
