@@ -66,6 +66,16 @@ describe("admin token on the read API", () => {
     expect(JSON.stringify(res.body)).not.toContain(TOKEN);
   });
 
+  it("treats a non-Bearer Authorization header as missing and accepts any Bearer casing", async () => {
+    const app = await createApp({ admin: { token: TOKEN } });
+    const basic = await request(app).get("/api/metrics").set("Authorization", "Basic abc").expect(401);
+    expect(basic.body.error).toMatchObject({
+      code: "HEAT_E_ADMIN_TOKEN_MISSING",
+      cause: "header Authorization is not of the form Bearer <token>"
+    });
+    await request(app).get("/api/metrics").set("Authorization", `bearer   ${TOKEN}`).expect(200);
+  });
+
   it("serves the read API with the right token", async () => {
     const app = await createApp({ admin: { token: TOKEN } });
     await request(app).get("/api/metrics").set("Authorization", `Bearer ${TOKEN}`).expect(200);
