@@ -10,9 +10,24 @@ const listen = (app: express.Express) =>
   new Promise<{ port: number; close: () => Promise<void> }>((resolve) => {
     const server = app.listen(0, () => {
       const port = (server.address() as { port: number }).port;
-      resolve({ port, close: () => new Promise((done) => server.close(() => done())) });
+      resolve({
+        port,
+        close: () =>
+          new Promise((done) => {
+            server.close(() => done());
+            // /hang requests never finish on their own.
+            server.closeAllConnections();
+          })
+      });
     });
   });
+
+/** An origin with nothing listening: bind a port, then release it. */
+const deadOrigin = async () => {
+  const server = await listen(express());
+  await server.close();
+  return `http://127.0.0.1:${server.port}`;
+};
 
 /** Bundles the dashboard test harness (React + PageHeatmap) once per run with tsup. */
 export const bundleHarness = async () => {
@@ -66,20 +81,23 @@ export const startOverlayStack = async () => {
   site.get("/blocked", (_req, res) =>
     res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(SITE_PAGE)
   );
+  // Never answers: the frame check times out and the iframe never loads.
+  site.get("/hang", () => {});
   site.use("/sdk", express.static(path.resolve(__dirname, "../../packages/heat-sdk/dist")));
   site.use(collector.router);
   const siteServer = await listen(site);
   const siteOrigin = `http://127.0.0.1:${siteServer.port}`;
+  const downOrigin = await deadOrigin();
 
   const dashboard = express();
   const css = readFileSync(path.resolve(__dirname, "../../examples/nextjs-dashboard/app/globals.css"), "utf8");
   dashboard.get("/harness.js", (_req, res) => res.type("js").send(bundle));
   dashboard.get("/globals.css", (_req, res) => res.type("css").send(css));
   dashboard.get("/api/frame-check", async (req, res) => {
-    res.json(await checkFrame(String(req.query.url), String(req.query.origin), [siteOrigin]));
+    res.json(await checkFrame(String(req.query.url), String(req.query.origin), [siteOrigin, downOrigin]));
   });
   dashboard.get("/api/frame-check-slow", (_req, res) => {
-    setTimeout(() => res.json({ blocked: false, reason: "too late" }), 4_000).unref();
+    setTimeout(() => res.json({ verified: true, blocked: false, detail: "too late" }), 4_000).unref();
   });
   // Static page: the harness reads project/path from location.search; only server-known values are injected.
   const page =
@@ -92,7 +110,8 @@ export const startOverlayStack = async () => {
       .type("js")
       .send(
         `window.__SITE_ORIGIN__ = ${JSON.stringify(siteOrigin)};` +
-          `window.__UNLISTED_ORIGIN__ = ${JSON.stringify(`http://localhost:${siteServer.port}`)};`
+          `window.__UNLISTED_ORIGIN__ = ${JSON.stringify(`http://localhost:${siteServer.port}`)};` +
+          `window.__DOWN_ORIGIN__ = ${JSON.stringify(downOrigin)};`
       )
   );
   dashboard.use(collector.router);

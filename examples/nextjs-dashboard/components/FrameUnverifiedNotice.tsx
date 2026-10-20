@@ -1,19 +1,14 @@
-import { DASHBOARD_ERRORS, createHeatError } from "@m-software-engineering/heat-errors";
+import { DASHBOARD_ERRORS } from "@m-software-engineering/heat-errors";
 
-type Props = { reason: string };
-
-/** HEAT_E_FRAME_CHECK_UNVERIFIED: no framing verdict, so the page is not loaded (fail closed). */
-export default function FrameUnverifiedNotice({ reason }: Props) {
-  const error = createHeatError(DASHBOARD_ERRORS.HEAT_E_FRAME_CHECK_UNVERIFIED, reason);
+/**
+ * HEAT_E_FRAME_CHECK_INCONCLUSIVE: the server could not check framing (timeout or unreachable site), so the page
+ * is loaded anyway (fail open) and the browser decides. Shown only until the frame loads or falls back to blocked.
+ */
+export default function FrameUnverifiedNotice() {
+  const error = DASHBOARD_ERRORS.HEAT_E_FRAME_CHECK_INCONCLUSIVE;
   return (
-    <div role="alert" className="ph-alert" data-code={error.code} data-testid="frame-unverified">
-      <strong>{error.code}</strong>
-      <p>{error.message}</p>
-      <p>Cause: {error.cause}.</p>
-      <p>Fix: {error.fix}</p>
-      <a href={error.docs} target="_blank" rel="noreferrer">
-        Read the docs for {error.code}
-      </a>
-    </div>
+    <p role="status" className="ph-note" data-code={error.code} data-testid="frame-unverified">
+      {error.message}
+    </p>
   );
 }

@@ -297,6 +297,11 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The dashboard could not verify that this site may be shown in a frame, so the page is not loaded.
 - Fix: Check that the dashboard server can reach the site and that the site responds within 3 seconds, then reload this page.
 
+## HEAT_E_FRAME_CHECK_INCONCLUSIVE
+
+- Message: We couldn't check whether this site allows framing. If the page stays blank, the site likely blocks it.
+- Fix: Check that the dashboard server can reach the site and that the site responds within 2.5 seconds, then reload this page.
+
 ## HEAT_E_FRAME_ORIGIN_INVALID
 
 - Message: An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.

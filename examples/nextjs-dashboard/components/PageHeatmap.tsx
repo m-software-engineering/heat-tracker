@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { HeatError } from "@m-software-engineering/heat-errors";
 import { fetchHeatmap, type HeatmapResponse } from "../lib/api";
-import type { FrameVerdict } from "../lib/frame-policy";
+import { isInconclusive, type FrameVerdict } from "../lib/frame-policy";
 import { renderHeatmap } from "../lib/heatmap-render";
 import { topAreas } from "../lib/top-areas";
 import {
@@ -16,6 +16,7 @@ import {
   type ViewState
 } from "../lib/view-state";
 import FrameBlockedNotice from "./FrameBlockedNotice";
+import FrameCheckFailedNotice from "./FrameCheckFailedNotice";
 import FrameUnverifiedNotice from "./FrameUnverifiedNotice";
 import HeatmapControls from "./HeatmapControls";
 import HeatmapLegend from "./HeatmapLegend";
@@ -30,10 +31,14 @@ type Props = {
   path: string;
   /** Server route that reads the site's framing headers (see app/api/frame-check). */
   frameCheckUrl?: string;
+  /** After an inconclusive check, how long the frame may take to load before the blocked state is shown. */
+  frameLoadTimeoutMs?: number;
 };
 
 const DAY_MS = 86_400_000;
 const FRAME_CHECK_BUDGET_MS = 3_000;
+/** Inconclusive check: a frame that has not loaded by then is treated as blocked. */
+export const FRAME_LOAD_TIMEOUT_MS = 8_000;
 
 const useViewState = () => {
   const [state, setState] = useState<ViewState>(() =>
@@ -63,11 +68,12 @@ const useFrameVerdict = (pageUrl: string, frameCheckUrl: string) => {
     fetch(`${frameCheckUrl}?${query}`, { signal: controller.signal })
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`frame check returned ${res.status}`))))
       .then((body: FrameVerdict) => active && setVerdict(body))
-      // No verdict (timeout, error): fail closed and do not load the page.
+      // The dashboard's own route gave no answer (client budget, error): fail closed and do not load the page.
+      // A slow or unreachable site is reported by the route itself as inconclusive (fail open).
       .catch((err: Error) => {
         if (!active) return;
-        const reason = controller.signal.aborted ? "frame check timed out" : err.message || "frame check failed";
-        setVerdict({ blocked: false, verified: false, reason });
+        const detail = controller.signal.aborted ? "frame check timed out" : err.message || "frame check failed";
+        setVerdict({ verified: false, blocked: false, reason: "check-failed", detail });
       })
       .finally(() => clearTimeout(timer));
     return () => {
@@ -83,7 +89,8 @@ export default function PageHeatmap({
   projectId,
   siteOrigin,
   path,
-  frameCheckUrl = "/api/frame-check"
+  frameCheckUrl = "/api/frame-check",
+  frameLoadTimeoutMs = FRAME_LOAD_TIMEOUT_MS
 }: Props) {
   const [state, update] = useViewState();
   const [data, setData] = useState<HeatmapResponse | null>(null);
@@ -96,9 +103,13 @@ export default function PageHeatmap({
 
   const pageUrl = siteOrigin ? new URL(path, siteOrigin).toString() : "";
   const verdict = useFrameVerdict(pageUrl, frameCheckUrl);
-  const notAllowed = verdict?.allowed === false;
-  const unverified = verdict?.verified === false;
-  const framed = Boolean(pageUrl) && verdict?.blocked === false && !notAllowed && !unverified;
+  const inconclusive = verdict !== null && isInconclusive(verdict);
+  // Inconclusive check and the frame did not load in time: most likely blocked by the browser.
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
+  const notAllowed = verdict?.verified === false && verdict.reason === "not-allowed";
+  const refused = verdict?.verified === false && !inconclusive && !notAllowed;
+  const blocked = verdict?.blocked === true || (inconclusive && loadTimedOut);
+  const framed = Boolean(pageUrl) && (verdict?.verified === true || inconclusive) && !blocked;
   // Bucket counts ignore the viewport filter, so the last response always has every option's count.
   const [buckets, setBuckets] = useState<BucketCount[] | null>(null);
   const options = useMemo(() => (buckets ? viewportOptions(buckets) : null), [buckets]);
@@ -107,6 +118,17 @@ export default function PageHeatmap({
   const chosen = state.viewport ? options?.find((o) => o.viewport === state.viewport) : busiest;
   // The whole class is filtered; the busiest bucket goes first, so it sets the frame width.
   const filterBucket = chosen && chosen.count > 0 ? chosen.buckets.join(",") : undefined;
+
+  useEffect(() => {
+    setFrameLoaded(false);
+    setLoadTimedOut(false);
+  }, [pageUrl]);
+
+  useEffect(() => {
+    if (!inconclusive || frameLoaded) return;
+    const timer = setTimeout(() => setLoadTimedOut(true), frameLoadTimeoutMs);
+    return () => clearTimeout(timer);
+  }, [inconclusive, frameLoaded, frameLoadTimeoutMs]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -203,8 +225,18 @@ export default function PageHeatmap({
         </div>
       )}
       {notAllowed && <SiteNotAllowedNotice siteOrigin={new URL(siteOrigin).origin} />}
-      {unverified && <FrameUnverifiedNotice reason={verdict.reason} />}
-      {verdict?.blocked && <FrameBlockedNotice reason={verdict.reason} dashboardOrigin={window.location.origin} />}
+      {refused && <FrameCheckFailedNotice reason={verdict.detail} />}
+      {inconclusive && !blocked && <FrameUnverifiedNotice />}
+      {blocked && verdict && (
+        <FrameBlockedNotice
+          reason={
+            verdict.verified
+              ? verdict.detail
+              : `the page did not load within ${frameLoadTimeoutMs / 1000} s after ${verdict.detail}`
+          }
+          dashboardOrigin={window.location.origin}
+        />
+      )}
       <TopAreasTable areas={areas} visible={state.view === "table"} caption={summary} />
       <div
         className="ph-scroller"

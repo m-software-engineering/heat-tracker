@@ -17,6 +17,11 @@ export const DASHBOARD_ERRORS = {
     message: "The dashboard could not verify that this site may be shown in a frame, so the page is not loaded.",
     fix: "Check that the dashboard server can reach the site and that the site responds within 3 seconds, then reload this page."
   },
+  HEAT_E_FRAME_CHECK_INCONCLUSIVE: {
+    code: "HEAT_E_FRAME_CHECK_INCONCLUSIVE",
+    message: "We couldn't check whether this site allows framing. If the page stays blank, the site likely blocks it.",
+    fix: "Check that the dashboard server can reach the site and that the site responds within 2.5 seconds, then reload this page."
+  },
   HEAT_E_FRAME_ORIGIN_INVALID: {
     code: "HEAT_E_FRAME_ORIGIN_INVALID",
     message: "An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.",
