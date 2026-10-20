@@ -8,7 +8,7 @@ import {
   createSchema
 } from "./schema";
 import { migrateHeatmapMongo, migrateHeatmapSql } from "./heatmap-migrate";
-import { buildCreatePagesIndexSql, buildCreatePagesSql } from "./pages-sql";
+import { buildCreatePagesIndexSql, buildCreatePagesSql } from "./pages-schema";
 
 export type DbAdapterConfig =
   | {
