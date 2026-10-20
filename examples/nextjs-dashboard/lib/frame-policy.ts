@@ -90,7 +90,11 @@ export const checkFrame = async (
     // Not checkable: show the frame and let the browser decide.
     return { blocked: false, reason: "site origin is not in HEAT_DASHBOARD_SITE_ORIGINS, so framing was not checked" };
   }
-  const url = new URL(new URL(siteUrl).pathname + new URL(siteUrl).search, origin);
+  // Host comes only from the allowlist; path and query are copied onto it so "//other-host" cannot redirect the fetch.
+  const requested = new URL(siteUrl);
+  const url = new URL(origin);
+  url.pathname = requested.pathname;
+  url.search = requested.search;
   try {
     const res = await fetch(url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(timeoutMs) });
     await res.body?.cancel();
