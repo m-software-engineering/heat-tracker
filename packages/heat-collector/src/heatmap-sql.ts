@@ -1,5 +1,6 @@
 import { and, desc, eq, gte, inArray, lte, sql, type SQL } from "drizzle-orm";
 import type { DbContext } from "./db";
+import { catchUpRollup } from "./heatmap-migrate";
 import { ROLLUP_HOUR_MS } from "./heatmap-rollup";
 import type { HeatmapBackend, HeatmapFilter, HeatmapGrid } from "./heatmap-types";
 
@@ -109,8 +110,11 @@ export const aggregateSql = (ctx: DbContext): HeatmapBackend => {
   const mayContainScroll = (filter: HeatmapFilter) => filter.type === "all" || filter.type === "scroll";
 
   // Runs `query` on every part of the range and returns the per-part results.
-  const across = <T>(filter: HeatmapFilter, query: (source: Source, part: HeatmapFilter) => Promise<T>) => {
-    const parts = splitRange(filter);
+  // Once per request (one backend per request): count pending rows first, or read raw if some remain.
+  let ready: Promise<boolean> | undefined;
+  const across = async <T>(filter: HeatmapFilter, query: (source: Source, part: HeatmapFilter) => Promise<T>) => {
+    ready ??= catchUpRollup(ctx, filter.projectId);
+    const parts = (await ready) ? splitRange(filter) : { raw: [filter], rollup: undefined };
     return Promise.all([
       ...parts.raw.map((part) => query(raw, part)),
       ...(parts.rollup ? [query(rollup, parts.rollup)] : [])

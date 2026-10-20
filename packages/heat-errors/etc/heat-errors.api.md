@@ -325,6 +325,11 @@ export const SERVER_ERRORS: {
         readonly message: "The database config has neither a connection string nor a client.";
         readonly fix: "Pass db.connectionString or db.client to createCollector().";
     };
+    readonly HEAT_E_ROLLUP_CATCH_UP: {
+        readonly code: "HEAT_E_ROLLUP_CATCH_UP";
+        readonly message: "The collector could not count new events into the heatmap rollup; heatmaps read raw events until it can.";
+        readonly fix: "Check database connectivity and permissions on events and heatmap_rollup; the next catch-up retries automatically.";
+    };
     readonly HEAT_E_DB_EXECUTE: {
         readonly code: "HEAT_E_DB_EXECUTE";
         readonly message: "The database client cannot run raw SQL statements.";

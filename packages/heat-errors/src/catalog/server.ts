@@ -7,6 +7,11 @@ export const SERVER_ERRORS = {
     message: "The database config has neither a connection string nor a client.",
     fix: "Pass db.connectionString or db.client to createCollector()."
   },
+  HEAT_E_ROLLUP_CATCH_UP: {
+    code: "HEAT_E_ROLLUP_CATCH_UP",
+    message: "The collector could not count new events into the heatmap rollup; heatmaps read raw events until it can.",
+    fix: "Check database connectivity and permissions on events and heatmap_rollup; the next catch-up retries automatically."
+  },
   HEAT_E_DB_EXECUTE: {
     code: "HEAT_E_DB_EXECUTE",
     message: "The database client cannot run raw SQL statements.",

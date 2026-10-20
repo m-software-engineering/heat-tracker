@@ -156,6 +156,7 @@ A JWKS download failure now returns HTTP 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with
 - Whole hours are read from the `heatmap_rollup` table, which ingest keeps up to date and `autoMigrate` builds from existing events (MongoDB reads events directly).
 - Without `viewportBucket`, the viewport is the most common bucket among the 10,000 most recent matching events. `viewportBucket` must look like `1440x900`; anything else returns 400 `HEAT_E_QUERY_INVALID` naming the param.
 - `autoMigrate` adds the `events_project_path_type_ts_idx` index (project, path, type, ts), the `events.viewport_bucket` and `events.rollup_state` columns and the `heatmap_rollup` table, and counts older rows into it (safe to run while ingesting, and on several instances at once).
+- Rolling upgrades: an older collector still running next to an upgraded one writes events without counting them (`rollup_state` stays NULL). Before a heatmap read, the collector counts up to 10,000 such rows for that project; if more remain, it reads the whole range from raw events instead, so results stay correct. A background catch-up (`heatmap.rollupCatchUpIntervalMs`, default 60000, `0` disables) counts the rest. Call `collector.close()` to stop it.
 - Scroll events are projected vertically from scroll depth percentage into the active render height, so scroll hotspots line up better with long-page behavior.
 
 ## Configuration

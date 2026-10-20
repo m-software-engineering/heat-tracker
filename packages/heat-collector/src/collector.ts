@@ -14,11 +14,18 @@ import {
 import { verifyJwt, type JwtConfig } from "./jwt";
 import { aggregateHeatmap } from "./heatmap";
 import { insertEventsWithRollup, ROLLUP_HOUR_MS } from "./heatmap-rollup";
+import { backfillRollup, CATCH_UP_BATCHES } from "./heatmap-migrate";
 import { storedBucket } from "./viewport-bucket";
 
 const DEFAULT_HEATMAP_WINDOW_MS = 7 * 24 * ROLLUP_HOUR_MS;
 import type { EventQueryType } from "./heatmap-types";
-import { HeatTrackerError, INGEST_ERRORS, QUERY_ERRORS, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
+import {
+  createHeatError,
+  HeatTrackerError,
+  INGEST_ERRORS,
+  QUERY_ERRORS,
+  SERVER_ERRORS
+} from "@m-software-engineering/heat-errors";
 import { fieldErrors, payloadCause, queryCause, resolveRequestId, sendError } from "./http-errors";
 
 export type AuthConfig = { mode: "projectKey" } | ({ mode: "jwt" } & JwtConfig) | ({ mode: "both" } & JwtConfig);
@@ -27,6 +34,13 @@ export type CollectorConfig = {
   db: DbAdapterConfig;
   auth: AuthConfig;
   autoMigrate?: boolean;
+  heatmap?: {
+    /**
+     * How often to count rows written with `rollup_state` NULL (an older collector during a rolling
+     * upgrade) into the rollup. Default 60000 ms; 0 disables (heatmap reads still catch up).
+     */
+    rollupCatchUpIntervalMs?: number;
+  };
   ingestion?: {
     maxBodyBytes?: number;
     rateLimit?: { windowMs: number; max: number };
@@ -47,6 +61,8 @@ export type Collector = {
    * after it keep working; mount it last: `app.use(collector.notFoundHandler)`.
    */
   notFoundHandler: express.RequestHandler;
+  /** Stops background work (the rollup catch-up timer). The database client stays open. */
+  close: () => void;
 };
 
 type RequestWithContext = Request & { requestId?: string; startedAtMs?: number };
@@ -605,7 +621,20 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     );
   };
 
-  return { router, ingestRouter, apiRouter, metrics, notFoundHandler };
+  const catchUpMs = config.heatmap?.rollupCatchUpIntervalMs ?? 60_000;
+  const catchUpTimer =
+    dbContext.dialect !== "mongodb" && catchUpMs > 0
+      ? setInterval(() => {
+          backfillRollup(dbContext, { maxBatches: CATCH_UP_BATCHES * 5 }).catch((err) => {
+            const error = createHeatError(SERVER_ERRORS.HEAT_E_ROLLUP_CATCH_UP, "periodic catch-up failed");
+            logger.warn(error.message, { code: error.code, cause: error.cause, err: String(err?.code ?? err?.name) });
+          });
+        }, catchUpMs)
+      : undefined;
+  catchUpTimer?.unref();
+  const close = () => clearInterval(catchUpTimer);
+
+  return { router, ingestRouter, apiRouter, metrics, notFoundHandler, close };
 };
 
 const ensureProjectAndUser = async (

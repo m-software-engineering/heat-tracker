@@ -59,9 +59,11 @@ const pgTarget = (): Target => {
 };
 
 afterAll(async () => {
+  for (const collector of collectors) collector.close();
   await Promise.all(pools.map((pool) => pool.end()));
 });
 
+const collectors: Array<{ close: () => void }> = [];
 const targets = [sqliteTarget, ...(process.env.HEAT_TEST_PG_URL ? [pgTarget] : [])];
 
 const click = (i: number) => ({
@@ -76,9 +78,15 @@ const click = (i: number) => ({
   y: 10
 });
 
-const setup = async (target: Target) => {
+const setup = async (target: Target, catchUpMs = 0) => {
   const config = await target.config();
-  const collector = await createCollector({ db: config, auth: { mode: "projectKey" }, logging: { level: "error" } });
+  const collector = await createCollector({
+    db: config,
+    auth: { mode: "projectKey" },
+    logging: { level: "error" },
+    heatmap: { rollupCatchUpIntervalMs: catchUpMs }
+  });
+  collectors.push(collector);
   const app = express();
   app.use(collector.router);
   const ingest = (events: any[]) =>
@@ -86,7 +94,7 @@ const setup = async (target: Target) => {
       .post("/ingest")
       .set("x-project-key", KEY)
       .send({ session: { id: "s1", startedAt: T0, lastSeenAt: T0 }, events });
-  return { app, config, ingest };
+  return { app, config, ingest, collector };
 };
 
 const totals = async (target: Target) => {
@@ -141,4 +149,61 @@ describe.each(targets.map((make) => [make().name, make] as const))("rollup safet
     const [pending] = await target.query("select count(*) as n from events where rollup_state is null");
     expect(Number(pending.n)).toBe(0);
   }, 60_000);
+
+  // Rolling upgrade: an older collector keeps writing rows (rollup_state NULL) after the migration.
+  const insertOld = async (target: Target, projectId: string, prefix: string, count: number, ts: number) => {
+    for (let start = 0; start < count; start += 1000) {
+      const n = Math.min(1000, count - start);
+      const values = Array.from(
+        { length: n },
+        (_, k) => `('${prefix}-${start + k}', '${projectId}', 's1', 'click', ${ts}, '/late', 10, 10, '{}')`
+      );
+      await target.query(
+        `insert into events (id, project_id, session_id, type, ts, path, x, y, meta_json) values ${values.join(",")}`
+      );
+    }
+  };
+  const hourWindow = {
+    path: "/late",
+    type: "click",
+    from: T0 - (T0 % 3_600_000),
+    to: T0 - (T0 % 3_600_000) + 3_600_000 - 1
+  };
+
+  it("counts rows written after the migration before a whole-hour read", async () => {
+    const target = make();
+    const { app, ingest } = await setup(target);
+    await ingest([click(0)]).expect(200);
+    const [{ id: projectId }] = await target.query("select id from projects");
+    await insertOld(target, projectId, "late", 100, T0 + 10);
+
+    const res = await request(app).get(`/api/projects/${projectId}/heatmap`).query(hourWindow).expect(200);
+
+    expect(res.body.meta.total).toBe(100);
+    expect(await totals(target)).toEqual({ events: 101, rollup: 101 });
+  });
+
+  it("reads raw events while more pending rows remain than one catch-up counts", async () => {
+    const target = make();
+    const { app, ingest } = await setup(target);
+    await ingest([click(0)]).expect(200);
+    const [{ id: projectId }] = await target.query("select id from projects");
+    await insertOld(target, projectId, "bulk", 12_000, T0 + 10); // > CATCH_UP_BATCHES × 5000
+
+    const res = await request(app).get(`/api/projects/${projectId}/heatmap`).query(hourWindow).expect(200);
+
+    expect(res.body.meta.total).toBe(12_000);
+    const [pending] = await target.query("select count(*) as n from events where rollup_state is null");
+    expect(Number(pending.n)).toBe(2000);
+  }, 60_000);
+
+  it("catches up on a timer without any heatmap read", async () => {
+    const target = make();
+    const { ingest } = await setup(target, 50);
+    await ingest([click(0)]).expect(200);
+    const [{ id: projectId }] = await target.query("select id from projects");
+    await insertOld(target, projectId, "timer", 30, T0 + 10);
+
+    await expect.poll(() => totals(target), { timeout: 5000 }).toEqual({ events: 31, rollup: 31 });
+  });
 });
