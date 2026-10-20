@@ -55,6 +55,19 @@ jobs:
         id: build
         run: pnpm build
 
+      - name: Detect pending changesets
+        id: pending
+        run: |
+          if find .changeset -maxdepth 1 -name '*.md' ! -name 'README.md' | grep -q .; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preflight npm publishability
+        if: ${{ steps.pending.outputs.has_changesets == 'false' }}
+        run: node scripts/check-npm-publishable.mjs
+
       - name: Publish with Changesets
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
