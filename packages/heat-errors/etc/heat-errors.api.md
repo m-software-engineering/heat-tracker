@@ -34,6 +34,11 @@ export const DASHBOARD_ERRORS: {
         readonly message: "An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.";
         readonly fix: "List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin.";
     };
+    readonly HEAT_E_COLLECTOR_UNREACHABLE: {
+        readonly code: "HEAT_E_COLLECTOR_UNREACHABLE";
+        readonly message: "The dashboard can't reach the collector.";
+        readonly fix: "Check that the collector container is running: `docker compose ps`.";
+    };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";
         readonly message: "The dashboard could not read heatmap data from the collector.";

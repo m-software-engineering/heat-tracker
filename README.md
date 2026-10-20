@@ -24,6 +24,22 @@ End-to-end stack for product analytics heatmaps and session analysis: browser SD
    - `GET /api/projects/:projectId/sessions`
    - `GET /api/sessions/:sessionId`
 
+## Quick start (self-hosted, Docker)
+
+1. `git clone https://github.com/m-software-engineering/heat-tracker.git && cd heat-tracker`
+2. `docker compose up -d` (Postgres, collector on port 4000, dashboard on port 3000).
+3. Copy the admin token from the block printed by `docker compose logs collector`. Show it again any time with `docker compose exec collector heat-collector token`.
+4. Open http://localhost:3000 and paste the token once.
+5. Copy the snippet into your site. The dashboard shows "Waiting for your first event…" until the first visit arrives, then "Receiving events from <your site>".
+
+> The images are pulled from `ghcr.io/m-software-engineering` at a pinned version. To build them from this checkout instead: `docker compose -f docker-compose.yml -f compose.dev.yml up --build`.
+
+- Data (Postgres and the admin token) lives in named volumes, so `docker compose down` / `up` keeps it.
+- **Full reset:** `docker compose down -v`. **This deletes all recorded data and the admin token.**
+- The read API (`/api/*`) needs `Authorization: Bearer <admin token>`. The dashboard keeps the token in an HttpOnly cookie and calls the collector from its server, so the token never reaches browser JavaScript. Ingest stays authenticated by project key.
+- For TLS, put a reverse proxy in front of ports 3000 and 4000, and set `HEAT_PUBLIC_COLLECTOR_URL` (collector and dashboard) to the public collector URL.
+- If the dashboard says "Can't reach the collector", check `docker compose ps`.
+
 ## Quick setup (local development)
 
 ### 1) Start local infrastructure

@@ -343,6 +343,11 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.
 - Fix: List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin.
 
+## HEAT_E_COLLECTOR_UNREACHABLE
+
+- Message: The dashboard can't reach the collector.
+- Fix: Check that the collector container is running: `docker compose ps`.
+
 ## HEAT_E_DASHBOARD_FETCH
 
 - Message: The dashboard could not read heatmap data from the collector.

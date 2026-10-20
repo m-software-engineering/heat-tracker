@@ -10,9 +10,9 @@ pnpm --filter ./examples/nextjs-dashboard dev
 
 ## How to use
 
-1. Start a collector instance.
-2. Open the dashboard.
-3. Configure Collector Base URL and Project ID in the top controls.
+1. Start a collector with an admin token (`heat-collector`, or `docker compose up` from the repo root). Set `HEAT_COLLECTOR_URL` (how the dashboard server reaches it, default `http://localhost:4000`) and `HEAT_PUBLIC_COLLECTOR_URL` (how visitors' browsers reach it; used in the snippet).
+2. Open the dashboard and paste the admin token. `POST /api/session` checks it against the collector and stores it in an HttpOnly, `SameSite=Strict` cookie; collector reads go through `GET /api/collector/api/*`, which adds the token server-side, so browser JavaScript never sees it.
+3. Copy the snippet (a projectKey is generated and kept in this browser). Below it, "Waiting for your first event…" turns into "Receiving events from <origin>" when the first ingest creates the project.
 4. Set Site URL (your site's origin, e.g. `https://shop.example.com`) and Path. The page loads in a sandboxed frame at the recorded viewport width and the heatmap fades in over it.
 
 ## Heatmap over the page

@@ -1,0 +1,15 @@
+# Builds the collector and dashboard images from this checkout instead of pulling them:
+#   docker compose -f docker-compose.yml -f compose.dev.yml up --build
+# Used by the compose e2e (e2e/compose.e2e.spec.ts) and .github/workflows/compose-smoke.yml.
+services:
+  collector:
+    image: heat-tracker/heat-collector:dev
+    build:
+      context: .
+      dockerfile: packages/heat-collector/Dockerfile
+
+  dashboard:
+    image: heat-tracker/heat-dashboard:dev
+    build:
+      context: .
+      dockerfile: examples/nextjs-dashboard/Dockerfile
