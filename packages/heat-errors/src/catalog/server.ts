@@ -12,6 +12,26 @@ export const SERVER_ERRORS = {
     message: "The collector could not connect to the database.",
     fix: "Check that the database is running and reachable at the host and port in DATABASE_URL, for example with `docker compose ps postgres`."
   },
+  HEAT_E_DB_CONNECTION_LOST: {
+    code: "HEAT_E_DB_CONNECTION_LOST",
+    message: "An idle database connection was closed; the collector reconnects on the next query.",
+    fix: "Nothing to do after a database restart. If it repeats, check database health and the network between collector and database (`docker compose ps postgres`)."
+  },
+  HEAT_E_ADMIN_TOKEN_FILE_INVALID: {
+    code: "HEAT_E_ADMIN_TOKEN_FILE_INVALID",
+    message: "The admin token file holds no token.",
+    fix: "Delete it so a new token is generated on the next start: `docker compose run --rm collector rm /data/admin-token`, then `docker compose up -d` and paste the new token in the dashboard."
+  },
+  HEAT_E_ADMIN_TOKEN_WEAK: {
+    code: "HEAT_E_ADMIN_TOKEN_WEAK",
+    message: "HEAT_ADMIN_TOKEN is too short to be safe.",
+    fix: "Use at least 32 random characters, for example `openssl rand -base64 32`, or unset HEAT_ADMIN_TOKEN to use the generated token."
+  },
+  HEAT_E_SERVER_CONFIG: {
+    code: "HEAT_E_SERVER_CONFIG",
+    message: "A heat-collector environment variable has an invalid value.",
+    fix: "Correct the variable named in the cause; see the heat-collector README for accepted values."
+  },
   HEAT_E_ADMIN_TOKEN_STORE: {
     code: "HEAT_E_ADMIN_TOKEN_STORE",
     message: "The collector could not read or write the admin token file.",
