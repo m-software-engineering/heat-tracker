@@ -94,8 +94,15 @@ Accepted headers:
 - `GET /api/projects/:projectId/heatmap`
 - `GET /api/projects/:projectId/events`
 - `GET /api/projects/:projectId/sessions`
+- `GET /api/projects/by-key/:projectKey` (`{ project: { id, name, createdAt } | null }`; `null` until the first event for that key arrives)
 - `GET /api/sessions/:sessionId`
 - `GET /api/metrics`
+
+With `admin: { token }` in the config, every `/api/*` route requires `Authorization: Bearer <token>` and answers 401 `HEAT_E_ADMIN_TOKEN_MISSING` or `HEAT_E_ADMIN_TOKEN_INVALID` otherwise. Without it the read API stays open, as before. A project is created by the first ingest for its key and named after the request's `Origin` (or `Default`).
+
+### Health
+
+`GET /healthz` → `200 { "ok": true }` while the process is up. It does not touch the database.
 
 ### Response headers and error payloads
 
@@ -212,6 +219,29 @@ db: {
 ```
 
 The collector now prefers `db.database` when provided, otherwise it uses the database from the MongoDB connection string.
+
+## Standalone server (`heat-collector`)
+
+The package ships a ready-to-run server, used by the Docker images:
+
+```bash
+DATABASE_URL=postgres://heat:heat@localhost:5432/heat_tracker HEAT_DATA_DIR=./data heat-collector
+heat-collector token   # prints the admin token again
+```
+
+| Variable           | Default            | Meaning                                                                                                                               |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEAT_DIALECT`     | `pg`               | `pg`, `mysql`, `mongodb` or `sqlite` (`SQLITE_FILE`).                                                                                 |
+| `DATABASE_URL`     | —                  | Required except for SQLite; missing → `HEAT_E_DB_CONFIG`, unreachable → `HEAT_E_DB_UNREACHABLE` (host:port only, never the password). |
+| `HEAT_DATA_DIR`    | `/data`            | Where the generated admin token is stored (`admin-token`, mode 0600).                                                                 |
+| `HEAT_ADMIN_TOKEN` | —                  | Use this token instead of the stored one.                                                                                             |
+| `PORT` / `HOST`    | `4000` / `0.0.0.0` | Listen address.                                                                                                                       |
+| `HEAT_LOG_LEVEL`   | `warn`             | Request logs appear at `info`.                                                                                                        |
+| `HEAT_TRUST_PROXY` | —                  | Express `trust proxy` value when behind a reverse proxy.                                                                              |
+
+A database host that does not resolve fails with `HEAT_E_DB_UNREACHABLE` naming `ENOTFOUND`. A dropped idle Postgres connection (database restart) is logged as `HEAT_E_DB_CONNECTION_LOST` and the pool reconnects on the next query; the process keeps running. An empty `admin-token` file fails with `HEAT_E_ADMIN_TOKEN_FILE_INVALID` (delete it to regenerate).
+
+At startup it prints one block with the dashboard URL, the admin token, and the command to show it again. `/ingest` answers CORS preflights from any origin (ingest stays authenticated by project key); the read API sends no CORS headers.
 
 ## Production migration command
 

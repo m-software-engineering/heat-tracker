@@ -44,6 +44,21 @@ export const DASHBOARD_ERRORS: {
         readonly message: "An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.";
         readonly fix: "List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin.";
     };
+    readonly HEAT_E_COLLECTOR_UNREACHABLE: {
+        readonly code: "HEAT_E_COLLECTOR_UNREACHABLE";
+        readonly message: "The dashboard can't reach the collector.";
+        readonly fix: "Check that the collector container is running: `docker compose ps`.";
+    };
+    readonly HEAT_E_DASHBOARD_CONTENT_TYPE: {
+        readonly code: "HEAT_E_DASHBOARD_CONTENT_TYPE";
+        readonly message: "The dashboard session request is not JSON.";
+        readonly fix: "Send the token as JSON with `Content-Type: application/json`, for example `{\"token\":\"…\"}`.";
+    };
+    readonly HEAT_E_DASHBOARD_ORIGIN: {
+        readonly code: "HEAT_E_DASHBOARD_ORIGIN";
+        readonly message: "The dashboard session request came from another site.";
+        readonly fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.";
+    };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";
         readonly message: "The dashboard could not read heatmap data from the collector.";
@@ -270,7 +285,21 @@ export const QUERY_ERRORS: {
         readonly status: 404;
         readonly legacyCode: "not_found";
         readonly message: "The collector has no route for this method and path.";
-        readonly fix: "Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics.";
+        readonly fix: "Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/projects/by-key/:projectKey, /api/sessions/:sessionId, /api/metrics, or GET /healthz.";
+    };
+    readonly HEAT_E_ADMIN_TOKEN_MISSING: {
+        readonly code: "HEAT_E_ADMIN_TOKEN_MISSING";
+        readonly status: 401;
+        readonly legacyCode: "admin_token_missing";
+        readonly message: "The read API request has no admin token.";
+        readonly fix: "Send Authorization: Bearer <admin token>. Show the token with `docker compose exec collector heat-collector token` and paste it in the dashboard.";
+    };
+    readonly HEAT_E_ADMIN_TOKEN_INVALID: {
+        readonly code: "HEAT_E_ADMIN_TOKEN_INVALID";
+        readonly status: 401;
+        readonly legacyCode: "admin_token_invalid";
+        readonly message: "The admin token does not match this collector.";
+        readonly fix: "Show the current token with `docker compose exec collector heat-collector token` and paste it again in the dashboard.";
     };
     readonly HEAT_E_QUERY_INVALID: {
         readonly code: "HEAT_E_QUERY_INVALID";
@@ -321,6 +350,13 @@ export const QUERY_ERRORS: {
         readonly message: "The collector could not read sessions.";
         readonly fix: "Search collector logs for the requestId and check database connectivity.";
     };
+    readonly HEAT_E_PROJECT_QUERY_FAILED: {
+        readonly code: "HEAT_E_PROJECT_QUERY_FAILED";
+        readonly status: 500;
+        readonly legacyCode: "project_query_failed";
+        readonly message: "The collector could not read the project.";
+        readonly fix: "Search collector logs for the requestId and check database connectivity.";
+    };
     readonly HEAT_E_SESSION_DETAIL_FAILED: {
         readonly code: "HEAT_E_SESSION_DETAIL_FAILED";
         readonly status: 500;
@@ -362,7 +398,47 @@ export const SERVER_ERRORS: {
     readonly HEAT_E_DB_CONFIG: {
         readonly code: "HEAT_E_DB_CONFIG";
         readonly message: "The database config has neither a connection string nor a client.";
-        readonly fix: "Pass db.connectionString or db.client to createCollector().";
+        readonly fix: "Set DATABASE_URL for the heat-collector server (docker compose sets it), or pass db.connectionString or db.client to createCollector().";
+    };
+    readonly HEAT_E_DB_UNREACHABLE: {
+        readonly code: "HEAT_E_DB_UNREACHABLE";
+        readonly message: "The collector could not connect to the database.";
+        readonly fix: "Check that the database is running and reachable at the host and port in DATABASE_URL, for example with `docker compose ps postgres`.";
+    };
+    readonly HEAT_E_DB_CONNECTION_LOST: {
+        readonly code: "HEAT_E_DB_CONNECTION_LOST";
+        readonly message: "An idle database connection was closed; the collector reconnects on the next query.";
+        readonly fix: "Nothing to do after a database restart. If it repeats, check database health and the network between collector and database (`docker compose ps postgres`).";
+    };
+    readonly HEAT_E_ADMIN_TOKEN_FILE_INVALID: {
+        readonly code: "HEAT_E_ADMIN_TOKEN_FILE_INVALID";
+        readonly message: "The admin token file holds no token.";
+        readonly fix: "Delete it so a new token is generated on the next start: `docker compose run --rm collector rm /data/admin-token`, then `docker compose up -d` and paste the new token in the dashboard.";
+    };
+    readonly HEAT_E_ADMIN_TOKEN_WEAK: {
+        readonly code: "HEAT_E_ADMIN_TOKEN_WEAK";
+        readonly message: "HEAT_ADMIN_TOKEN is too short to be safe.";
+        readonly fix: "Use at least 32 random characters, for example `openssl rand -base64 32`, or unset HEAT_ADMIN_TOKEN to use the generated token.";
+    };
+    readonly HEAT_E_SERVER_CONFIG: {
+        readonly code: "HEAT_E_SERVER_CONFIG";
+        readonly message: "A heat-collector environment variable has an invalid value.";
+        readonly fix: "Correct the variable named in the cause; see the heat-collector README for accepted values.";
+    };
+    readonly HEAT_E_ADMIN_TOKEN_STORE: {
+        readonly code: "HEAT_E_ADMIN_TOKEN_STORE";
+        readonly message: "The collector could not read or write the admin token file.";
+        readonly fix: "Mount a writable volume at HEAT_DATA_DIR (default /data), or set HEAT_ADMIN_TOKEN.";
+    };
+    readonly HEAT_E_SERVER_LISTEN: {
+        readonly code: "HEAT_E_SERVER_LISTEN";
+        readonly message: "The collector could not listen on its port.";
+        readonly fix: "Free the port or set PORT to another one; in docker compose, change the published port in docker-compose.yml.";
+    };
+    readonly HEAT_E_SERVER_COMMAND: {
+        readonly code: "HEAT_E_SERVER_COMMAND";
+        readonly message: "heat-collector does not know this command.";
+        readonly fix: "Run `heat-collector` (or `heat-collector serve`) to start the server, or `heat-collector token` to print the admin token.";
     };
     readonly HEAT_E_ROLLUP_CATCH_UP: {
         readonly code: "HEAT_E_ROLLUP_CATCH_UP";

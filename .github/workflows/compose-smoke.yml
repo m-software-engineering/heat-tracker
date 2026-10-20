@@ -1,0 +1,61 @@
+name: Compose smoke
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  compose:
+    name: docker compose quick start
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          version: 10.26.0
+
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        timeout-minutes: 10
+
+      # Built before the timed run, so the cold-start budget (120 s) matches "with images pulled".
+      - name: Build images from this checkout
+        run: docker compose -f docker-compose.yml -f compose.dev.yml build
+
+      - name: Pull Postgres
+        run: docker compose -f docker-compose.yml -f compose.dev.yml pull postgres
+
+      - name: Run compose e2e
+        env:
+          HEAT_COMPOSE_E2E: "1"
+        run: pnpm exec playwright test e2e/compose.e2e.spec.ts
+
+      - name: Compose logs
+        if: failure()
+        run: docker compose -p heat-tracker-e2e -f docker-compose.yml -f compose.dev.yml logs

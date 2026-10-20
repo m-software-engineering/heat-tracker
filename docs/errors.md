@@ -194,7 +194,21 @@ console.log(body.error.message); // "The JWT has expired."
 - HTTP status: 404
 - Legacy code: `not_found`
 - Message: The collector has no route for this method and path.
-- Fix: Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/sessions/:sessionId, /api/metrics.
+- Fix: Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/projects/by-key/:projectKey, /api/sessions/:sessionId, /api/metrics, or GET /healthz.
+
+## HEAT_E_ADMIN_TOKEN_MISSING
+
+- HTTP status: 401
+- Legacy code: `admin_token_missing`
+- Message: The read API request has no admin token.
+- Fix: Send Authorization: Bearer <admin token>. Show the token with `docker compose exec collector heat-collector token` and paste it in the dashboard.
+
+## HEAT_E_ADMIN_TOKEN_INVALID
+
+- HTTP status: 401
+- Legacy code: `admin_token_invalid`
+- Message: The admin token does not match this collector.
+- Fix: Show the current token with `docker compose exec collector heat-collector token` and paste it again in the dashboard.
 
 ## HEAT_E_QUERY_INVALID
 
@@ -245,6 +259,13 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The collector could not read sessions.
 - Fix: Search collector logs for the requestId and check database connectivity.
 
+## HEAT_E_PROJECT_QUERY_FAILED
+
+- HTTP status: 500
+- Legacy code: `project_query_failed`
+- Message: The collector could not read the project.
+- Fix: Search collector logs for the requestId and check database connectivity.
+
 ## HEAT_E_SESSION_DETAIL_FAILED
 
 - HTTP status: 500
@@ -255,7 +276,47 @@ console.log(body.error.message); // "The JWT has expired."
 ## HEAT_E_DB_CONFIG
 
 - Message: The database config has neither a connection string nor a client.
-- Fix: Pass db.connectionString or db.client to createCollector().
+- Fix: Set DATABASE_URL for the heat-collector server (docker compose sets it), or pass db.connectionString or db.client to createCollector().
+
+## HEAT_E_DB_UNREACHABLE
+
+- Message: The collector could not connect to the database.
+- Fix: Check that the database is running and reachable at the host and port in DATABASE_URL, for example with `docker compose ps postgres`.
+
+## HEAT_E_DB_CONNECTION_LOST
+
+- Message: An idle database connection was closed; the collector reconnects on the next query.
+- Fix: Nothing to do after a database restart. If it repeats, check database health and the network between collector and database (`docker compose ps postgres`).
+
+## HEAT_E_ADMIN_TOKEN_FILE_INVALID
+
+- Message: The admin token file holds no token.
+- Fix: Delete it so a new token is generated on the next start: `docker compose run --rm collector rm /data/admin-token`, then `docker compose up -d` and paste the new token in the dashboard.
+
+## HEAT_E_ADMIN_TOKEN_WEAK
+
+- Message: HEAT_ADMIN_TOKEN is too short to be safe.
+- Fix: Use at least 32 random characters, for example `openssl rand -base64 32`, or unset HEAT_ADMIN_TOKEN to use the generated token.
+
+## HEAT_E_SERVER_CONFIG
+
+- Message: A heat-collector environment variable has an invalid value.
+- Fix: Correct the variable named in the cause; see the heat-collector README for accepted values.
+
+## HEAT_E_ADMIN_TOKEN_STORE
+
+- Message: The collector could not read or write the admin token file.
+- Fix: Mount a writable volume at HEAT_DATA_DIR (default /data), or set HEAT_ADMIN_TOKEN.
+
+## HEAT_E_SERVER_LISTEN
+
+- Message: The collector could not listen on its port.
+- Fix: Free the port or set PORT to another one; in docker compose, change the published port in docker-compose.yml.
+
+## HEAT_E_SERVER_COMMAND
+
+- Message: heat-collector does not know this command.
+- Fix: Run `heat-collector` (or `heat-collector serve`) to start the server, or `heat-collector token` to print the admin token.
 
 ## HEAT_E_ROLLUP_CATCH_UP
 
@@ -311,6 +372,21 @@ console.log(body.error.message); // "The JWT has expired."
 
 - Message: An entry in HEAT_DASHBOARD_SITE_ORIGINS is not an origin, so it is ignored.
 - Fix: List full origins such as https://shop.example.com, separated by commas. Wildcards like `*` or `*.example.com` are not supported; list each origin.
+
+## HEAT_E_COLLECTOR_UNREACHABLE
+
+- Message: The dashboard can't reach the collector.
+- Fix: Check that the collector container is running: `docker compose ps`.
+
+## HEAT_E_DASHBOARD_CONTENT_TYPE
+
+- Message: The dashboard session request is not JSON.
+- Fix: Send the token as JSON with `Content-Type: application/json`, for example `{"token":"…"}`.
+
+## HEAT_E_DASHBOARD_ORIGIN
+
+- Message: The dashboard session request came from another site.
+- Fix: Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.
 
 ## HEAT_E_DASHBOARD_FETCH
 
