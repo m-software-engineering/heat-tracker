@@ -7,6 +7,7 @@ let stack: Stack;
 let projectId: string;
 
 const CLICKS = 5;
+const MOBILE_CLICKS = 2;
 
 test.beforeAll(async ({ browser }) => {
   stack = await startOverlayStack();
@@ -22,8 +23,20 @@ test.beforeAll(async ({ browser }) => {
   await site.click("#buy");
   await site.evaluate(() => (window as any).__tracker__.flush());
   await context.close();
+  // Two clicks from a phone-sized viewport: their own bucket, filtered out of the desktop view.
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const mobile = await phone.newPage();
+  await mobile.goto(`${stack.siteUrl}/pricing`);
+  await mobile.waitForFunction(() => typeof (window as any).__tracker__?.flush === "function");
+  for (let i = 0; i < MOBILE_CLICKS; i += 1) await mobile.click("#buy");
+  await mobile.evaluate(() => (window as any).__tracker__.flush());
+  await phone.close();
   const db = new Database(stack.dbFile);
   projectId = (db.prepare("select id from projects where key = ?").get("overlay-key") as { id: string }).id;
+  // A click stored without coordinates (older SDKs), on its own page.
+  db.prepare(
+    "insert into events (id, project_id, session_id, type, ts, path, meta_json, viewport_bucket) values ('nopos', ?, 's', 'click', ?, '/nopos', '{}', '1400x900')"
+  ).run(projectId, Date.now());
   db.close();
 });
 
@@ -150,4 +163,57 @@ test("renders 100 k points in ≤ 300 ms without a long task over 50 ms", async 
   console.log(`render 100k points: ${Math.round(result.ms)} ms, longest task ${Math.round(result.maxLongTaskMs)} ms`);
   expect(result.ms).toBeLessThanOrEqual(300);
   expect(result.maxLongTaskMs).toBeLessThanOrEqual(50);
+});
+
+test("viewport toggle filters events, shows counts and disables empty buckets", async ({ page }) => {
+  await openDashboard(page, "path=/pricing");
+  const group = page.getByRole("group", { name: "Viewport" });
+  await expect(group.getByText(`Desktop · ${CLICKS}`)).toBeVisible();
+  await expect(group.getByText(`Mobile · ${MOBILE_CLICKS}`)).toBeVisible();
+  const tablet = group.getByRole("radio", { name: "Tablet · 0" });
+  await expect(tablet).toBeDisabled();
+  await expect(group.locator("label", { hasText: "Tablet" })).toHaveAttribute(
+    "title",
+    "Nenhum evento neste viewport no período"
+  );
+
+  await group.getByRole("radio", { name: `Mobile · ${MOBILE_CLICKS}` }).check();
+  await expect(page).toHaveURL(/viewport=mobile/);
+  await expect(page.getByTestId("heatmap-summary")).toHaveText(`${MOBILE_CLICKS} clicks · 7 days · mobile`);
+});
+
+test("an origin outside HEAT_DASHBOARD_SITE_ORIGINS is not loaded and shows the line to add", async ({
+  page,
+  context
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/pricing&site=unlisted`);
+  const notice = page.getByTestId("site-not-allowed");
+  await expect(notice.getByRole("heading")).toHaveText("Este site ainda não está liberado");
+  const origin = stack.siteUrl.replace("127.0.0.1", "localhost");
+  await expect(notice.getByTestId("allowlist-line")).toHaveText(`HEAT_DASHBOARD_SITE_ORIGINS=${origin}`);
+  await notice.getByRole("button", { name: "Copiar" }).click();
+  await expect(notice.getByRole("button", { name: "Copiado" })).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`HEAT_DASHBOARD_SITE_ORIGINS=${origin}`);
+  await expect(page.locator("iframe")).toHaveCount(0);
+  await expect(page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]')).toHaveCount(0);
+  await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
+});
+
+test("clicks without a position are reported in a note", async ({ page }) => {
+  await openDashboard(page, "path=/nopos");
+  await expect(page.getByTestId("no-position-note")).toHaveText("1 cliques sem posição não aparecem no mapa");
+});
+
+test("a container narrower than the bucket scales the frame to fit and labels it", async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 900 });
+  await openDashboard(page, "path=/pricing");
+  const scroller = page.getByTestId("heatmap-scroller");
+  const { clientWidth, scrollWidth } = await scroller.evaluate((el) => ({
+    clientWidth: el.clientWidth,
+    scrollWidth: el.scrollWidth
+  }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  const percent = Math.floor((clientWidth / 1400) * 100);
+  await expect(page.getByTestId("frame-scale")).toHaveText(`1400 px, ${percent}%`);
 });

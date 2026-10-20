@@ -62,7 +62,7 @@ export const startOverlayStack = async () => {
   const bundle = await bundleHarness();
 
   const site = express();
-  site.get(["/pricing", "/empty"], (_req, res) => res.type("html").send(SITE_PAGE));
+  site.get(["/pricing", "/empty", "/nopos"], (_req, res) => res.type("html").send(SITE_PAGE));
   site.get("/blocked", (_req, res) =>
     res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(SITE_PAGE)
   );
@@ -85,7 +85,12 @@ export const startOverlayStack = async () => {
     `<script src="/site.js"></script><script src="/harness.js"></script></body></html>`;
   dashboard.get("/", (_req, res) => res.type("html").send(page));
   dashboard.get("/site.js", (_req, res) =>
-    res.type("js").send(`window.__SITE_ORIGIN__ = ${JSON.stringify(siteOrigin)};`)
+    res
+      .type("js")
+      .send(
+        `window.__SITE_ORIGIN__ = ${JSON.stringify(siteOrigin)};` +
+          `window.__UNLISTED_ORIGIN__ = ${JSON.stringify(`http://localhost:${siteServer.port}`)};`
+      )
   );
   dashboard.use(collector.router);
   const dashboardServer = await listen(dashboard);

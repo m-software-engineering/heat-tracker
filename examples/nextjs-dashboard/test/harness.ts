@@ -11,10 +11,17 @@ if (projectId) {
   const config = {
     collectorUrl: window.location.origin,
     projectId,
-    siteOrigin: String((window as unknown as { __SITE_ORIGIN__?: string }).__SITE_ORIGIN__),
+    // site=unlisted: a reachable origin that is not on the dashboard's allowlist.
+    siteOrigin: String(
+      (window as unknown as Record<string, string>)[
+        params.get("site") === "unlisted" ? "__UNLISTED_ORIGIN__" : "__SITE_ORIGIN__"
+      ]
+    ),
     path: params.get("path") ?? "/pricing"
   };
-  createRoot(document.getElementById("root")!).render(createElement(PageHeatmap, config));
+  // Full-width grid cell, like the dashboard's main column.
+  const cell = { style: { gridColumn: "1 / -1", minWidth: 0 } };
+  createRoot(document.getElementById("root")!).render(createElement("div", cell, createElement(PageHeatmap, config)));
 }
 
 (window as unknown as Record<string, unknown>).__renderBench = async (count: number) => {

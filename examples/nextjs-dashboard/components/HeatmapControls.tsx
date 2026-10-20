@@ -1,32 +1,42 @@
 "use client";
 
-import { PERIOD_DAYS, type ViewState, type ViewportClass } from "../lib/view-state";
+import { PERIOD_DAYS, type ViewState, type ViewportClass, type ViewportOption } from "../lib/view-state";
 
 type Props = {
   state: ViewState;
   activeViewport: ViewportClass;
+  /** null until the first response arrives. */
+  options: ViewportOption[] | null;
   onChange: (next: Partial<ViewState>) => void;
 };
 
-const VIEWPORTS: ViewportClass[] = ["desktop", "tablet", "mobile"];
+const LABELS: Record<ViewportClass, string> = { desktop: "Desktop", tablet: "Tablet", mobile: "Mobile" };
 
-export default function HeatmapControls({ state, activeViewport, onChange }: Props) {
+export default function HeatmapControls({ state, activeViewport, options, onChange }: Props) {
   return (
     <div className="ph-toolbar">
       <fieldset className="ph-radios">
         <legend>Viewport</legend>
-        {VIEWPORTS.map((viewport) => (
-          <label key={viewport} className="ph-target">
-            <input
-              type="radio"
-              name="heatmap-viewport"
-              value={viewport}
-              checked={activeViewport === viewport}
-              onChange={() => onChange({ viewport })}
-            />
-            {viewport[0].toUpperCase() + viewport.slice(1)}
-          </label>
-        ))}
+        {(options ?? []).map(({ viewport, bucket, count }) => {
+          const empty = count === 0;
+          return (
+            <label
+              key={viewport}
+              className={empty ? "ph-target disabled" : "ph-target"}
+              title={empty ? "Nenhum evento neste viewport no período" : `${bucket} px`}
+            >
+              <input
+                type="radio"
+                name="heatmap-viewport"
+                value={viewport}
+                checked={activeViewport === viewport}
+                disabled={empty}
+                onChange={() => onChange({ viewport })}
+              />
+              {LABELS[viewport]} · {count.toLocaleString("en-US")}
+            </label>
+          );
+        })}
       </fieldset>
       <label className="ph-target">
         Opacity <span aria-hidden="true">([ / ])</span>

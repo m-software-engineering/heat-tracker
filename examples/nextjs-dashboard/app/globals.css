@@ -20,6 +20,10 @@ body {
   color: var(--ink);
 }
 
+main > * {
+  min-width: 0;
+}
+
 main {
   display: grid;
   grid-template-columns: 280px 1fr 320px;
@@ -133,6 +137,7 @@ main {
 }
 
 .page-heatmap {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -201,7 +206,8 @@ main {
 .ph-scroller {
   position: relative;
   max-height: 70vh;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: linear-gradient(135deg, #fff4f1, #eef6ff);
@@ -275,4 +281,48 @@ main {
 
 .ph-legend-unit {
   color: var(--muted);
+}
+
+.ph-note {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted, #4a4a4a);
+}
+
+.ph-notice {
+  border: 2px solid #0b4bb3;
+  border-radius: 12px;
+  padding: 12px 16px;
+  background: #f3f7ff;
+  color: #1c1c1c;
+}
+
+.ph-notice h2 {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+}
+
+.ph-notice a {
+  color: #0b4bb3;
+}
+
+.ph-copy {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.ph-copy code {
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+
+.ph-target.disabled {
+  color: #595959;
+  cursor: not-allowed;
 }

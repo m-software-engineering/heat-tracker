@@ -3,7 +3,12 @@
  * Browsers hide a blocked cross-origin frame from the parent (it looks like any other cross-origin
  * frame), so the dashboard asks its own server route to fetch the page and read these headers.
  */
-export type FrameVerdict = { blocked: boolean; reason: string };
+export type FrameVerdict = {
+  blocked: boolean;
+  reason: string;
+  /** false when the site origin is not in HEAT_DASHBOARD_SITE_ORIGINS: the dashboard does not load it. */
+  allowed?: boolean;
+};
 
 type HeaderSource = { get(name: string): string | null };
 
@@ -87,8 +92,7 @@ export const checkFrame = async (
 ): Promise<FrameVerdict> => {
   const origin = allowedOrigins.find((allowed) => allowed === new URL(siteUrl).origin);
   if (!origin) {
-    // Not checkable: show the frame and let the browser decide.
-    return { blocked: false, reason: "site origin is not in HEAT_DASHBOARD_SITE_ORIGINS, so framing was not checked" };
+    return { blocked: false, allowed: false, reason: "site origin is not in HEAT_DASHBOARD_SITE_ORIGINS" };
   }
   // Host comes only from the allowlist; path and query are copied onto it so "//other-host" cannot redirect the fetch.
   const requested = new URL(siteUrl);

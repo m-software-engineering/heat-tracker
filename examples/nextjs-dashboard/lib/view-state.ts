@@ -21,6 +21,21 @@ export const DEFAULT_VIEW: ViewState = { viewport: null, opacity: 60, showHeatma
 export const viewportClassOf = (width: number): ViewportClass =>
   width < 600 ? "mobile" : width < 1100 ? "tablet" : "desktop";
 
+export type BucketCount = { bucket: string; count: number };
+/** One viewport toggle option: the class's busiest stored bucket (the filter sent) and its event count. */
+export type ViewportOption = { viewport: ViewportClass; bucket: string; count: number };
+
+export const VIEWPORT_CLASSES: ViewportClass[] = ["desktop", "tablet", "mobile"];
+
+/** Picks, per class, the bucket with the most events (falls back to VIEWPORT_BUCKETS with count 0). */
+export const viewportOptions = (buckets: BucketCount[]): ViewportOption[] =>
+  VIEWPORT_CLASSES.map((viewport) => {
+    const top = buckets
+      .filter((b) => viewportClassOf(Number(b.bucket.split("x")[0])) === viewport)
+      .sort((a, b) => b.count - a.count)[0];
+    return top ? { viewport, ...top } : { viewport, bucket: VIEWPORT_BUCKETS[viewport], count: 0 };
+  });
+
 const clampOpacity = (n: number) => Math.min(100, Math.max(0, Math.round(n / 5) * 5));
 
 export const readViewState = (params: URLSearchParams): ViewState => {

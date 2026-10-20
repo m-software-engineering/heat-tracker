@@ -11,6 +11,8 @@ export type HeatmapResponse = {
     viewport: { w: number; h: number };
     renderHeight: number;
     bucket: string;
+    excluded?: { noCoordinates: number };
+    viewportBuckets?: Array<{ bucket: string; count: number }>;
   };
 };
 
