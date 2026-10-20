@@ -13,7 +13,7 @@ import {
 } from "./validation";
 import { verifyJwt, type JwtConfig } from "./jwt";
 import { aggregateHeatmap } from "./heatmap";
-import { ROLLUP_HOUR_MS, upsertRollup } from "./heatmap-rollup";
+import { insertEventsWithRollup, ROLLUP_HOUR_MS } from "./heatmap-rollup";
 import { storedBucket } from "./viewport-bucket";
 
 const DEFAULT_HEATMAP_WINDOW_MS = 7 * 24 * ROLLUP_HOUR_MS;
@@ -844,9 +844,7 @@ const insertEvents = async (ctx: DbContext, projectId: string, userId: string | 
     return;
   }
 
-  const { events, heatmapRollup } = ctx.schema as any;
-  await ctx.db.insert(events).values(rows);
-  await upsertRollup(ctx.db, ctx.dialect as "pg" | "mysql" | "sqlite", heatmapRollup, rows);
+  await insertEventsWithRollup(ctx, rows);
 };
 
 const listProjectEvents = async (

@@ -145,14 +145,13 @@ describe("heatmap rollup", () => {
     const client = new Database(":memory:");
     const app = await collectorOn(client);
     const projectId = await ingest(app, client, [click(1, T0 + 1000, 10, 10)]);
-    // Rows written by an older collector: no viewport_bucket, no rollup, one click without coordinates.
+    // Rows written by an older collector (no viewport_bucket, rollup_state NULL), one click without coordinates.
     const insert = client.prepare(
       "insert into events (id, project_id, session_id, type, ts, path, x, y, meta_json) values (?, ?, 's1', 'click', ?, '/', ?, ?, ?)"
     );
     const meta = JSON.stringify({ viewport: { w: 1440, h: 900 }, meta: {} });
     insert.run("old-1", projectId, T0 + 2000, 30, 30, meta);
     insert.run("old-2", projectId, T0 + 3000, null, null, meta);
-    client.exec("delete from heatmap_rollup");
 
     const migrated = await collectorOn(client);
     const whole = await heatmap(migrated, projectId, { from: T0, to: T0 + HOUR - 1 });

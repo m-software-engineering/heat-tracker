@@ -7,7 +7,8 @@ import * as sqliteCore from "drizzle-orm/sqlite-core";
  * Heatmap rollup (#26): events pre-aggregated per (project, path, type, viewport bucket, hour, position).
  * Positions stay at pixel precision, so a query over whole hours reads the rollup and still buckets
  * exactly like the raw rows. `pos` is 0 = no coordinates, 1 = x/y, 2 = scroll depth.
- * Maintained at ingest (`upsertRollup`) and backfilled by `autoMigrate` when the table is empty.
+ * Ingest writes events and their rollup increments in one transaction (`insertEventsWithRollup`); rows
+ * written before the rollup existed are counted by the `autoMigrate` backfill (`heatmap-migrate.ts`).
  */
 export const ROLLUP_TABLE = "heatmap_rollup";
 export const ROLLUP_HOUR_MS = 3_600_000;
@@ -80,17 +81,6 @@ export const buildCreateRollupSql = (dialect: SqlDialect) => {
   );`);
 };
 
-// One position per event, the same rule the raw backend applies (see heatmap-sql.ts).
-const POS = `CASE WHEN type = 'scroll' AND scroll_depth IS NOT NULL THEN 2 WHEN x IS NOT NULL AND y IS NOT NULL THEN 1 ELSE 0 END`;
-
-/** Backfill from `events` (the migration for existing installs). Run only while the rollup is empty. */
-export const buildBackfillRollupSql = () =>
-  sql.raw(`INSERT INTO ${ROLLUP_TABLE} (${KEY_COLUMNS}, cnt)
-    SELECT project_id, path, type, COALESCE(viewport_bucket, ''), ts - (ts % ${ROLLUP_HOUR_MS}), ${POS},
-      CASE WHEN ${POS} = 1 THEN x ELSE 0 END, CASE WHEN ${POS} = 1 THEN y ELSE 0 END,
-      CASE WHEN ${POS} = 2 THEN scroll_depth ELSE 0 END, count(*)
-    FROM events GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9`);
-
 type RollupEvent = {
   projectId: string;
   path: string;
@@ -151,18 +141,15 @@ export const toRollupRows = (rows: RollupEvent[]) => {
   return [...grouped.values()];
 };
 
-/** Adds the rows' counts to the rollup (insert or increment). */
-export const upsertRollup = async (db: any, dialect: SqlDialect, table: any, rows: RollupEvent[]) => {
-  const values = toRollupRows(rows);
-  if (values.length === 0) return;
+/** The increment statement (insert or add to `cnt`); not yet executed. */
+const upsertQuery = (db: any, dialect: SqlDialect, table: any, values: ReturnType<typeof toRollupRows>) => {
   if (dialect === "mysql") {
-    await db
+    return db
       .insert(table)
       .values(values)
       .onDuplicateKeyUpdate({ set: { cnt: sql`cnt + VALUES(cnt)` } });
-    return;
   }
-  await db
+  return db
     .insert(table)
     .values(values)
     .onConflictDoUpdate({
@@ -179,4 +166,48 @@ export const upsertRollup = async (db: any, dialect: SqlDialect, table: any, row
       ],
       set: { cnt: sql`${sql.raw(ROLLUP_TABLE)}.cnt + excluded.cnt` }
     });
+};
+
+/**
+ * Runs `work` in one transaction. better-sqlite3 transactions are synchronous, so SQLite work gets a
+ * `run` helper that executes each statement immediately; pg/mysql statements are awaited.
+ */
+export const inTransaction = async (
+  ctx: { db: any; dialect: string },
+  work: (tx: any, run: (query: any) => unknown) => unknown
+) => {
+  if (ctx.dialect === "sqlite") {
+    // IMMEDIATE takes the write lock up front, so concurrent backfills and ingest serialize.
+    return ctx.db.transaction((tx: any) => work(tx, (query: any) => query.run()), { behavior: "immediate" });
+  }
+  return ctx.db.transaction(async (tx: any) => work(tx, (query: any) => query));
+};
+
+/** Adds the rows' counts to the rollup inside `tx` (see `inTransaction`). */
+export const upsertRollup = (
+  tx: any,
+  dialect: SqlDialect,
+  table: any,
+  rows: RollupEvent[],
+  run: (q: any) => unknown
+) => {
+  const values = toRollupRows(rows);
+  return values.length === 0 ? undefined : run(upsertQuery(tx, dialect, table, values));
+};
+
+/** Inserts events marked as counted (`rollup_state = 1`) and their rollup increments, atomically. */
+export const insertEventsWithRollup = (ctx: { db: any; dialect: string; schema: any }, rows: RollupEvent[]) => {
+  const { events, heatmapRollup } = ctx.schema;
+  const dialect = ctx.dialect as SqlDialect;
+  const counted = rows.map((row) => ({ ...row, rollupState: 1 }));
+  if (dialect === "sqlite") {
+    return inTransaction(ctx, (tx, run) => {
+      run(tx.insert(events).values(counted));
+      upsertRollup(tx, dialect, heatmapRollup, rows, run);
+    });
+  }
+  return inTransaction(ctx, async (tx) => {
+    await tx.insert(events).values(counted);
+    await upsertRollup(tx, dialect, heatmapRollup, rows, (q) => q);
+  });
 };
