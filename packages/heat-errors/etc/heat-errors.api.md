@@ -164,6 +164,13 @@ export const INGEST_ERRORS: {
         readonly message: "The ingest request has no project key.";
         readonly fix: "Set projectKey in init() or forward the x-project-key header through your proxy.";
     };
+    readonly HEAT_E_PROJECT_KEY_INVALID: {
+        readonly code: "HEAT_E_PROJECT_KEY_INVALID";
+        readonly status: 400;
+        readonly legacyCode: "invalid_project_key";
+        readonly message: "The project key has characters the collector does not accept.";
+        readonly fix: "Use 1 to 128 characters from A-Z, a-z, 0-9, `_` and `-`, such as the key the dashboard generates (`pk_…`).";
+    };
     readonly HEAT_E_RATE_LIMITED: {
         readonly code: "HEAT_E_RATE_LIMITED";
         readonly status: 429;
@@ -285,7 +292,7 @@ export const QUERY_ERRORS: {
         readonly status: 404;
         readonly legacyCode: "not_found";
         readonly message: "The collector has no route for this method and path.";
-        readonly fix: "Use POST /ingest or GET /api/projects/:projectId/{heatmap,events,sessions}, /api/projects/by-key/:projectKey, /api/sessions/:sessionId, /api/metrics, or GET /healthz.";
+        readonly fix: "Use POST /ingest or GET /api/projects, /api/projects/:projectId/{pages,heatmap,events,sessions}, /api/projects/by-key/:projectKey, /api/sessions/:sessionId, /api/metrics, or GET /healthz.";
     };
     readonly HEAT_E_ADMIN_TOKEN_MISSING: {
         readonly code: "HEAT_E_ADMIN_TOKEN_MISSING";
@@ -362,6 +369,34 @@ export const QUERY_ERRORS: {
         readonly status: 500;
         readonly legacyCode: "session_detail_failed";
         readonly message: "The collector could not read the session detail.";
+        readonly fix: "Search collector logs for the requestId and check database connectivity.";
+    };
+    readonly HEAT_E_QUERY_CURSOR: {
+        readonly code: "HEAT_E_QUERY_CURSOR";
+        readonly status: 400;
+        readonly legacyCode: "invalid_cursor";
+        readonly message: "Query parameter cursor is not a cursor this endpoint returned.";
+        readonly fix: "Send meta.nextCursor from the previous response unchanged, or omit cursor to start from the first page.";
+    };
+    readonly HEAT_E_PROJECT_NOT_FOUND: {
+        readonly code: "HEAT_E_PROJECT_NOT_FOUND";
+        readonly status: 404;
+        readonly legacyCode: "project_not_found";
+        readonly message: "No project has this id.";
+        readonly fix: "List projects with GET /api/projects and use one of the returned ids.";
+    };
+    readonly HEAT_E_PROJECTS_QUERY_FAILED: {
+        readonly code: "HEAT_E_PROJECTS_QUERY_FAILED";
+        readonly status: 500;
+        readonly legacyCode: "projects_query_failed";
+        readonly message: "The collector could not read projects.";
+        readonly fix: "Search collector logs for the requestId and check database connectivity.";
+    };
+    readonly HEAT_E_PAGES_QUERY_FAILED: {
+        readonly code: "HEAT_E_PAGES_QUERY_FAILED";
+        readonly status: 500;
+        readonly legacyCode: "pages_query_failed";
+        readonly message: "The collector could not read the project's pages.";
         readonly fix: "Search collector logs for the requestId and check database connectivity.";
     };
 };

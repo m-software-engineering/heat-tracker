@@ -16,19 +16,19 @@ export const generateProjectKey = (random: (bytes: Uint8Array) => Uint8Array = (
   return `pk_${Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")}`;
 };
 
-/** A JS string literal that is also safe inside an HTML <script> (`<` escaped, so no `</script>` breakout). */
-const jsString = (value: string) => JSON.stringify(value).replace(/</g, "\\u003c");
+/** A JS string literal that is also safe inside an HTML <script> (no `<`, so no `</script>`). */
+export const scriptString = (value: string) =>
+  JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
 
 /** `dashboardOrigin` is this dashboard's own origin: the SDK sends its frame handshake only there (#59). */
 export const trackingSnippet = (publicCollectorUrl: string, projectKey: string, dashboardOrigin: string) =>
   [
     '<script type="module">',
     `  import { init } from "https://cdn.jsdelivr.net/npm/@m-software-engineering/heat-sdk@${SDK_VERSION}/+esm";`,
-    "  init({",
-    `    endpoint: ${jsString(`${publicCollectorUrl}/ingest`)},`,
-    `    projectKey: ${jsString(projectKey)},`,
-    `    dashboardOrigins: [${jsString(dashboardOrigin)}]`,
-    "  });",
+    `  init({ endpoint: ${scriptString(`${publicCollectorUrl}/ingest`)}, projectKey: ${scriptString(projectKey)}, dashboardOrigins: [${scriptString(dashboardOrigin)}] });`,
     "</script>"
   ].join("\n");
 

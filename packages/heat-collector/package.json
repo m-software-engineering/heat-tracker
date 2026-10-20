@@ -38,8 +38,9 @@
     "test": "vitest run && corepack pnpm test:dist",
     "test:coverage": "vitest run --coverage && corepack pnpm test:dist",
     "test:dist": "corepack pnpm build && node scripts/distribution-smoke.mjs",
-    "test:golden": "vitest run src/heatmap.golden.test.ts src/heatmap-rollup-safety.test.ts",
+    "test:golden": "vitest run --no-file-parallelism src/heatmap.golden.test.ts src/heatmap-rollup-safety.test.ts src/pages.db.test.ts",
     "bench:heatmap": "node bench/heatmap-bench.mjs",
+    "bench:pages": "node bench/pages-bench.mjs",
     "pack:check": "publint --pack npm && attw --pack . && api-extractor run --verbose",
     "api:check": "api-extractor run --verbose",
     "api:local": "api-extractor run --local --verbose"

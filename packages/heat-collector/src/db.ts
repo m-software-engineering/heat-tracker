@@ -8,6 +8,7 @@ import {
   createSchema
 } from "./schema";
 import { migrateHeatmapMongo, migrateHeatmapSql } from "./heatmap-migrate";
+import { buildCreatePagesIndexSql, buildCreatePagesSql } from "./pages-schema";
 
 export type DbAdapterConfig =
   | {
@@ -148,6 +149,9 @@ export const autoMigrate = async (ctx: DbContext) => {
     await createMongoIndex(ctx.db.collection("events"), { projectId: 1, path: 1, ts: 1 });
     await createMongoIndex(ctx.db.collection("events"), { projectId: 1, path: 1, type: 1, ts: 1 });
     await createMongoIndex(ctx.db.collection("events"), { sessionId: 1, ts: 1 });
+    await createMongoIndex(ctx.db.collection("events"), { projectId: 1, type: 1, ts: 1 });
+    await createMongoIndex(ctx.db.collection("events"), { projectId: 1, ts: 1 });
+    await createMongoIndex(ctx.db.collection("pages"), { projectId: 1, path: 1 }, { unique: true });
     await migrateHeatmapMongo(ctx.db);
     return;
   }
@@ -172,6 +176,13 @@ export const autoMigrate = async (ctx: DbContext) => {
     if (ctx.dialect === "mysql" && isDuplicateKeyName(error)) return;
     throw error;
   });
+  await execute(ctx.db, buildCreatePagesSql(ctx.dialect));
+  for (const statement of buildCreatePagesIndexSql(ctx.dialect)) {
+    await execute(ctx.db, statement).catch((error: any) => {
+      if (ctx.dialect === "mysql" && isDuplicateKeyName(error)) return;
+      throw error;
+    });
+  }
   await migrateHeatmapSql(ctx, execute);
 };
 

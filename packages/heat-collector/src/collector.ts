@@ -16,6 +16,8 @@ import { aggregateHeatmap } from "./heatmap";
 import { insertEventsWithRollup, ROLLUP_HOUR_MS } from "./heatmap-rollup";
 import { backfillRollup, CATCH_UP_BATCHES } from "./heatmap-migrate";
 import { storedBucket } from "./viewport-bucket";
+import { pageTitlesOf, registerPageRoutes, upsertPageTitles } from "./pages";
+import { sanitizePayloadPaths } from "./path-privacy";
 import { requireAdminToken } from "./admin-auth";
 import { projectNameFromOrigin } from "./project-name";
 import { mountProjectsApi } from "./projects-api";
@@ -30,6 +32,8 @@ import {
   SERVER_ERRORS
 } from "@m-software-engineering/heat-errors";
 import { fieldErrors, payloadCause, queryCause, resolveRequestId, sendError } from "./http-errors";
+
+const PROJECT_KEY_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 export type AuthConfig = { mode: "projectKey" } | ({ mode: "jwt" } & JwtConfig) | ({ mode: "both" } & JwtConfig);
 
@@ -262,6 +266,18 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       });
     }
 
+    // The key ends up in the dashboard's install snippet, so only a safe charset is accepted (#64).
+    if (!PROJECT_KEY_PATTERN.test(projectKey)) {
+      return sendError(
+        logger,
+        req,
+        res,
+        INGEST_ERRORS.HEAT_E_PROJECT_KEY_INVALID,
+        `header x-project-key has ${projectKey.length} characters; expected 1-128 of [A-Za-z0-9_-]`,
+        { context: { ip } }
+      );
+    }
+
     const limitStatus = consumeRateLimit(rateBuckets, `${projectKey}:${ip}`, limiter.windowMs, limiter.max);
     res.setHeader("X-RateLimit-Limit", String(limitStatus.limit));
     res.setHeader("X-RateLimit-Remaining", String(limitStatus.remaining));
@@ -338,6 +354,7 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
         }
         payload = hookResult.data;
       }
+      payload = sanitizePayloadPaths(payload);
 
       const { projectId, userId } = await ensureProjectAndUser(
         dbContext,
@@ -348,6 +365,7 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
       );
       await upsertSession(dbContext, projectId, userId, payload, req);
       await insertEvents(dbContext, projectId, userId, payload);
+      await upsertPageTitles(dbContext, projectId, pageTitlesOf(payload.events));
 
       metrics.ingestCount += 1;
       metrics.lastIngestMs = Date.now() - started;
@@ -383,6 +401,7 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     apiRouter.use("/api", requireAdminToken(logger, config.admin.token));
   }
   mountProjectsApi(apiRouter, dbContext, logger);
+  registerPageRoutes(apiRouter, dbContext, logger, parseTime, markNoStore);
 
   apiRouter.get("/api/projects/:projectId/heatmap", async (req, res) => {
     const parseResult = heatmapQuerySchema.safeParse(req.query);

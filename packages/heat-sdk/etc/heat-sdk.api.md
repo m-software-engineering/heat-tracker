@@ -88,6 +88,7 @@ export type InitConfig = {
         blockSelectors?: string[];
         allowSelectors?: string[];
         maskTextSelectors?: string[];
+        keepQueryParams?: string[];
     };
     capture?: {
         click?: boolean;
@@ -97,6 +98,7 @@ export type InitConfig = {
         };
         scroll?: boolean;
         pageview?: boolean;
+        pageTitle?: boolean;
         inputs?: {
             enabled: boolean;
             mode: "off" | "metadata" | "masked" | "allowlist";

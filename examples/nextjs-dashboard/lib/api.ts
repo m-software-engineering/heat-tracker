@@ -17,9 +17,7 @@ export type HeatmapResponse = {
 };
 
 /** Collector errors are rethrown as-is (they are already catalog errors); anything else is HEAT_E_DASHBOARD_FETCH. */
-export const fetchHeatmap = async (baseUrl: string, projectId: string, params: Record<string, string>) => {
-  const query = new URLSearchParams(params).toString();
-  const url = `${baseUrl}/api/projects/${encodeURIComponent(projectId)}/heatmap?${query}`;
+const getJson = async (baseUrl: string, url: string) => {
   let res: Response;
   try {
     res = await fetch(url);
@@ -33,8 +31,50 @@ export const fetchHeatmap = async (baseUrl: string, projectId: string, params: R
     if (isHeatError(body?.error)) throw body.error;
     throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_DASHBOARD_FETCH, `collector answered HTTP ${res.status}`);
   }
+  return body;
+};
+
+/** Collector errors are rethrown as-is (they are already catalog errors); anything else is HEAT_E_DASHBOARD_FETCH. */
+export const fetchHeatmap = async (baseUrl: string, projectId: string, params: Record<string, string>) => {
+  const query = new URLSearchParams(params).toString();
+  const body = await getJson(baseUrl, `${baseUrl}/api/projects/${encodeURIComponent(projectId)}/heatmap?${query}`);
   if (!body || !Array.isArray(body.points)) {
     throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_DASHBOARD_FETCH, "collector response has no points array");
   }
   return body as HeatmapResponse;
+};
+
+export type ProjectListItem = {
+  id: string;
+  name: string;
+  projectKey: string;
+  createdAt: number;
+  eventsLast24h: number;
+  lastEventAt: number | null;
+  receivingData: boolean;
+  /** Events dated in the future exist (site clock ahead); not counted in lastEventAt/eventsLast24h. */
+  hasFutureEvents: boolean;
+};
+
+export type PopularPage = { path: string; title: string; hasTitle: boolean; sessions: number; clicks: number };
+
+type Listing<K extends string, T> = { [key in K]: T[] } & { meta: { limit: number; nextCursor: string | null } };
+
+const withCursor = (cursor?: string | null) => (cursor ? `?cursor=${encodeURIComponent(cursor)}` : "");
+
+export const fetchProjects = async (baseUrl: string, cursor?: string | null) => {
+  const body = await getJson(baseUrl, `${baseUrl}/api/projects${withCursor(cursor)}`);
+  if (!body || !Array.isArray(body.projects)) {
+    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_DASHBOARD_FETCH, "collector response has no projects array");
+  }
+  return body as Listing<"projects", ProjectListItem>;
+};
+
+export const fetchPages = async (baseUrl: string, projectId: string, cursor?: string | null) => {
+  const url = `${baseUrl}/api/projects/${encodeURIComponent(projectId)}/pages${withCursor(cursor)}`;
+  const body = await getJson(baseUrl, url);
+  if (!body || !Array.isArray(body.pages)) {
+    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_DASHBOARD_FETCH, "collector response has no pages array");
+  }
+  return body as Listing<"pages", PopularPage>;
 };

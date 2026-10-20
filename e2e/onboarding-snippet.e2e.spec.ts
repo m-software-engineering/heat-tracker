@@ -1,23 +1,48 @@
 import { test, expect } from "@playwright/test";
-import { trackingSnippet } from "../examples/nextjs-dashboard/lib/onboarding";
+import { scriptString, trackingSnippet } from "../examples/nextjs-dashboard/lib/onboarding";
 
-test.describe("onboarding tracking snippet (#59)", () => {
-  test("fills in dashboardOrigins with the dashboard's own origin", () => {
-    const snippet = trackingSnippet("https://collector.example.com", "pk_abc", "https://heat.example.com");
-    expect(snippet).toContain('dashboardOrigins: ["https://heat.example.com"]');
-    expect(snippet).toContain('endpoint: "https://collector.example.com/ingest"');
-    expect(snippet).toContain('projectKey: "pk_abc"');
+// The snippet is pasted into an HTML page, so a hostile key or URL must stay one JS string (#64 QA).
+const evil = 'x"});fetch("//evil.example")//</script><script>alert(1)</script>\u2028';
+const DASHBOARD = "https://heat.example.com";
+
+test.describe("tracking snippet", () => {
+  test("keeps a malicious projectKey, collector URL and dashboard origin as data in an HTML page", async ({ page }) => {
+    const snippet = trackingSnippet(`https://c.example${evil}`, evil, `${DASHBOARD}${evil}`);
+    // The page as a site owner would paste it, with the CDN import swapped for a recorder.
+    const pasted = snippet.replace(/^\s*import .*$/m, "");
+    await page.addInitScript(() => {
+      const calls: unknown[] = [];
+      Object.assign(window, { calls, init: (c: unknown) => calls.push(c), alert: () => calls.push("alert") });
+    });
+    await page.route("http://snippet.test/", (route) => route.fulfill({ contentType: "text/html", body: pasted }));
+    await page.goto("http://snippet.test/");
+    await expect
+      .poll(() => page.evaluate(() => (window as any).calls))
+      .toEqual([
+        { endpoint: `https://c.example${evil}/ingest`, projectKey: evil, dashboardOrigins: [`${DASHBOARD}${evil}`] }
+      ]);
+    // Only the snippet's own tags: nothing inside can close the script element.
+    expect(snippet.match(/<\/?script/gi)).toEqual(["<script", "</script"]);
   });
 
-  test("escapes values with JSON.stringify and cannot close the script tag", () => {
-    const snippet = trackingSnippet('https://c.test/"x', "pk_1", 'https://d.test"</script><script>alert(1)//');
-    expect(snippet).toContain('endpoint: "https://c.test/\\"x/ingest"');
-    expect(snippet).toContain('dashboardOrigins: ["https://d.test\\"\\u003c/script>\\u003cscript>alert(1)//"]');
-    // Only the snippet's own closing tag remains.
-    expect(snippet.match(/<\/script>/g)).toHaveLength(1);
-    // Each value is a JSON literal, so it parses back to the original string.
-    const origins = JSON.parse(snippet.match(/dashboardOrigins: (\[.*\])/)![1]) as string[];
-    expect(origins).toEqual(['https://d.test"</script><script>alert(1)//']);
-    expect(JSON.parse(snippet.match(/endpoint: (".*"),/)![1])).toBe('https://c.test/"x/ingest');
+  test("renders a normal key unchanged, with dashboardOrigins set to the dashboard's own origin (#59)", () => {
+    expect(trackingSnippet("http://localhost:4000", "pk_ab", "http://localhost:3000")).toContain(
+      'init({ endpoint: "http://localhost:4000/ingest", projectKey: "pk_ab", dashboardOrigins: ["http://localhost:3000"] });'
+    );
+  });
+
+  test("dashboardOrigins goes through scriptString", () => {
+    const snippet = trackingSnippet("http://localhost:4000", "pk_ab", 'https://d.test"</script>\u2028');
+    expect(snippet).toContain(`dashboardOrigins: [${scriptString('https://d.test"</script>\u2028')}]`);
+    expect(snippet).toContain('dashboardOrigins: ["https://d.test\\"\\u003c/script>\\u2028"]');
+  });
+
+  test("scriptString round-trips through JSON and never emits <, </script, U+2028 or U+2029", () => {
+    for (const value of ["pk_ab", 'a"b\\c', "</script><!--", "x\u2028y\u2029z", "ü🔥\n"]) {
+      const literal = scriptString(value);
+      expect(JSON.parse(literal)).toBe(value);
+      expect(literal).not.toMatch(/[<\u2028\u2029]/);
+    }
+    expect(scriptString("</script>")).toBe('"\\u003c/script>"');
   });
 });
