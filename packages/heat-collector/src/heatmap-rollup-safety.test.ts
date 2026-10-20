@@ -10,6 +10,7 @@ const KEY = "safety-key";
 const T0 = 1_760_000_000_000;
 
 type Target = {
+  failRollup: string[];
   name: string;
   config: () => Promise<DbAdapterConfig>;
   query: (q: string, p?: unknown[]) => Promise<any[]>;
@@ -19,6 +20,9 @@ const sqliteTarget = (): Target => {
   const client = new Database(":memory:");
   return {
     name: "sqlite",
+    failRollup: [
+      "create trigger fail_rollup before insert on heatmap_rollup begin select raise(abort, 'rollup down'); end"
+    ],
     config: async () => ({ dialect: "sqlite", client }),
     query: async (q, p = []) =>
       q.trim().startsWith("select") ? client.prepare(q).all(...p) : (client.prepare(q).run(...p), [])
@@ -30,6 +34,10 @@ const pgTarget = (): Target => {
   let pool: any;
   return {
     name: "pg",
+    failRollup: [
+      "create function fail_rollup() returns trigger language plpgsql as $$ begin raise exception 'rollup down'; end $$",
+      "create trigger fail_rollup before insert on heatmap_rollup for each row execute function fail_rollup()"
+    ],
     config: async () => {
       const { Pool } = await import("pg");
       // Own schema, so the golden test can use the same database at the same time.
@@ -92,7 +100,8 @@ describe.each(targets.map((make) => [make().name, make] as const))("rollup safet
     const target = make();
     const { ingest } = await setup(target);
     await ingest([click(1)]).expect(200);
-    await target.query("drop table heatmap_rollup");
+    // Make every rollup write fail (the table stays, so no statement sees a schema change).
+    for (const statement of target.failRollup) await target.query(statement);
 
     const res = await ingest([click(2), click(3)]);
 
