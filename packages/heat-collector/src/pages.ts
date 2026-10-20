@@ -6,7 +6,7 @@ import { fieldErrors, queryCause, sendError } from "./http-errors";
 import { pagesQuerySchema, projectsQuerySchema } from "./validation";
 import { listPagesMongo, listProjectsMongo, projectExistsMongo, upsertPageTitlesMongo } from "./pages-mongo";
 import { listPagesSql, listProjectsSql, projectExistsSql, upsertPageTitlesSql } from "./pages-sql";
-import type { PageCursor, PageTitle, ProjectCursor } from "./pages-types";
+import { projectSortKey, type PageCursor, type PageTitle, type ProjectCursor } from "./pages-types";
 
 /**
  * Projects and popular pages (#25): `GET /api/projects` and `GET /api/projects/:projectId/pages`.
@@ -43,7 +43,7 @@ const decodeCursor = <T>(raw: string, valid: (value: any) => boolean): T | undef
 };
 
 const isNum = (v: unknown) => typeof v === "number" && Number.isFinite(v);
-const isProjectCursor = (v: any) => isNum(v?.c) && typeof v?.i === "string";
+const isProjectCursor = (v: any) => isNum(v?.k) && typeof v?.i === "string";
 const isPageCursor = (v: any) => isNum(v?.s) && typeof v?.p === "string" && isNum(v?.f) && isNum(v?.t);
 
 const timeCause = (param: "from" | "to", value?: string) =>
@@ -81,7 +81,7 @@ export const registerPageRoutes = (
         meta: {
           count: projects.length,
           limit,
-          nextCursor: rows.length > limit ? encodeCursor({ c: last.createdAt, i: last.id }) : null
+          nextCursor: rows.length > limit ? encodeCursor({ k: projectSortKey(last), i: last.id }) : null
         }
       });
     } catch (err) {

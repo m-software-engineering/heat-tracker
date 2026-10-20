@@ -3,18 +3,35 @@
  * the site allowlists in `privacy.keepQueryParams`, and the masked document title on pageviews.
  * Sensitive params are never kept, even when allowlisted (the collector strips them again).
  */
-const SENSITIVE_PARAMS = new Set(["token", "email", "code", "password", "secret", "key", "auth"]);
+// Same rule as the collector: the name lowercased without `-`/`_` contains one of these.
+const SENSITIVE_PARTS = ["token", "key", "secret", "password", "passwd", "auth", "sig", "jwt", "session", "code"];
 const EMAIL_VALUE = /^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/;
 const MAX_TITLE_LENGTH = 200;
 const MASK = "•••";
 
 const isSensitive = (name: string, value: string) => {
-  const lower = name.toLowerCase();
-  return SENSITIVE_PARAMS.has(lower) || lower.startsWith("session") || EMAIL_VALUE.test(value.trim());
+  const folded = name.toLowerCase().replace(/[-_]/g, "");
+  return SENSITIVE_PARTS.some((part) => folded.includes(part)) || EMAIL_VALUE.test(value.trim());
 };
 
+const decode = (segment: string) => {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+};
+
+/** Email-looking path segments become `[email]` (one page for /users/<any email>). */
+const maskEmails = (pathname: string) =>
+  pathname
+    .split("/")
+    .map((segment) => (EMAIL_VALUE.test(decode(segment)) ? "[email]" : segment))
+    .join("/");
+
 export const pagePath = (keepQueryParams: string[]) => {
-  const { pathname, search } = location;
+  const { search } = location;
+  const pathname = maskEmails(location.pathname);
   if (keepQueryParams.length === 0 || !search) return pathname;
   const allowed = new Set(keepQueryParams.map((name) => name.toLowerCase()));
   const kept = new URLSearchParams();

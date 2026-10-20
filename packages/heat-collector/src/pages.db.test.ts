@@ -94,7 +94,7 @@ describe.each(targets)("projects and pages on $name", ({ db }) => {
         .expect(200);
 
     await ingest("s1", [
-      ["pageview", "/b?token=x", now - 3000, "Old B"],
+      ["pageview", "/b?access_token=x", now - 3000, "Old B"],
       ["click", "/b", now - 2500],
       ["pageview", "/b", now - 1000, "B"]
     ]);
@@ -106,7 +106,12 @@ describe.each(targets)("projects and pages on $name", ({ db }) => {
 
     const projects = await request(app).get("/api/projects").expect(200);
     expect(projects.body.projects).toHaveLength(1);
-    expect(projects.body.projects[0]).toMatchObject({ name: "Default", eventsLast24h: 6, receivingData: true });
+    expect(projects.body.projects[0]).toMatchObject({
+      name: "Default",
+      projectKey: "db-key",
+      eventsLast24h: 6,
+      receivingData: true
+    });
     const id = projects.body.projects[0].id;
 
     const first = await request(app).get(`/api/projects/${id}/pages`).query({ limit: 1 }).expect(200);

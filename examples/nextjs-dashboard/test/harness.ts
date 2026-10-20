@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import PageHeatmap from "../components/PageHeatmap";
 import PopularPages from "../components/PopularPages";
 import ProjectList from "../components/ProjectList";
+import ProjectSnippet from "../components/ProjectSnippet";
 import { pageHref, projectHref } from "../lib/entry-links";
 import { renderHeatmap } from "../lib/heatmap-render";
 
@@ -21,7 +22,12 @@ if (!projectId) {
     createElement(PopularPages, {
       collectorUrl: window.location.origin,
       projectId,
-      hrefFor: (p) => pageHref(projectId, p.path)
+      hrefFor: (p) => pageHref(projectId, p.path),
+      snippet: createElement(ProjectSnippet, {
+        publicCollectorUrl: window.location.origin,
+        projectId,
+        collectorUrl: window.location.origin
+      })
     })
   );
 } else {

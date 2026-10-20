@@ -46,6 +46,8 @@ test("a page appears with its title within 10 s of installing the SDK, then open
   await projects.getByRole("link", { name: /Default/ }).click();
 
   await expect(page.getByTestId("waiting-first-event")).toContainText("Waiting for your first event…");
+  // The snippet comes from GET /api/projects (projectKey), so it shows in a browser that never onboarded.
+  await expect(page.getByTestId("snippet")).toContainText('projectKey: "overlay-key"');
 
   // Install: the fixture site loads the SDK; its pageview carries document.title ("Pricing").
   const started = Date.now();

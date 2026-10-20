@@ -4,6 +4,8 @@ export type PageTitle = { path: string; title: string; ts: number };
 export type ProjectRow = {
   id: string;
   name: string;
+  /** Returned because `GET /api/projects` is admin-only (#24): the dashboard builds the snippet from it. */
+  projectKey: string;
   createdAt: number;
   eventsLast24h: number;
   lastEventAt: number | null;
@@ -12,6 +14,11 @@ export type ProjectRow = {
 /** `title` is the stored (latest-seen) title, null when the page never sent one. */
 export type PageRow = { path: string; title: string | null; sessions: number; clicks: number };
 
-/** Keyset positions: projects by (createdAt, id); pages by (sessions desc, path) inside a fixed window. */
-export type ProjectCursor = { c: number; i: string };
+/**
+ * Keyset positions. Projects: (k desc, id) where k is the last event ts, or NO_EVENTS_SORT_KEY for a
+ * project with no events (listed first). Pages: (sessions desc, path) inside a fixed window.
+ */
+export type ProjectCursor = { k: number; i: string };
+export const NO_EVENTS_SORT_KEY = Number.MAX_SAFE_INTEGER;
+export const projectSortKey = (p: { lastEventAt: number | null }) => p.lastEventAt ?? NO_EVENTS_SORT_KEY;
 export type PageCursor = { s: number; p: string; f: number; t: number };

@@ -1,25 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PROJECT_KEY_STORAGE, trackingSnippet } from "../lib/onboarding";
+import { fetchProjects } from "../lib/api";
+import { trackingSnippet } from "../lib/onboarding";
 
 type Props = { publicCollectorUrl: string; projectId: string; collectorUrl: string };
 
 /**
- * #24's install snippet for a project that has no pages yet. The projectKey is only known to the browser
- * that generated it, so the snippet shows when the stored key belongs to this project.
+ * #24's install snippet for a project that has no pages yet. The key comes from `GET /api/projects`
+ * (admin-only, Margot #64), so the snippet shows in any signed-in browser.
  */
 export default function ProjectSnippet({ publicCollectorUrl, projectId, collectorUrl }: Props) {
   const [projectKey, setProjectKey] = useState<string>();
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const key = window.localStorage.getItem(PROJECT_KEY_STORAGE);
-    if (!key) return;
     let cancelled = false;
-    fetch(`${collectorUrl}/api/projects/by-key/${encodeURIComponent(key)}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((body) => !cancelled && body?.project?.id === projectId && setProjectKey(key))
+    const find = async (cursor?: string | null): Promise<string | undefined> => {
+      const page = await fetchProjects(collectorUrl, cursor);
+      const found = page.projects.find((p) => p.id === projectId);
+      if (found || !page.meta.nextCursor) return found?.projectKey;
+      return find(page.meta.nextCursor);
+    };
+    find()
+      .then((key) => !cancelled && setProjectKey(key))
       .catch(() => undefined);
     return () => {
       cancelled = true;

@@ -68,7 +68,8 @@ Optional fields:
 - `sampling`: sampling rate (0..1)
 - `privacy`: selector masking and blocking options; `keepQueryParams: ["utm_source", ...]` keeps those query
   params in the stored path (default `[]`: the path is `location.pathname` only, no query string or hash).
-  `token`, `email`, `code`, `password`, `secret`, `key`, `auth`, `session*` and email-looking values are never kept.
+  Keys whose name (lowercased, `-`/`_` removed) contains `token`, `key`, `secret`, `password`, `passwd`, `auth`, `sig`,
+  `jwt`, `session` or `code`, and email-looking values, are never kept. Email-looking path segments become `[email]`.
 - `capture`: capture-level controls; `pageTitle: false` stops sending `document.title` on pageviews (default on;
   `maskTextSelectors` text in the title is replaced by `•••`, at most 200 characters)
 - `onError(err)`: receives every ingest error as a `HeatError` (`code`, `message`, `cause`, `fix`, `docs`, `requestId?`)

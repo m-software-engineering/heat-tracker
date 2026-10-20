@@ -1,4 +1,11 @@
-import type { PageCursor, PageRow, PageTitle, ProjectCursor, ProjectRow } from "./pages-types";
+import {
+  projectSortKey,
+  type PageCursor,
+  type PageRow,
+  type PageTitle,
+  type ProjectCursor,
+  type ProjectRow
+} from "./pages-types";
 
 /** MongoDB backend for projects and popular pages (#25); same results as `pages-sql.ts`. */
 export const upsertPageTitlesMongo = async (db: any, projectId: string, titles: PageTitle[]) => {
@@ -23,25 +30,19 @@ export const upsertPageTitlesMongo = async (db: any, projectId: string, titles: 
   );
 };
 
-/** Two queries: the projects page, then one grouped read of their events. */
+/**
+ * Two queries: all projects, then one grouped read of the events; sorted like the SQL backend
+ * (no events first, then most recent event) and keyset-paged in Node.
+ */
 export const listProjectsMongo = async (
   db: any,
   opts: { limit: number; after?: ProjectCursor; since: number }
 ): Promise<ProjectRow[]> => {
-  const filter = opts.after
-    ? { $or: [{ createdAt: { $gt: opts.after.c } }, { createdAt: opts.after.c, id: { $gt: opts.after.i } }] }
-    : {};
-  const projects = await db
-    .collection("projects")
-    .find(filter)
-    .sort({ createdAt: 1, id: 1 })
-    .limit(opts.limit + 1)
-    .toArray();
+  const projects = await db.collection("projects").find({}).toArray();
   if (projects.length === 0) return [];
   const stats = await db
     .collection("events")
     .aggregate([
-      { $match: { projectId: { $in: projects.map((p: any) => p.id ?? String(p._id)) } } },
       {
         $group: {
           _id: "$projectId",
@@ -52,17 +53,26 @@ export const listProjectsMongo = async (
     ])
     .toArray();
   const byId = new Map(stats.map((s: any) => [s._id, s]));
-  return projects.map((p: any) => {
+  const rows: ProjectRow[] = projects.map((p: any) => {
     const id = String(p.id ?? p._id);
     const s: any = byId.get(id);
     return {
       id,
       name: String(p.name),
+      projectKey: String(p.key),
       createdAt: Number(p.createdAt),
       eventsLast24h: Number(s?.recent ?? 0),
       lastEventAt: s?.last == null ? null : Number(s.last)
     };
   });
+  const ordered = rows.sort(
+    (a, b) => projectSortKey(b) - projectSortKey(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)
+  );
+  const after = opts.after;
+  const start = after
+    ? ordered.filter((r) => projectSortKey(r) < after.k || (projectSortKey(r) === after.k && r.id > after.i))
+    : ordered;
+  return start.slice(0, opts.limit + 1);
 };
 
 export const projectExistsMongo = async (db: any, projectId: string) =>

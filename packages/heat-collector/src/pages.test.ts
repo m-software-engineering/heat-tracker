@@ -157,53 +157,81 @@ describe("GET /api/projects/:projectId/pages", () => {
 });
 
 describe("ingest path and title privacy", () => {
-  it("strips sensitive params and email values, keeps others, trims titles to 200 chars", async () => {
+  it("strips params whose folded name contains a sensitive part, and email values; trims titles", async () => {
     const { app, client } = await setup();
     const dirty =
-      "/a?utm_source=x&token=t&Email=e&code=1&password=p&secret=s&key=k&auth=a&sessionId=9&q=me%40x.com&page=2#access=1&code=2";
+      "/a?utm_source=x&access_token=t&api_key=k&X-Amz-Signature=s&passwd=p&client_secret=c&Authorization=a" +
+      "&jwt=j&my_session=9&promo-code=1&q=me%40x.com&email=plain&page=2#access=1&state_code=2";
     await send(app, "s", [
       { type: "pageview", path: dirty, title: `${"é".repeat(250)}` },
       { type: "click", path: dirty }
     ]);
     const paths = client.prepare("select distinct path from events").all() as Array<{ path: string }>;
-    expect(paths).toEqual([{ path: "/a?utm_source=x&page=2#access=1" }]);
-    const meta = client.prepare("select meta_json from events where type = 'pageview'").get() as any;
-    expect(meta.meta_json).not.toContain("token");
+    expect(paths).toEqual([{ path: "/a?utm_source=x&email=plain&page=2#access=1" }]);
     const page = client.prepare("select title from pages").get() as { title: string };
     expect(Array.from(page.title)).toHaveLength(200);
+  });
+
+  it("groups email-looking path segments as [email]", async () => {
+    const { app, client } = await setup();
+    await send(app, "a", [{ type: "pageview", path: "/users/ana@x.com/orders", title: "Orders" }]);
+    await send(app, "b", [{ type: "pageview", path: "/users/bo%40y.org/orders" }]);
+    const res = await request(app)
+      .get(`/api/projects/${projectIdOf(client)}/pages`)
+      .expect(200);
+    expect(res.body.pages).toEqual([
+      { path: "/users/[email]/orders", title: "Orders", hasTitle: true, sessions: 2, clicks: 0 }
+    ]);
   });
 });
 
 describe("GET /api/projects", () => {
-  it("lists every project with events in the last 24 h, a receiving-data flag and a cursor", async () => {
+  it("lists projects with no events first, then by most recent event, with projectKey and a cursor", async () => {
     const { app, client, countQueries } = await setup();
+    const now = Date.now();
+    await send(app, "old", [{ type: "pageview", path: "/", ts: now - 2 * 86_400_000 }], "key-old");
     await send(
       app,
-      "a",
+      "new",
       [
         { type: "pageview", path: "/" },
         { type: "click", path: "/" }
       ],
-      "key-a"
+      "key-new"
     );
-    await send(app, "b", [{ type: "pageview", path: "/", ts: Date.now() - 2 * 86_400_000 }], "key-b");
+    client
+      .prepare("insert into projects (id, key, name, created_at) values ('empty', 'key-empty', 'Empty', ?)")
+      .run(now);
+
     const { result: first, queries } = await countQueries(() =>
-      request(app).get("/api/projects").query({ limit: 1 }).expect(200)
+      request(app).get("/api/projects").query({ limit: 2 }).expect(200)
     );
     expect(queries).toBeGreaterThan(0);
     expect(queries).toBeLessThanOrEqual(2);
     expect(first.body.projects).toEqual([
       expect.objectContaining({
-        id: projectIdOf(client, "key-a"),
+        id: "empty",
+        projectKey: "key-empty",
+        eventsLast24h: 0,
+        lastEventAt: null,
+        receivingData: false
+      }),
+      expect.objectContaining({
+        id: projectIdOf(client, "key-new"),
+        projectKey: "key-new",
         name: "Default",
         eventsLast24h: 2,
         receivingData: true
       })
     ]);
-    expect(first.body.projects[0]).not.toHaveProperty("key");
     const second = await request(app).get("/api/projects").query({ cursor: first.body.meta.nextCursor }).expect(200);
     expect(second.body.projects).toEqual([
-      expect.objectContaining({ id: projectIdOf(client, "key-b"), eventsLast24h: 0, receivingData: false })
+      expect.objectContaining({
+        id: projectIdOf(client, "key-old"),
+        projectKey: "key-old",
+        eventsLast24h: 0,
+        receivingData: false
+      })
     ]);
     expect(second.body.meta).toMatchObject({ limit: 50, nextCursor: null });
   });

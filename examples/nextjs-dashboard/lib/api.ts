@@ -47,6 +47,7 @@ export const fetchHeatmap = async (baseUrl: string, projectId: string, params: R
 export type ProjectListItem = {
   id: string;
   name: string;
+  projectKey: string;
   createdAt: number;
   eventsLast24h: number;
   lastEventAt: number | null;

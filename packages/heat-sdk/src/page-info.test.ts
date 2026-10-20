@@ -43,12 +43,22 @@ describe("page path and title (#25)", () => {
     expect(view).toMatchObject({ path: "/checkout", to: "/checkout" });
   });
 
-  it("keeps only allowlisted params, never sensitive ones or email values", async () => {
-    history.replaceState({}, "", "/p?utm_source=ads&token=t&Email=x&ref=me%40x.com&sessionid=1&other=1");
+  it("keeps only allowlisted params, never ones whose folded name is sensitive or with email values", async () => {
+    history.replaceState(
+      {},
+      "",
+      "/p?utm_source=ads&access_token=t&api_key=k&X-Amz-Signature=s&ref=me%40x.com&email=plain&other=1"
+    );
     const [view] = await pageviews({
-      privacy: { keepQueryParams: ["utm_source", "token", "email", "ref", "sessionId"] }
+      privacy: { keepQueryParams: ["utm_source", "access_token", "api_key", "X-Amz-Signature", "ref", "email"] }
     });
-    expect(view.path).toBe("/p?utm_source=ads");
+    expect(view.path).toBe("/p?utm_source=ads&email=plain");
+  });
+
+  it("replaces email-looking path segments with [email]", async () => {
+    history.replaceState({}, "", "/users/ana%40example.com/orders");
+    const [view] = await pageviews();
+    expect(view.path).toBe("/users/[email]/orders");
   });
 
   it("sends the trimmed title, masks maskTextSelectors text and caps it at 200 characters", async () => {
