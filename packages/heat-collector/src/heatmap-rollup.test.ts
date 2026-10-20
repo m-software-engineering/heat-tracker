@@ -114,7 +114,8 @@ describe("heatmap rollup", () => {
     ]);
     // 390 and 420 round to 400: use different heights for two buckets.
     client.exec("update events set viewport_bucket = '400x800' where ts = " + (T0 + 2000));
-    client.exec("delete from heatmap_rollup");
+    // Documented rebuild: empty the rollup and mark every row pending.
+    client.exec("delete from heatmap_rollup; update events set rollup_state = null");
     const migrated = await collectorOn(client);
 
     const body = await heatmap(migrated, projectId, { from: T0, to: T0 + HOUR - 1, viewport: "400x900,400x800" });
