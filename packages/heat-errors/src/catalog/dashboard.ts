@@ -9,9 +9,8 @@ export const DASHBOARD_ERRORS = {
   },
   HEAT_E_FRAME_ORIGIN_NOT_ALLOWED: {
     code: "HEAT_E_FRAME_ORIGIN_NOT_ALLOWED",
-    message:
-      "This site is not allowed in the dashboard yet, so its page is not loaded and the heatmap is drawn on a blank page.",
-    fix: "Add `HEAT_DASHBOARD_SITE_ORIGINS=<site origin>` to the dashboard's environment (comma-separate several origins), then restart the dashboard."
+    message: "This site isn't allowed yet.",
+    fix: "Add its origin to HEAT_DASHBOARD_SITE_ORIGINS and restart the dashboard."
   },
   HEAT_E_DASHBOARD_FETCH: {
     code: "HEAT_E_DASHBOARD_FETCH",

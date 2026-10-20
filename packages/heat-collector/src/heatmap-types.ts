@@ -7,7 +7,8 @@ export type HeatmapFilter = {
   projectId: string;
   type: EventQueryType;
   path?: string;
-  viewport?: string;
+  /** Stored buckets to keep (any of them); the first one sets the grid. */
+  viewport?: string[];
   from: number;
   to: number;
 };

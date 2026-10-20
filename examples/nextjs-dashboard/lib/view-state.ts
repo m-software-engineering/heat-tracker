@@ -22,18 +22,27 @@ export const viewportClassOf = (width: number): ViewportClass =>
   width < 600 ? "mobile" : width < 1100 ? "tablet" : "desktop";
 
 export type BucketCount = { bucket: string; count: number };
-/** One viewport toggle option: the class's busiest stored bucket (the filter sent) and its event count. */
-export type ViewportOption = { viewport: ViewportClass; bucket: string; count: number };
+/**
+ * One viewport toggle option: every stored bucket of the class (the filter sent, busiest first),
+ * their summed event count, and the busiest bucket, whose width the frame uses.
+ */
+export type ViewportOption = { viewport: ViewportClass; bucket: string; buckets: string[]; count: number };
 
 export const VIEWPORT_CLASSES: ViewportClass[] = ["desktop", "tablet", "mobile"];
 
-/** Picks, per class, the bucket with the most events (falls back to VIEWPORT_BUCKETS with count 0). */
+/** Groups stored buckets by class (an empty class falls back to VIEWPORT_BUCKETS with count 0). */
 export const viewportOptions = (buckets: BucketCount[]): ViewportOption[] =>
   VIEWPORT_CLASSES.map((viewport) => {
-    const top = buckets
+    const own = buckets
       .filter((b) => viewportClassOf(Number(b.bucket.split("x")[0])) === viewport)
-      .sort((a, b) => b.count - a.count)[0];
-    return top ? { viewport, ...top } : { viewport, bucket: VIEWPORT_BUCKETS[viewport], count: 0 };
+      .sort((a, b) => b.count - a.count || (a.bucket < b.bucket ? -1 : 1));
+    if (own.length === 0) return { viewport, bucket: VIEWPORT_BUCKETS[viewport], buckets: [], count: 0 };
+    return {
+      viewport,
+      bucket: own[0].bucket,
+      buckets: own.map((b) => b.bucket),
+      count: own.reduce((sum, b) => sum + b.count, 0)
+    };
   });
 
 const clampOpacity = (n: number) => Math.min(100, Math.max(0, Math.round(n / 5) * 5));

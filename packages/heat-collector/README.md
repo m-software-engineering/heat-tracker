@@ -151,7 +151,7 @@ A JWKS download failure now returns HTTP 503 `HEAT_E_AUTH_JWKS_UNAVAILABLE` with
 - The heatmap renderer adapts to deeper page interactions by expanding `meta.renderHeight` beyond the base viewport when events are observed below the fold.
 - Aggregation runs in the database (`GROUP BY` on bucketed coordinates; MongoDB aggregation pipelines), so a heatmap over 1 M events stays within p95 ≤ 500 ms on Postgres with constant collector memory. `meta.totalEvents` is the number of matched events and `meta.sampled` is `false` (every matched event is counted).
 - Without `from` and `to`, a heatmap covers the last 7 days ending with the current hour; `meta.range` is `{ from, to, defaulted }`. `from` alone ends at now, `to` alone starts at 0.
-- `viewport=390x800` counts only events stored with that viewport bucket (and uses it as the grid). `meta.viewportBuckets` lists `{ bucket, count }` for every bucket in the range, ignoring `viewport`.
+- `viewport=400x800,400x900` counts only events stored with one of those viewport buckets (the first sets the grid). `meta.viewportBuckets` lists `{ bucket, count }` for every bucket in the range, ignoring `viewport`.
 - `click`/`move` events without coordinates (and scrolls without depth) are skipped on every database and counted in `meta.excluded.noCoordinates`. SQL databases used to plot them at 0,0.
 - Whole hours are read from the `heatmap_rollup` table, which ingest keeps up to date and `autoMigrate` builds from existing events (MongoDB reads events directly).
 - Without `viewportBucket`, the viewport is the most common bucket among the 10,000 most recent matching events. `viewportBucket` must look like `1440x900`; anything else returns 400 `HEAT_E_QUERY_INVALID` naming the param.

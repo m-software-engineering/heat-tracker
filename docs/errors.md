@@ -284,8 +284,8 @@ console.log(body.error.message); // "The JWT has expired."
 
 ## HEAT_E_FRAME_ORIGIN_NOT_ALLOWED
 
-- Message: This site is not allowed in the dashboard yet, so its page is not loaded and the heatmap is drawn on a blank page.
-- Fix: Add `HEAT_DASHBOARD_SITE_ORIGINS=<site origin>` to the dashboard's environment (comma-separate several origins), then restart the dashboard.
+- Message: This site isn't allowed yet.
+- Fix: Add its origin to HEAT_DASHBOARD_SITE_ORIGINS and restart the dashboard.
 
 ## HEAT_E_DASHBOARD_FETCH
 

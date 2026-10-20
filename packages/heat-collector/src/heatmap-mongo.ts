@@ -5,7 +5,7 @@ const match = (filter: HeatmapFilter) => {
   const query: Record<string, unknown> = { projectId: filter.projectId, ts: { $gte: filter.from, $lte: filter.to } };
   if (filter.type !== "all") query.type = filter.type;
   if (filter.path) query.path = filter.path;
-  if (filter.viewport) query.viewportBucket = filter.viewport;
+  if (filter.viewport) query.viewportBucket = { $in: filter.viewport };
   return query;
 };
 

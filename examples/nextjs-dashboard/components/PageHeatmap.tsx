@@ -95,7 +95,8 @@ export default function PageHeatmap({
   // No choice yet: the busiest class, so the checked option is always the one plotted.
   const busiest = options?.reduce((a, b) => (b.count > a.count ? b : a));
   const chosen = state.viewport ? options?.find((o) => o.viewport === state.viewport) : busiest;
-  const filterBucket = chosen && chosen.count > 0 ? chosen.bucket : undefined;
+  // The whole class is filtered; the busiest bucket goes first, so it sets the frame width.
+  const filterBucket = chosen && chosen.count > 0 ? chosen.buckets.join(",") : undefined;
 
   useEffect(() => {
     if (!projectId) return;
@@ -166,8 +167,9 @@ export default function PageHeatmap({
 
   const activeViewport = state.viewport ?? busiest?.viewport ?? viewportClassOf(width);
   const period = `${state.days} ${state.days === 1 ? "day" : "days"}`;
+  const rangeLabel = `Last ${period}`;
   const clicks = data?.meta.totalEvents ?? 0;
-  const summary = `${clicks.toLocaleString("en-US")} clicks · ${period} · ${activeViewport}${data?.meta.sampled ? " · sampled" : ""}`;
+  const summary = `${clicks.toLocaleString("en-US")} clicks · ${rangeLabel} · ${activeViewport}${data?.meta.sampled ? " · sampled" : ""}`;
   const noPosition = data?.meta.excluded?.noCoordinates ?? 0;
   const areas = useMemo(() => (data ? topAreas(data.points, data.meta.viewport) : []), [data]);
 
@@ -180,7 +182,9 @@ export default function PageHeatmap({
       {data && clicks === 0 && <p className="ph-empty">No clicks on this page in the last {period}.</p>}
       {noPosition > 0 && (
         <p className="ph-note" data-testid="no-position-note">
-          {noPosition.toLocaleString("pt-BR")} cliques sem posição não aparecem no mapa
+          {noPosition === 1
+            ? "1 click without a position isn't shown"
+            : `${noPosition.toLocaleString("en-US")} clicks without a position aren't shown`}
         </p>
       )}
       {error && (
@@ -227,11 +231,9 @@ export default function PageHeatmap({
           </div>
         </div>
       </div>
-      {scale < 1 && (
-        <p className="ph-note" data-testid="frame-scale">
-          {width} px, {Math.round(scale * 100)}%
-        </p>
-      )}
+      <p className="ph-note" data-testid="frame-scale">
+        {width} px{scale < 1 ? `, ${Math.round(scale * 100)}%` : ""}
+      </p>
       <HeatmapLegend max={max} />
     </section>
   );

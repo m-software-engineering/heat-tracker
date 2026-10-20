@@ -7,7 +7,7 @@ let stack: Stack;
 let projectId: string;
 
 const CLICKS = 5;
-const MOBILE_CLICKS = 2;
+const MOBILE_CLICKS = 2; // 400x800, plus one 400x900 click: Mobile counts 3
 
 test.beforeAll(async ({ browser }) => {
   stack = await startOverlayStack();
@@ -31,12 +31,22 @@ test.beforeAll(async ({ browser }) => {
   for (let i = 0; i < MOBILE_CLICKS; i += 1) await mobile.click("#buy");
   await mobile.evaluate(() => (window as any).__tracker__.flush());
   await phone.close();
+  // One click from a taller phone: a second mobile bucket (400x900), smaller than 400x800.
+  const tall = await browser.newContext({ viewport: { width: 414, height: 896 } });
+  const tallPage = await tall.newPage();
+  await tallPage.goto(`${stack.siteUrl}/pricing`);
+  await tallPage.waitForFunction(() => typeof (window as any).__tracker__?.flush === "function");
+  await tallPage.click("#buy");
+  await tallPage.evaluate(() => (window as any).__tracker__.flush());
+  await tall.close();
   const db = new Database(stack.dbFile);
   projectId = (db.prepare("select id from projects where key = ?").get("overlay-key") as { id: string }).id;
-  // A click stored without coordinates (older SDKs), on its own page.
-  db.prepare(
-    "insert into events (id, project_id, session_id, type, ts, path, meta_json, viewport_bucket) values ('nopos', ?, 's', 'click', ?, '/nopos', '{}', '1400x900')"
-  ).run(projectId, Date.now());
+  // Clicks stored without coordinates (older SDKs): one on /nopos, twelve on /nopos-many.
+  const noPosition = db.prepare(
+    "insert into events (id, project_id, session_id, type, ts, path, meta_json, viewport_bucket) values (?, ?, 's', 'click', ?, ?, '{}', '1400x900')"
+  );
+  noPosition.run("nopos", projectId, Date.now(), "/nopos");
+  for (let i = 0; i < 12; i += 1) noPosition.run(`nopos-${i}`, projectId, Date.now(), "/nopos-many");
   db.close();
 });
 
@@ -85,7 +95,7 @@ test("heatmap overlays the framed page and stays aligned while scrolling", async
   const frame = page.locator("iframe");
   await expect(frame).toHaveAttribute("sandbox", "allow-same-origin allow-scripts");
   await expect(frame).toHaveCSS("pointer-events", "none");
-  await expect(page.getByTestId("heatmap-summary")).toHaveText(`${CLICKS} clicks · 7 days · desktop`);
+  await expect(page.getByTestId("heatmap-summary")).toHaveText(`${CLICKS} clicks · Last 7 days · desktop`);
 
   // Bucket size for a 1400 × 2000 page at resolution 128, in screen px.
   const check = async () => {
@@ -169,17 +179,20 @@ test("viewport toggle filters events, shows counts and disables empty buckets", 
   await openDashboard(page, "path=/pricing");
   const group = page.getByRole("group", { name: "Viewport" });
   await expect(group.getByText(`Desktop · ${CLICKS}`)).toBeVisible();
-  await expect(group.getByText(`Mobile · ${MOBILE_CLICKS}`)).toBeVisible();
+  await expect(group.getByText(`Mobile · ${MOBILE_CLICKS + 1}`)).toBeVisible();
   const tablet = group.getByRole("radio", { name: "Tablet · 0" });
   await expect(tablet).toBeDisabled();
   await expect(group.locator("label", { hasText: "Tablet" })).toHaveAttribute(
     "title",
-    "Nenhum evento neste viewport no período"
+    "No events for this viewport in this period"
   );
 
-  await group.getByRole("radio", { name: `Mobile · ${MOBILE_CLICKS}` }).check();
+  await expect(page.getByTestId("frame-scale")).toHaveText(/^1400 px/);
+  await group.getByRole("radio", { name: `Mobile · ${MOBILE_CLICKS + 1}` }).check();
   await expect(page).toHaveURL(/viewport=mobile/);
-  await expect(page.getByTestId("heatmap-summary")).toHaveText(`${MOBILE_CLICKS} clicks · 7 days · mobile`);
+  // The whole class is plotted; the frame keeps the busiest bucket's width.
+  await expect(page.getByTestId("heatmap-summary")).toHaveText(`${MOBILE_CLICKS + 1} clicks · Last 7 days · mobile`);
+  await expect(page.getByTestId("frame-scale")).toHaveText("400 px");
 });
 
 test("an origin outside HEAT_DASHBOARD_SITE_ORIGINS is not loaded and shows the line to add", async ({
@@ -189,11 +202,15 @@ test("an origin outside HEAT_DASHBOARD_SITE_ORIGINS is not loaded and shows the 
   await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.goto(`${stack.dashboardUrl}/?project=${projectId}&path=/pricing&site=unlisted`);
   const notice = page.getByTestId("site-not-allowed");
-  await expect(notice.getByRole("heading")).toHaveText("Este site ainda não está liberado");
+  await expect(notice.getByRole("heading")).toHaveText("This site isn't allowed yet");
+  await expect(notice).toContainText("Add its origin to HEAT_DASHBOARD_SITE_ORIGINS and restart the dashboard.");
   const origin = stack.siteUrl.replace("127.0.0.1", "localhost");
   await expect(notice.getByTestId("allowlist-line")).toHaveText(`HEAT_DASHBOARD_SITE_ORIGINS=${origin}`);
-  await notice.getByRole("button", { name: "Copiar" }).click();
-  await expect(notice.getByRole("button", { name: "Copiado" })).toBeVisible();
+  await notice.getByRole("button", { name: "Copy" }).click();
+  const copiedAt = Date.now();
+  await expect(notice.getByRole("button", { name: "Copied" })).toBeVisible();
+  await expect(notice.getByRole("button", { name: "Copy", exact: true })).toBeVisible({ timeout: 3000 });
+  expect(Date.now() - copiedAt).toBeGreaterThanOrEqual(1900);
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(`HEAT_DASHBOARD_SITE_ORIGINS=${origin}`);
   await expect(page.locator("iframe")).toHaveCount(0);
   await expect(page.locator('[data-code="HEAT_E_FRAME_BLOCKED"]')).toHaveCount(0);
@@ -202,7 +219,9 @@ test("an origin outside HEAT_DASHBOARD_SITE_ORIGINS is not loaded and shows the 
 
 test("clicks without a position are reported in a note", async ({ page }) => {
   await openDashboard(page, "path=/nopos");
-  await expect(page.getByTestId("no-position-note")).toHaveText("1 cliques sem posição não aparecem no mapa");
+  await expect(page.getByTestId("no-position-note")).toHaveText("1 click without a position isn't shown");
+  await openDashboard(page, "path=/nopos-many");
+  await expect(page.getByTestId("no-position-note")).toHaveText("12 clicks without a position aren't shown");
 });
 
 test("a container narrower than the bucket scales the frame to fit and labels it", async ({ page }) => {

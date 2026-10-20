@@ -23,7 +23,7 @@ export default function HeatmapControls({ state, activeViewport, options, onChan
             <label
               key={viewport}
               className={empty ? "ph-target disabled" : "ph-target"}
-              title={empty ? "Nenhum evento neste viewport no período" : `${bucket} px`}
+              title={empty ? "No events for this viewport in this period" : `${bucket} px`}
             >
               <input
                 type="radio"

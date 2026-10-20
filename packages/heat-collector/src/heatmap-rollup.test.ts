@@ -104,6 +104,24 @@ describe("heatmap rollup", () => {
     ]);
   });
 
+  it("filters by several buckets at once; the first sets the grid", async () => {
+    const client = new Database(":memory:");
+    const app = await collectorOn(client);
+    const projectId = await ingest(app, client, [
+      click(1, T0 + 1000, 10, 10, 390),
+      click(2, T0 + 2000, 10, 10, 420),
+      click(3, T0 + 3000, 100, 100)
+    ]);
+    // 390 and 420 round to 400: use different heights for two buckets.
+    client.exec("update events set viewport_bucket = '400x800' where ts = " + (T0 + 2000));
+    client.exec("delete from heatmap_rollup");
+    const migrated = await collectorOn(client);
+
+    const body = await heatmap(migrated, projectId, { from: T0, to: T0 + HOUR - 1, viewport: "400x900,400x800" });
+
+    expect(body.meta).toMatchObject({ total: 2, viewportFilter: "400x900,400x800", bucket: "400x900" });
+  });
+
   it("defaults to the last 7 whole days and returns the applied range", async () => {
     const client = new Database(":memory:");
     const app = await collectorOn(client);

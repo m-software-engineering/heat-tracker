@@ -62,7 +62,7 @@ export const startOverlayStack = async () => {
   const bundle = await bundleHarness();
 
   const site = express();
-  site.get(["/pricing", "/empty", "/nopos"], (_req, res) => res.type("html").send(SITE_PAGE));
+  site.get(["/pricing", "/empty", "/nopos", "/nopos-many"], (_req, res) => res.type("html").send(SITE_PAGE));
   site.get("/blocked", (_req, res) =>
     res.set("Content-Security-Policy", "frame-ancestors 'none'").type("html").send(SITE_PAGE)
   );
