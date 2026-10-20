@@ -18,7 +18,9 @@ export const requireAdminToken =
   (logger: Logger, token: string): RequestHandler =>
   (req, res, next) => {
     const header = req.header("authorization");
-    const received = header?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+    const value = header?.trim() ?? "";
+    // String ops instead of a regex: the header is attacker-controlled (no backtracking).
+    const received = value.slice(0, 7).toLowerCase() === "bearer " ? value.slice(7).trim() : "";
     if (!received) {
       sendError(
         logger,

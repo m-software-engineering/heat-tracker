@@ -73,11 +73,12 @@ const serve = async (env: ServerEnv, io: ServerIo): Promise<Server> => {
     server.on("close", () => collector.close());
     server.on("error", (err: NodeJS.ErrnoException) => {
       collector.close();
-      reject(
-        new HeatTrackerError(SERVER_ERRORS.HEAT_E_SERVER_LISTEN, `${err.code ?? err.name} on ${host}:${port}`, {
-          original: err
-        })
+      const error: Error = new HeatTrackerError(
+        SERVER_ERRORS.HEAT_E_SERVER_LISTEN,
+        `${err.code ?? err.name} on ${host}:${port}`,
+        { original: err }
       );
+      reject(error);
     });
   });
 };
