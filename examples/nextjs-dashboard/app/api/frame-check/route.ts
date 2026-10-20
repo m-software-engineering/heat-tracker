@@ -1,4 +1,4 @@
-import { checkFrame } from "../../../lib/frame-policy";
+import { allowedSiteOrigins, checkFrame } from "../../../lib/frame-policy";
 
 /**
  * GET /api/frame-check?url=<site page>&origin=<dashboard origin> → { blocked, reason }.
@@ -12,5 +12,7 @@ export async function GET(request: Request) {
   if (!url || !URL.canParse(url)) {
     return Response.json({ blocked: true, reason: "url is missing or not absolute" }, { status: 400 });
   }
-  return Response.json(await checkFrame(url, origin), { headers: { "Cache-Control": "no-store" } });
+  return Response.json(await checkFrame(url, origin, allowedSiteOrigins()), {
+    headers: { "Cache-Control": "no-store" }
+  });
 }

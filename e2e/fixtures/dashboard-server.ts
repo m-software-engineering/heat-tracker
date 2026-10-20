@@ -69,36 +69,30 @@ export const startOverlayStack = async () => {
   site.use("/sdk", express.static(path.resolve(__dirname, "../../packages/heat-sdk/dist")));
   site.use(collector.router);
   const siteServer = await listen(site);
+  const siteOrigin = `http://127.0.0.1:${siteServer.port}`;
 
   const dashboard = express();
   const css = readFileSync(path.resolve(__dirname, "../../examples/nextjs-dashboard/app/globals.css"), "utf8");
   dashboard.get("/harness.js", (_req, res) => res.type("js").send(bundle));
   dashboard.get("/globals.css", (_req, res) => res.type("css").send(css));
   dashboard.get("/api/frame-check", async (req, res) => {
-    res.json(await checkFrame(String(req.query.url), String(req.query.origin)));
+    res.json(await checkFrame(String(req.query.url), String(req.query.origin), [siteOrigin]));
   });
-  dashboard.get("/", (req, res) => {
-    const config = JSON.stringify({
-      collectorUrl: `http://localhost:${dashboardServer.port}`,
-      projectId: String(req.query.project ?? ""),
-      siteOrigin: `http://127.0.0.1:${siteServer.port}`,
-      path: String(req.query.path ?? "/pricing")
-    });
-    res
-      .type("html")
-      .send(
-        `<!doctype html><html lang="en"><head><meta charset="utf-8" /><title>Heatmap</title>` +
-          `<link rel="stylesheet" href="/globals.css" /></head>` +
-          `<body><main id="root"></main><script>window.__HARNESS__ = ${req.query.project ? config : "undefined"};</script>` +
-          `<script src="/harness.js"></script></body></html>`
-      );
-  });
+  // Static page: the harness reads project/path from location.search; only server-known values are injected.
+  const page =
+    `<!doctype html><html lang="en"><head><meta charset="utf-8" /><title>Heatmap</title>` +
+    `<link rel="stylesheet" href="/globals.css" /></head><body><main id="root"></main>` +
+    `<script src="/site.js"></script><script src="/harness.js"></script></body></html>`;
+  dashboard.get("/", (_req, res) => res.type("html").send(page));
+  dashboard.get("/site.js", (_req, res) =>
+    res.type("js").send(`window.__SITE_ORIGIN__ = ${JSON.stringify(siteOrigin)};`)
+  );
   dashboard.use(collector.router);
   const dashboardServer = await listen(dashboard);
 
   return {
     dbFile,
-    siteUrl: `http://127.0.0.1:${siteServer.port}`,
+    siteUrl: siteOrigin,
     dashboardUrl: `http://localhost:${dashboardServer.port}`,
     close: async () => {
       await siteServer.close();

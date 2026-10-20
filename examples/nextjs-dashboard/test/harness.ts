@@ -5,10 +5,15 @@ import { createRoot } from "react-dom/client";
 import PageHeatmap from "../components/PageHeatmap";
 import { renderHeatmap } from "../lib/heatmap-render";
 
-type HarnessConfig = { collectorUrl: string; projectId: string; siteOrigin: string; path: string };
-
-const config = (window as unknown as { __HARNESS__?: HarnessConfig }).__HARNESS__;
-if (config) {
+const params = new URLSearchParams(window.location.search);
+const projectId = params.get("project");
+if (projectId) {
+  const config = {
+    collectorUrl: window.location.origin,
+    projectId,
+    siteOrigin: String((window as unknown as { __SITE_ORIGIN__?: string }).__SITE_ORIGIN__),
+    path: params.get("path") ?? "/pricing"
+  };
   createRoot(document.getElementById("root")!).render(createElement(PageHeatmap, config));
 }
 

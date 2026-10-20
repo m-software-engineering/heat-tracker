@@ -67,12 +67,30 @@ export const frameVerdict = (headers: HeaderSource, dashboardOrigin: string, sit
   return { blocked: false, reason: "no framing restriction" };
 };
 
-/** Fetches `siteUrl` (http/https only, 3 s budget) and returns the framing verdict. */
-export const checkFrame = async (siteUrl: string, dashboardOrigin: string, timeoutMs = 2500): Promise<FrameVerdict> => {
-  const url = new URL(siteUrl);
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    return { blocked: true, reason: `${url.protocol} URLs cannot be framed` };
+/** Origins the server may fetch, from `HEAT_DASHBOARD_SITE_ORIGINS` (comma-separated). */
+export const allowedSiteOrigins = (value = process.env.HEAT_DASHBOARD_SITE_ORIGINS ?? "") =>
+  value
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map((origin) => new URL(origin).origin);
+
+/**
+ * Fetches `siteUrl` (2.5 s budget) and returns the framing verdict. Only URLs on an allowlisted origin
+ * are fetched, so the route cannot be used to make the dashboard server request arbitrary hosts.
+ */
+export const checkFrame = async (
+  siteUrl: string,
+  dashboardOrigin: string,
+  allowedOrigins: string[],
+  timeoutMs = 2500
+): Promise<FrameVerdict> => {
+  const origin = allowedOrigins.find((allowed) => allowed === new URL(siteUrl).origin);
+  if (!origin) {
+    // Not checkable: show the frame and let the browser decide.
+    return { blocked: false, reason: "site origin is not in HEAT_DASHBOARD_SITE_ORIGINS, so framing was not checked" };
   }
+  const url = new URL(new URL(siteUrl).pathname + new URL(siteUrl).search, origin);
   try {
     const res = await fetch(url, { method: "GET", redirect: "follow", signal: AbortSignal.timeout(timeoutMs) });
     await res.body?.cancel();
