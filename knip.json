@@ -17,8 +17,8 @@
       "project": ["src/**/*.ts"]
     },
     "examples/nextjs-dashboard": {
-      "entry": ["app/**/*.tsx", "components/**/*.tsx", "lib/**/*.ts"],
-      "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.ts"]
+      "entry": ["app/**/*.tsx", "components/**/*.tsx", "lib/**/*.ts", "test/*.ts"],
+      "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.ts", "test/*.ts"]
     }
   },
   "ignoreExportsUsedInFile": true

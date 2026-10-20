@@ -52,7 +52,7 @@ const sourceWhere = (columns: any, ts: any, bucket: any) => (filter: HeatmapFilt
   const filters = [eq(columns.projectId, filter.projectId), gte(ts, filter.from), lte(ts, filter.to)];
   if (filter.type !== "all") filters.push(eq(columns.type, filter.type));
   if (filter.path) filters.push(eq(columns.path, filter.path));
-  if (filter.viewport) filters.push(eq(bucket, filter.viewport));
+  if (filter.viewport) filters.push(inArray(bucket, filter.viewport));
   if (extra) filters.push(extra);
   return and(...filters);
 };

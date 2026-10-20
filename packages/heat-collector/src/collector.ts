@@ -394,7 +394,14 @@ export const createCollector = async (config: CollectorConfig): Promise<Collecto
     const requestedType = (query.type ?? "click") as EventQueryType;
 
     try {
-      const filter = { projectId, type: requestedType, path: query.path, viewport: query.viewport, from, to };
+      const filter = {
+        projectId,
+        type: requestedType,
+        path: query.path,
+        viewport: query.viewport?.split(","),
+        from,
+        to
+      };
       const range = { from, to, defaulted };
       const options = { resolution: query.resolution, viewportBucket: query.viewportBucket, requestedType, range };
       let result = await aggregateHeatmap(dbContext, filter, options);
