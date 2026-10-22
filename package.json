@@ -1,7 +1,7 @@
 {
   "name": "heat-tracker",
   "private": true,
-  "packageManager": "pnpm@10.26.0",
+  "packageManager": "pnpm@10.34.7",
   "scripts": {
     "build": "corepack pnpm -r build",
     "dev": "corepack pnpm -r dev",
@@ -69,7 +69,7 @@
       "sharp@>=0.35.0 <0.35.5": "0.35.5",
       "smol-toml@>=1.0.0 <1.9.0": "1.9.0",
       "source-map-js@>=1.0.0 <1.2.2": "1.2.2",
-      "vitest@4.1.11>vite": "6.4.3",
+      "vitest@4.1.12>vite": "6.4.4",
       "ws@>=8.0.0 <8.21.0": "8.21.0"
     }
   }

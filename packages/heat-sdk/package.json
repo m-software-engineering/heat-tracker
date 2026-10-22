@@ -48,9 +48,9 @@
   },
   "devDependencies": {
     "@m-software-engineering/heat-errors": "workspace:*",
-    "@vitest/coverage-v8": "4.1.11",
+    "@vitest/coverage-v8": "4.1.12",
     "jsdom": "^24.0.0",
     "typescript": "^5.5.4",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   }
 }
