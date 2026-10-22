@@ -40,7 +40,7 @@ test.describe("HEAT_DASHBOARD_URL", () => {
       withUrl(value, () => expect(() => configuredOrigin()).toThrow(/not a valid origin/)));
   }
 
-  for (const secret of ["s3cret#PW", "s3cret/PW", "s3cret?PW", "p@ss3cretPW"]) {
+  for (const secret of ["s3cretPW", "s3cret#PW", "s3cret/PW", "s3cret?PW", "p@ss3cretPW"]) {
     test(`never prints the password ${JSON.stringify(secret)}`, () =>
       withUrl(`https://u:${secret}@dash.example.com`, () => {
         let cause = "";
@@ -49,11 +49,11 @@ test.describe("HEAT_DASHBOARD_URL", () => {
         } catch (error) {
           cause = String((error as { cause: unknown }).cause);
         }
-        expect(cause).toBe("https://***:***@dash.example.com");
+        expect(cause).toBe("(hidden: value contains credentials)");
         expect(cause).not.toContain("s3cret");
       }));
   }
 
-  test("masks a username-only credential", () =>
-    expect(redactUserinfo("https://s3cretPW@dash.example.com")).toBe("https://***@dash.example.com"));
+  test("hides a username-only credential", () =>
+    expect(redactUserinfo("https://s3cretPW@dash.example.com")).toBe("(hidden: value contains credentials)"));
 });

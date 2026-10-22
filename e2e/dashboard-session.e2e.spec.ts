@@ -106,7 +106,7 @@ test("behind a reverse proxy: chained X-Forwarded-* use the first hop; HEAT_DASH
   expect(chained.status).toBe(200);
   expect(chained.headers.get("set-cookie")).toMatch(/^__Host-heat_admin=.*; Secure$/);
 
-  process.env.HEAT_DASHBOARD_URL = "https://dash.example/";
+  process.env.HEAT_DASHBOARD_URL = "https://dash.example";
   try {
     // nginx default proxy_pass: Host rewritten, no X-Forwarded-*.
     const rewritten = await post(adminToken, { origin: "https://dash.example", host: "127.0.0.1:3000" });
