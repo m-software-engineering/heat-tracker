@@ -82,7 +82,8 @@ const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || nul
  */
 /** Masks user and password in the cause itself, so no later log can print the secret. */
 /** Any "@" may be credentials: echo none of the value, so no masking edge case can leak a secret. */
-export const redactUserinfo = (value: string) => (value.includes("@") ? "(hidden: value contains credentials)" : value);
+/** A rejected value may carry a secret anywhere (userinfo, query, fragment), so it never reaches the log. */
+export const hiddenValue = (value: string) => `(hidden, ${value.length} characters)`;
 
 export const configuredOrigin = (): string | undefined => {
   const configured = process.env.HEAT_DASHBOARD_URL;
@@ -99,7 +100,7 @@ export const configuredOrigin = (): string | undefined => {
     // Reported below.
   }
   if (!origin || origin !== configured.toLowerCase()) {
-    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID, redactUserinfo(configured));
+    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID, hiddenValue(configured));
   }
   return origin;
 };

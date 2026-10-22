@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
-import { configuredOrigin, redactUserinfo } from "../examples/nextjs-dashboard/lib/collector-proxy";
+import { configuredOrigin } from "../examples/nextjs-dashboard/lib/collector-proxy";
+import { register } from "../examples/nextjs-dashboard/instrumentation";
 
 const withUrl = (value: string | undefined, run: () => void) => {
   const saved = process.env.HEAT_DASHBOARD_URL;
@@ -40,20 +41,57 @@ test.describe("HEAT_DASHBOARD_URL", () => {
       withUrl(value, () => expect(() => configuredOrigin()).toThrow(/not a valid origin/)));
   }
 
-  for (const secret of ["s3cretPW", "s3cret#PW", "s3cret/PW", "s3cret?PW", "p@ss3cretPW"]) {
-    test(`never prints the password ${JSON.stringify(secret)}`, () =>
-      withUrl(`https://u:${secret}@dash.example.com`, () => {
-        let cause = "";
+  const leaks = [
+    "https://u:s3cretPW@dash.example.com",
+    "https://u:s3cret#PW@dash.example.com",
+    "https://u:s3cret/PW@dash.example.com",
+    "https://u:s3cret?PW@dash.example.com",
+    "https://u:p@ss3cretPW@dash.example.com",
+    "https://s3cretPW@dash.example.com",
+    "https://dash.example.com?access_token=s3cret",
+    "https://dash.example.com#s3cret",
+    "https://u:s3cret%40dash.example.com",
+    "https://dash.example.com/\nFORGED s3cret",
+    "   ",
+    "not-a-url"
+  ];
+
+  const boot = (value: string) => {
+    const lines: string[] = [];
+    const saved = { error: console.error, exit: process.exit, runtime: process.env.NEXT_RUNTIME };
+    console.error = (...args: unknown[]) => void lines.push(args.join(" "));
+    process.exit = ((code?: number) => {
+      throw new Error(`exit ${code}`);
+    }) as typeof process.exit;
+    process.env.NEXT_RUNTIME = "nodejs";
+    let exit = "";
+    try {
+      withUrl(value, () => {
         try {
-          configuredOrigin();
+          register();
         } catch (error) {
-          cause = String((error as { cause: unknown }).cause);
+          exit = (error as Error).message;
         }
-        expect(cause).toBe("(hidden: value contains credentials)");
-        expect(cause).not.toContain("s3cret");
-      }));
+      });
+    } finally {
+      console.error = saved.error;
+      process.exit = saved.exit;
+      if (saved.runtime === undefined) delete process.env.NEXT_RUNTIME;
+      else process.env.NEXT_RUNTIME = saved.runtime;
+    }
+    return { exit, log: lines.join("\n") };
+  };
+
+  for (const value of leaks) {
+    test(`boot hides rejected value ${JSON.stringify(value)}`, () => {
+      const { exit, log } = boot(value);
+      expect(exit).toBe("exit 1");
+      expect(log).toContain(`  got:  (hidden, ${value.length} characters)`);
+      expect(log).not.toContain("s3cret");
+      expect(log).not.toContain("FORGED");
+      expect(log.split("\n")).toHaveLength(4);
+    });
   }
 
-  test("hides a username-only credential", () =>
-    expect(redactUserinfo("https://s3cretPW@dash.example.com")).toBe("(hidden: value contains credentials)"));
+  test("whitespace shows its length", () => expect(boot("   ").log).toContain("(hidden, 3 characters)"));
 });
