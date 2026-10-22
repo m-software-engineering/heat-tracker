@@ -45,8 +45,9 @@ export const readAdminToken = (request: Request) => {
 
 export const secureRequest = (request: Request) =>
   process.env.HEAT_DASHBOARD_SECURE_COOKIE === "true" ||
+  /^https:/i.test(process.env.HEAT_DASHBOARD_URL?.trim() ?? "") ||
   new URL(request.url).protocol === "https:" ||
-  request.headers.get("x-forwarded-proto") === "https";
+  firstValue(request.headers.get("x-forwarded-proto")) === "https";
 
 export const adminCookie = (request: Request, token: string) => {
   const secure = secureRequest(request);
@@ -65,11 +66,25 @@ export const clearedAdminCookie = (request: Request) => {
   return `${secure ? SECURE_ADMIN_COOKIE : ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? "; Secure" : ""}`;
 };
 
-/** The dashboard's own origin as the browser sees it (honours a reverse proxy's X-Forwarded-*). */
+/** First value of a header a proxy chain may have appended to ("a, b" → "a"). */
+const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || null;
+
+/**
+ * The dashboard's own origin as the browser sees it. `HEAT_DASHBOARD_URL`, when set, is the canonical
+ * origin and the request headers are ignored; otherwise Host / X-Forwarded-* (first hop) decide.
+ */
 const ownOrigin = (request: Request) => {
+  const configured = process.env.HEAT_DASHBOARD_URL?.trim();
+  if (configured) {
+    try {
+      return new URL(configured).origin.toLowerCase();
+    } catch {
+      // Not a URL: fall back to the request headers.
+    }
+  }
   const url = new URL(request.url);
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? url.host;
-  const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(/:$/, "");
+  const host = firstValue(request.headers.get("x-forwarded-host")) ?? request.headers.get("host") ?? url.host;
+  const proto = firstValue(request.headers.get("x-forwarded-proto")) ?? url.protocol.replace(/:$/, "");
   return `${proto}://${host}`.toLowerCase();
 };
 

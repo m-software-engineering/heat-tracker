@@ -96,6 +96,34 @@ test("POST /api/session requires JSON and a same-origin Origin, and sets no cook
   expect(noOrigin.headers.get("set-cookie")).toBeNull();
 });
 
+test("behind a reverse proxy: chained X-Forwarded-* use the first hop; HEAT_DASHBOARD_URL is canonical (#73)", async () => {
+  const chained = await post(adminToken, {
+    origin: "https://dash.example",
+    host: "127.0.0.1:3000",
+    "x-forwarded-host": "dash.example, edge.internal",
+    "x-forwarded-proto": "https, http"
+  });
+  expect(chained.status).toBe(200);
+  expect(chained.headers.get("set-cookie")).toMatch(/^__Host-heat_admin=.*; Secure$/);
+
+  process.env.HEAT_DASHBOARD_URL = "https://dash.example/";
+  try {
+    // nginx default proxy_pass: Host rewritten, no X-Forwarded-*.
+    const rewritten = await post(adminToken, { origin: "https://dash.example", host: "127.0.0.1:3000" });
+    expect(rewritten.status).toBe(200);
+    // With a canonical URL, spoofed forwarded headers cannot widen what is accepted.
+    const spoofed = await post(adminToken, {
+      origin: "https://evil.example",
+      "x-forwarded-host": "evil.example",
+      "x-forwarded-proto": "https"
+    });
+    expect(spoofed.status).toBe(403);
+    expect((await spoofed.json()).error.cause).toBe('Origin "https://evil.example" is not https://dash.example');
+  } finally {
+    delete process.env.HEAT_DASHBOARD_URL;
+  }
+});
+
 test("over HTTPS (or HEAT_DASHBOARD_SECURE_COOKIE=true) the cookie is __Host-heat_admin; Secure", async () => {
   const proxied = await post(adminToken, {
     origin: "https://dash.example",

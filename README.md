@@ -41,14 +41,14 @@ End-to-end stack for product analytics heatmaps and session analysis: browser SD
 
 ### Settings (`.env` next to `docker-compose.yml`, all optional)
 
-| Variable                       | Default                 | Meaning                                                                                                                    |
-| ------------------------------ | ----------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `HEAT_PUBLIC_COLLECTOR_URL`    | `http://localhost:4000` | Collector URL as visitors' browsers reach it; goes into the snippet.                                                       |
-| `HEAT_DASHBOARD_URL`           | `http://localhost:3000` | Shown in the collector's startup block.                                                                                    |
-| `HEAT_ADMIN_TOKEN`             | generated               | Fixed admin token (at least 32 characters) instead of the one generated into the volume.                                   |
-| `HEAT_TRUST_PROXY`             | off                     | `true`, a hop count, or addresses/subnets of your reverse proxy.                                                           |
-| `HEAT_DASHBOARD_SECURE_COOKIE` | `false`                 | `true` forces the `Secure` `__Host-heat_admin` cookie (automatic when the request is HTTPS or `X-Forwarded-Proto: https`). |
-| `POSTGRES_PASSWORD`            | `heat`                  | Database password (the database is not published outside the compose network).                                             |
+| Variable                       | Default                 | Meaning                                                                                                                                  |
+| ------------------------------ | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `HEAT_PUBLIC_COLLECTOR_URL`    | `http://localhost:4000` | Collector URL as visitors' browsers reach it; goes into the snippet.                                                                     |
+| `HEAT_DASHBOARD_URL`           | `http://localhost:3000` | Shown in the collector's startup block. Behind a reverse proxy, set it to the public URL: dashboard login then accepts only that Origin. |
+| `HEAT_ADMIN_TOKEN`             | generated               | Fixed admin token (at least 32 characters) instead of the one generated into the volume.                                                 |
+| `HEAT_TRUST_PROXY`             | off                     | `true`, a hop count, or addresses/subnets of your reverse proxy.                                                                         |
+| `HEAT_DASHBOARD_SECURE_COOKIE` | `false`                 | `true` forces the `Secure` `__Host-heat_admin` cookie (automatic when the request is HTTPS or `X-Forwarded-Proto: https`).               |
+| `POSTGRES_PASSWORD`            | `heat`                  | Database password (the database is not published outside the compose network).                                                           |
 
 `.env` files are excluded from the Docker build context. For TLS, put a reverse proxy in front of ports 3000 and 4000, set `HEAT_PUBLIC_COLLECTOR_URL` to the public collector URL, and forward `Host`/`X-Forwarded-Proto`. **Cookie caveat:** over plain HTTP the cookie is `heat_admin`, and browsers share cookies across ports, so any other app on the same host name (e.g. another service on `localhost:8080`) receives it. Serve the dashboard over HTTPS on its own host name for the `__Host-` cookie.
 
