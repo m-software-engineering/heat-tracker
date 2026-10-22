@@ -416,6 +416,11 @@ export const SDK_ERRORS: {
         readonly message: "init() was called outside a browser, for example during server-side rendering.";
         readonly fix: "Call init() inside useEffect or behind typeof window !== \"undefined\".";
     };
+    readonly HEAT_E_EVENT_TOO_LARGE: {
+        readonly code: "HEAT_E_EVENT_TOO_LARGE";
+        readonly message: "An event was dropped because it is larger than one request can carry.";
+        readonly fix: "Send less data in track() properties; a single event must fit in 60,000 bytes of JSON.";
+    };
     readonly HEAT_E_INGEST_HTTP: {
         readonly code: "HEAT_E_INGEST_HTTP";
         readonly message: "The collector rejected an event batch.";

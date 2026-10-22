@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { HeatTrackerError, SDK_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import { HeatTrackerError, SDK_ERRORS, createHeatError, type HeatError } from "@m-software-engineering/heat-errors";
 import { KEEPALIVE_MAX_BODY_BYTES, onPageExit, utf8Bytes } from "./page-exit";
 import { announceToParentFrame } from "./frame-handshake";
 import { createErrorReporter, ingestHttpError, ingestNetworkError, type ReportError } from "./errors";
@@ -566,19 +566,28 @@ class TrackerImpl implements Tracker {
    * (survives the unload; keeps the project-key/auth headers), ignoring the retry backoff. Events of
    * a batch that fails stay queued (and persisted) for the next flush or page load.
    */
-  private flushOnExit = () => {
+  private flushOnExit = (reason: "hidden" | "pagehide") => {
     if (this.stopped) return;
     this.enqueueMoveEvent();
+    const pending = this.queue.length;
     // Concurrent keepalive bodies share one budget, so stop when the next batch would not fit.
     let budget = KEEPALIVE_MAX_BODY_BYTES;
     while (this.queue.length > 0) {
       const next = this.takeBatch(budget);
+      if (next.bytes > KEEPALIVE_MAX_BODY_BYTES) {
+        void this.sendBatch(true, next); // a lone oversized event: dropped and reported
+        continue;
+      }
       if (next.bytes > budget) {
         this.queue.unshift(...next.batch);
         break;
       }
       budget -= next.bytes;
       void this.sendBatch(true, next);
+    }
+    if (this.config.debug && pending > 0) {
+      // eslint-disable-next-line no-console -- debug-only, once per exit (#28)
+      console.info(`heat-sdk: flushed ${pending - this.queue.length}/${pending} events via fetch keepalive on ${reason}`);
     }
   };
 
@@ -657,6 +666,14 @@ class TrackerImpl implements Tracker {
     if (!force && this.backoffMs > 0 && this.retryTimer) return false;
 
     const { batch, body, bytes } = taken ?? this.takeBatch(KEEPALIVE_MAX_BODY_BYTES);
+    if (bytes > KEEPALIVE_MAX_BODY_BYTES) {
+      // Only a lone event can exceed the limit; truncating would corrupt it, so drop it loudly.
+      this.reportError(
+        createHeatError(SDK_ERRORS.HEAT_E_EVENT_TOO_LARGE, `event is ${bytes} bytes, limit ${KEEPALIVE_MAX_BODY_BYTES}`)
+      );
+      this.persistQueue();
+      return true;
+    }
     try {
       const res = await fetch(this.config.endpoint, {
         method: "POST",
@@ -666,8 +683,7 @@ class TrackerImpl implements Tracker {
           ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {})
         },
         body,
-        // A lone event over the limit can't go keepalive; send it as a normal request.
-        keepalive: bytes <= KEEPALIVE_MAX_BODY_BYTES
+        keepalive: true
       });
 
       if (!res.ok) {

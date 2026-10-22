@@ -52,6 +52,11 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: init() was called outside a browser, for example during server-side rendering.
 - Fix: Call init() inside useEffect or behind typeof window !== "undefined".
 
+## HEAT_E_EVENT_TOO_LARGE
+
+- Message: An event was dropped because it is larger than one request can carry.
+- Fix: Send less data in track() properties; a single event must fit in 60,000 bytes of JSON.
+
 ## HEAT_E_INGEST_HTTP
 
 - Message: The collector rejected an event batch.

@@ -3,15 +3,16 @@
  * unloaded (`pagehide`), the last moments a browser reliably lets a page start a request.
  * Returns a function that removes the listeners.
  */
-export const onPageExit = (onExit: () => void, win: Window = window) => {
-  const handle = (event: Event) => {
-    if (event.type === "pagehide" || win.document.visibilityState === "hidden") onExit();
+export const onPageExit = (onExit: (reason: "hidden" | "pagehide") => void, win: Window = window) => {
+  const handleVisibility = () => {
+    if (win.document.visibilityState === "hidden") onExit("hidden");
   };
-  win.document.addEventListener("visibilitychange", handle);
-  win.addEventListener("pagehide", handle);
+  const handlePageHide = () => onExit("pagehide");
+  win.document.addEventListener("visibilitychange", handleVisibility);
+  win.addEventListener("pagehide", handlePageHide);
   return () => {
-    win.document.removeEventListener("visibilitychange", handle);
-    win.removeEventListener("pagehide", handle);
+    win.document.removeEventListener("visibilitychange", handleVisibility);
+    win.removeEventListener("pagehide", handlePageHide);
   };
 };
 

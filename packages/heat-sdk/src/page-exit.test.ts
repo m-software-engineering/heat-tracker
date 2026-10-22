@@ -79,12 +79,26 @@ describe("flush on page exit (#28)", () => {
     await tracker.shutdown();
   });
 
-  it("sends a lone event over the keepalive limit as a normal request", async () => {
-    const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet });
+  it("drops a lone event over the limit and reports HEAT_E_EVENT_TOO_LARGE with its size", async () => {
+    const onError = vi.fn();
+    const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet, onError });
     tracker.track("huge", { big: "x".repeat(KEEPALIVE_MAX_BODY_BYTES) });
-    await tracker.flush();
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][1].keepalive).toBe(false);
+    tracker.track("small");
+    window.dispatchEvent(new Event("pagehide"));
+    expect(sentEvents(fetchMock).map((e: any) => e.name)).toEqual(["small"]);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "HEAT_E_EVENT_TOO_LARGE" }));
+    expect(onError.mock.calls[0][0].cause).toMatch(/event is \d+ bytes, limit 60000/);
+    await tracker.shutdown();
+  });
+
+  it("logs one debug line per exit in debug mode", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+    const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet, debug: true });
+    tracker.track("a");
+    tracker.track("b");
+    window.dispatchEvent(new Event("pagehide"));
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith("heat-sdk: flushed 2/2 events via fetch keepalive on pagehide");
     await tracker.shutdown();
   });
 
