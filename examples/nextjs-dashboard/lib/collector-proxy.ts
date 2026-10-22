@@ -45,7 +45,7 @@ export const readAdminToken = (request: Request) => {
 
 export const secureRequest = (request: Request) =>
   process.env.HEAT_DASHBOARD_SECURE_COOKIE === "true" ||
-  /^https:/i.test(process.env.HEAT_DASHBOARD_URL?.trim() ?? "") ||
+  configuredOrigin()?.startsWith("https:") ||
   new URL(request.url).protocol === "https:" ||
   firstValue(request.headers.get("x-forwarded-proto")) === "https";
 
@@ -70,18 +70,31 @@ export const clearedAdminCookie = (request: Request) => {
 const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || null;
 
 /**
+ * The canonical origin from `HEAT_DASHBOARD_URL`, or undefined when unset. A set value that isn't an
+ * http(s) URL throws: falling back to request headers would silently drop the strict Origin check.
+ */
+export const configuredOrigin = (): string | undefined => {
+  const configured = process.env.HEAT_DASHBOARD_URL?.trim();
+  if (!configured) return undefined;
+  let url: URL | undefined;
+  try {
+    url = new URL(configured);
+  } catch {
+    // Reported below.
+  }
+  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
+    throw new Error(`HEAT_DASHBOARD_URL must be an http:// or https:// URL, got ${JSON.stringify(configured)}`);
+  }
+  return url.origin.toLowerCase();
+};
+
+/**
  * The dashboard's own origin as the browser sees it. `HEAT_DASHBOARD_URL`, when set, is the canonical
  * origin and the request headers are ignored; otherwise Host / X-Forwarded-* (first hop) decide.
  */
 const ownOrigin = (request: Request) => {
-  const configured = process.env.HEAT_DASHBOARD_URL?.trim();
-  if (configured) {
-    try {
-      return new URL(configured).origin.toLowerCase();
-    } catch {
-      // Not a URL: fall back to the request headers.
-    }
-  }
+  const configured = configuredOrigin();
+  if (configured) return configured;
   const url = new URL(request.url);
   const host = firstValue(request.headers.get("x-forwarded-host")) ?? request.headers.get("host") ?? url.host;
   const proto = firstValue(request.headers.get("x-forwarded-proto")) ?? url.protocol.replace(/:$/, "");
