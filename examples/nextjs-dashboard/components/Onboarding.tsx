@@ -1,17 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  generateProjectKey,
-  PROJECT_KEY_STORAGE,
-  receivingLabel,
-  trackingSnippet,
-  type ProjectSummary
-} from "../lib/onboarding";
+import { useEffect, useState, type FormEvent } from "react";
+import type { Copy } from "../lib/copy";
+import { projectHref, siteOf } from "../lib/entry-links";
+import { generateProjectKey, PROJECT_KEY_STORAGE, PROJECT_NAME_STORAGE, trackingSnippet } from "../lib/onboarding";
+import { useFirstEvent } from "../lib/use-first-event";
+import CopyButton from "./CopyButton";
+import LiveCheck from "./LiveCheck";
 
-type Props = { publicCollectorUrl: string; onProject: (project: ProjectSummary) => void };
+type Props = { publicCollectorUrl: string; copy: Copy };
 
-const POLL_MS = 2_000;
+/** Spec default for the project name field (#29). */
+export const DEFAULT_PROJECT_NAME = "My site";
 
 const storedKey = () => {
   const existing = window.localStorage.getItem(PROJECT_KEY_STORAGE);
@@ -21,66 +21,51 @@ const storedKey = () => {
   return key;
 };
 
-/** Snippet + copy button + live "Waiting…" / "Receiving events from <origin>" state. */
-export default function Onboarding({ publicCollectorUrl, onProject }: Props) {
+/** New project (#29 step 3): a name field prefilled "My site"; "Create" opens the snippet screen. */
+export default function Onboarding({ publicCollectorUrl, copy }: Props) {
+  const [name, setName] = useState(DEFAULT_PROJECT_NAME);
   const [projectKey, setProjectKey] = useState<string>();
-  const [project, setProject] = useState<ProjectSummary | null>(null);
-  const [copied, setCopied] = useState(false);
 
-  useEffect(() => setProjectKey(storedKey()), []);
-
+  // A key already issued in this browser goes straight to its snippet (reloading keeps the screen).
   useEffect(() => {
-    if (!projectKey) return;
-    let stopped = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const schedule = (ms: number) => {
-      clearTimeout(timer);
-      // Paused while the tab is hidden; visibilitychange resumes it.
-      if (!stopped && !document.hidden) timer = setTimeout(poll, ms);
-    };
-    const poll = async () => {
-      const res = await fetch(`/api/collector/api/projects/by-key/${encodeURIComponent(projectKey)}`).catch(() => null);
-      const body = res?.ok ? await res.json().catch(() => null) : null;
-      if (stopped) return;
-      if (body?.project) {
-        stopped = true;
-        setProject(body.project);
-        onProject(body.project);
-        return;
-      }
-      schedule(POLL_MS);
-    };
-    const onVisibility = () => schedule(0);
-    document.addEventListener("visibilitychange", onVisibility);
-    schedule(0);
-    return () => {
-      stopped = true;
-      clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [projectKey, onProject]);
+    if (window.localStorage.getItem(PROJECT_KEY_STORAGE)) setProjectKey(storedKey());
+  }, []);
 
-  if (!projectKey) return null;
-  const snippet = trackingSnippet(publicCollectorUrl, projectKey, window.location.origin);
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(snippet);
-    setCopied(true);
+  const create = (event: FormEvent) => {
+    event.preventDefault();
+    window.localStorage.setItem(PROJECT_NAME_STORAGE, name.trim() || DEFAULT_PROJECT_NAME);
+    setProjectKey(storedKey());
   };
 
+  if (!projectKey) {
+    return (
+      <form className="onboarding-card" onSubmit={create} data-testid="new-project">
+        <label className="control">
+          Project name
+          <input value={name} onChange={(e) => setName(e.target.value)} required />
+        </label>
+        <button type="submit">Create</button>
+      </form>
+    );
+  }
+  return <SnippetScreen publicCollectorUrl={publicCollectorUrl} projectKey={projectKey} copy={copy} />;
+}
+
+function SnippetScreen({ publicCollectorUrl, projectKey, copy }: Props & { projectKey: string }) {
+  const project = useFirstEvent(projectKey);
+  const snippet = trackingSnippet(publicCollectorUrl, projectKey, window.location.origin);
   return (
-    <div className="onboarding-card">
-      <h2>Add Heat Tracker to your site</h2>
+    <div className="onboarding-card" data-testid="snippet-screen">
       <p>
         Paste this before <code>&lt;/body&gt;</code> on every page you want to track.
       </p>
       <pre data-testid="snippet">{snippet}</pre>
-      <button type="button" onClick={copy}>
-        {copied ? "Copied" : "Copy snippet"}
-      </button>
-      <p role="status" aria-live="polite" data-testid="ingest-status">
-        {receivingLabel(project)}
-      </p>
+      <CopyButton text={() => snippet} label="Copy" done={copy.copied} />
+      <LiveCheck
+        copy={copy}
+        received={Boolean(project)}
+        pagesHref={project ? projectHref(project.id, siteOf(project.name)) : undefined}
+      />
     </div>
   );
 }

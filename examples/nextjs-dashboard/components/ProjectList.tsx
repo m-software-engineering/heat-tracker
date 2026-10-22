@@ -1,18 +1,21 @@
 import { useCallback, type ReactNode } from "react";
 import { fetchProjects, type ProjectListItem } from "../lib/api";
+import type { Copy } from "../lib/copy";
 import { useListing } from "../lib/use-listing";
 import EntryTable, { type Column } from "./EntryTable";
 
 type Props = {
   collectorUrl: string;
   hrefFor: (project: ProjectListItem) => string;
-  /** Shown when the collector has no project yet (the dashboard passes #24's onboarding). */
+  copy: Copy;
+  locale?: string;
+  /** Where "Create project" goes (the new-project screen). */
+  createHref: string;
+  /** Replaces the default empty state (the e2e harness passes its own). */
   empty?: ReactNode;
 };
 
-const number = (value: number) => new Intl.NumberFormat().format(value);
-
-const columns: Column<ProjectListItem>[] = [
+const columnsFor = (locale: string | undefined): Column<ProjectListItem>[] => [
   {
     label: "Project",
     cell: (p) => (
@@ -23,21 +26,31 @@ const columns: Column<ProjectListItem>[] = [
           aria-label={p.receivingData ? "Receiving data" : "No data in the last 24 h"}
           title={
             p.lastEventAt
-              ? `Last event ${new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(p.lastEventAt)}`
-              : p.hasFutureEvents
-                ? "Only future-dated events so far (check the site's clock)"
-                : "No events yet"
+              ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(p.lastEventAt)
+              : undefined
           }
         />
         <span dir="auto">{p.name}</span>
       </span>
     )
-  },
-  { label: "Events (24 h)", numeric: true, cell: (p) => number(p.eventsLast24h) }
+  }
 ];
 
-/** Dashboard home (#25): every project in this collector, with a receiving-data dot. */
-export default function ProjectList({ collectorUrl, hrefFor, empty }: Props) {
+/** Spec empty state (#29): only a title, one line and the "Create project" button. */
+export function ProjectsEmpty({ copy, createHref }: { copy: Copy; createHref: string }) {
+  return (
+    <div className="onboarding-card" data-testid="projects-empty">
+      <h2>{copy.projectsEmptyTitle}</h2>
+      <p>{copy.projectsEmptyBody}</p>
+      <a className="button" href={createHref}>
+        {copy.createProject}
+      </a>
+    </div>
+  );
+}
+
+/** Dashboard home (#25): projects, waiting-for-first-event ones first, then by activity (sorted by the collector). */
+export default function ProjectList({ collectorUrl, hrefFor, copy, locale, createHref, empty }: Props) {
   const load = useCallback(
     (cursor?: string | null) =>
       fetchProjects(collectorUrl, cursor).then((r) => ({ items: r.projects, nextCursor: r.meta.nextCursor })),
@@ -48,12 +61,13 @@ export default function ProjectList({ collectorUrl, hrefFor, empty }: Props) {
     <EntryTable
       caption="Projects"
       testId="project-list"
-      columns={columns}
+      columns={columnsFor(locale)}
       {...listing}
+      copy={copy}
       onMore={listing.more}
       rowKey={(p) => p.id}
       rowHref={hrefFor}
-      empty={empty ?? <p className="ph-empty">No projects yet. A project appears when its first event arrives.</p>}
+      empty={empty ?? <ProjectsEmpty copy={copy} createHref={createHref} />}
     />
   );
 }

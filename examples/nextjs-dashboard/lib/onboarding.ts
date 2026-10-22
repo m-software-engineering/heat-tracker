@@ -1,6 +1,8 @@
 /** Pinned SDK release used in the snippet (keep in step with packages/heat-sdk/package.json). */
 export const SDK_VERSION = "0.3.0";
 export const PROJECT_KEY_STORAGE = "heat-dashboard:projectKey";
+/** The name typed on the new-project screen (#29); kept in this browser only, see the PR notes. */
+export const PROJECT_NAME_STORAGE = "heat-dashboard:projectName";
 
 export type ProjectSummary = { id: string; name: string; createdAt: number };
 export type SessionState = {
@@ -31,7 +33,3 @@ export const trackingSnippet = (publicCollectorUrl: string, projectKey: string, 
     `  init({ endpoint: ${scriptString(`${publicCollectorUrl}/ingest`)}, projectKey: ${scriptString(projectKey)}, dashboardOrigins: [${scriptString(dashboardOrigin)}] });`,
     "</script>"
   ].join("\n");
-
-/** Live state under the snippet. */
-export const receivingLabel = (project: ProjectSummary | null) =>
-  project ? `Receiving events from ${project.name}` : "Waiting for your first event…";

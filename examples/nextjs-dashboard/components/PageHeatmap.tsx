@@ -17,6 +17,8 @@ import {
 } from "../lib/view-state";
 import { HANDSHAKE_TIMEOUT_MS } from "../lib/frame-handshake";
 import { useFrameHandshake } from "../lib/use-frame-handshake";
+import { COPY, fill, type Copy } from "../lib/copy";
+import ErrorPanel from "./ErrorPanel";
 import FrameBlockedNotice from "./FrameBlockedNotice";
 import FrameCheckFailedNotice from "./FrameCheckFailedNotice";
 import { FrameNoResponseNotice, FrameRedirectedNotice } from "./FrameHandshakeNotice";
@@ -92,13 +94,17 @@ export default function PageHeatmap({
   siteOrigin,
   path,
   frameCheckUrl = "/api/frame-check",
-  handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS
-}: Props) {
+  handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS,
+  copy = COPY.en,
+  locale
+}: Props & { copy?: Copy; locale?: string }) {
   const [state, update] = useViewState();
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [error, setError] = useState<HeatError | null>(null);
   const [rendered, setRendered] = useState(false);
   const [scale, setScale] = useState(1);
+  // Bumped by the error panel's Retry.
+  const [attempt, setAttempt] = useState(0);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -149,7 +155,7 @@ export default function PageHeatmap({
     return () => {
       cancelled = true;
     };
-  }, [collectorUrl, projectId, path, filterBucket, state.days]);
+  }, [collectorUrl, projectId, path, filterBucket, state.days, attempt]);
 
   const width = data?.meta.viewport.w ?? 1280;
   const height = Math.max(data?.meta.renderHeight ?? 720, data?.meta.viewport.h ?? 720);
@@ -211,13 +217,19 @@ export default function PageHeatmap({
     <section
       className="page-heatmap"
       aria-label={`Click heatmap for ${path}`}
+      aria-busy={!data && !error}
       data-frame-state={blocked ? "blocked" : framed ? handshake.status : "none"}
     >
       <HeatmapControls state={state} activeViewport={activeViewport} options={options} onChange={update} />
       <p className="ph-summary" aria-live="polite" data-testid="heatmap-summary">
         {data ? summary : "Loading heatmap…"}
       </p>
-      {data && clicks === 0 && <p className="ph-empty">No clicks on this page in the last {period}.</p>}
+      {data && clicks === 0 && <p className="ph-empty">{copy.heatmapEmpty}</p>}
+      {data?.meta.sampled && (
+        <p className="ph-note" data-testid="partial-note">
+          {fill(copy.partial, { n: new Intl.NumberFormat(locale).format(data.meta.total) })}
+        </p>
+      )}
       {noPosition > 0 && (
         <p className="ph-note" data-testid="no-position-note">
           {noPosition === 1
@@ -225,11 +237,7 @@ export default function PageHeatmap({
             : `${noPosition.toLocaleString("en-US")} clicks without a position aren't shown`}
         </p>
       )}
-      {error && (
-        <div role="alert" className="ph-alert" data-code={error.code}>
-          <strong>{error.code}</strong> {error.message} Cause: {error.cause}. Fix: {error.fix}
-        </div>
-      )}
+      {error && <ErrorPanel error={error} copy={copy} onRetry={() => setAttempt((n) => n + 1)} />}
       {notAllowed && <SiteNotAllowedNotice siteOrigin={new URL(siteOrigin).origin} />}
       {refused && <FrameCheckFailedNotice reason={verdict.detail} />}
       {blocked && <FrameBlockedNotice reason={verdict.detail} dashboardOrigin={window.location.origin} />}
