@@ -50,8 +50,8 @@ export const DASHBOARD_ERRORS = {
   },
   HEAT_E_CONFIG_INVALID: {
     code: "HEAT_E_CONFIG_INVALID",
-    message: "HEAT_DASHBOARD_URL is not a valid URL.",
-    fix: "Use the dashboard's full origin, with http or https and no trailing slash. Example: `https://dash.example.com`."
+    message: "HEAT_DASHBOARD_URL is not a valid origin.",
+    fix: "Use the exact origin, e.g. HEAT_DASHBOARD_URL=https://dash.example.com"
   },
   HEAT_E_DASHBOARD_FETCH: {
     code: "HEAT_E_DASHBOARD_FETCH",

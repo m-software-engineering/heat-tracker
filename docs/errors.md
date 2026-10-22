@@ -425,8 +425,8 @@ console.log(body.error.message); // "The JWT has expired."
 
 ## HEAT_E_CONFIG_INVALID
 
-- Message: HEAT_DASHBOARD_URL is not a valid URL.
-- Fix: Use the dashboard's full origin, with http or https and no trailing slash. Example: `https://dash.example.com`.
+- Message: HEAT_DASHBOARD_URL is not a valid origin.
+- Fix: Use the exact origin, e.g. HEAT_DASHBOARD_URL=https://dash.example.com
 
 ## HEAT_E_DASHBOARD_FETCH
 

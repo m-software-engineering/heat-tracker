@@ -80,24 +80,29 @@ const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || nul
  * origin (no path, trailing slash, default port, query or credentials) throws: guessing what was meant,
  * or falling back to request headers, would silently weaken the strict Origin check.
  */
-/** Masks user:password so the startup error never prints a secret. */
-const redactUserinfo = (value: string) => value.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, "$1***@");
+/** Masks user and password in the cause itself, so no later log can print the secret. */
+const redactUserinfo = (value: string) =>
+  value.replace(
+    /^([a-z][a-z0-9+.-]*:\/\/)([^/?#@]*)@/i,
+    (_, scheme: string, info: string) => `${scheme}${info.includes(":") ? "***:***" : "***"}@`
+  );
 
 export const configuredOrigin = (): string | undefined => {
-  const configured = process.env.HEAT_DASHBOARD_URL?.trim();
-  if (!configured) return undefined;
+  const configured = process.env.HEAT_DASHBOARD_URL;
+  // Only a truly empty value means unset; whitespace is a typo and must fail.
+  if (configured === undefined || configured === "") return undefined;
   let origin: string | undefined;
   try {
     const url = new URL(configured);
-    if (url.protocol === "http:" || url.protocol === "https:") origin = url.origin.toLowerCase();
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      // "host." is a different origin from "host".
+      if (!url.hostname.endsWith(".")) origin = url.origin.toLowerCase();
+    }
   } catch {
     // Reported below.
   }
   if (!origin || origin !== configured.toLowerCase()) {
-    throw new HeatTrackerError(
-      DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID,
-      `HEAT_DASHBOARD_URL is ${JSON.stringify(redactUserinfo(configured))}`
-    );
+    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID, redactUserinfo(configured));
   }
   return origin;
 };

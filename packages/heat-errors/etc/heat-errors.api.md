@@ -61,8 +61,8 @@ export const DASHBOARD_ERRORS: {
     };
     readonly HEAT_E_CONFIG_INVALID: {
         readonly code: "HEAT_E_CONFIG_INVALID";
-        readonly message: "HEAT_DASHBOARD_URL is not a valid URL.";
-        readonly fix: "Use the dashboard's full origin, with http or https and no trailing slash. Example: `https://dash.example.com`.";
+        readonly message: "HEAT_DASHBOARD_URL is not a valid origin.";
+        readonly fix: "Use the exact origin, e.g. HEAT_DASHBOARD_URL=https://dash.example.com";
     };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";
