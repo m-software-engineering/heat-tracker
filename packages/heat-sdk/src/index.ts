@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { HeatTrackerError, SDK_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
-import { KEEPALIVE_MAX_BODY_BYTES, onPageExit } from "./page-exit";
+import { KEEPALIVE_MAX_BODY_BYTES, onPageExit, utf8Bytes } from "./page-exit";
 import { announceToParentFrame } from "./frame-handshake";
 import { createErrorReporter, ingestHttpError, ingestNetworkError, type ReportError } from "./errors";
 import { pagePath, pageTitle } from "./page-info";
@@ -566,18 +566,19 @@ class TrackerImpl implements Tracker {
    * (survives the unload; keeps the project-key/auth headers), ignoring the retry backoff. Events of
    * a batch that fails stay queued (and persisted) for the next flush or page load.
    */
-  private flushOnExit = (reason: "hidden" | "pagehide") => {
+  private flushOnExit = () => {
     if (this.stopped) return;
     this.enqueueMoveEvent();
-    const pending = this.queue.length;
-    let requests = 0;
-    while (this.queue.length > 0 && requests < pending) {
-      requests += 1;
-      void this.sendBatch(true);
-    }
-    if (this.config.debug && pending > 0) {
-      // eslint-disable-next-line no-console -- debug-only, once per exit (#28)
-      console.info(`heat-sdk: flushed ${pending} events via fetch keepalive on ${reason}`);
+    // Concurrent keepalive bodies share one budget, so stop when the next batch would not fit.
+    let budget = KEEPALIVE_MAX_BODY_BYTES;
+    while (this.queue.length > 0) {
+      const next = this.takeBatch(budget);
+      if (next.bytes > budget) {
+        this.queue.unshift(...next.batch);
+        break;
+      }
+      budget -= next.bytes;
+      void this.sendBatch(true, next);
     }
   };
 
@@ -630,27 +631,32 @@ class TrackerImpl implements Tracker {
     this.enqueue(evt, false);
   }
 
-  private async sendBatch(force = false) {
-    if (this.queue.length === 0) return true;
-    if (!force && this.backoffMs > 0 && this.retryTimer) return false;
-
-    const batch = this.queue.splice(0, this.config.batch.maxEvents);
-    // Keep each keepalive body under the browser's limit; the rest goes in the next request.
-    while (batch.length > 1 && JSON.stringify(batch).length > KEEPALIVE_MAX_BODY_BYTES) {
-      this.queue.unshift(batch.pop()!);
-    }
+  /** Splices the longest queue prefix whose request body fits `limit` UTF-8 bytes (at least one event). */
+  private takeBatch(limit: number) {
     const payload = {
       sdk: { name: SDK_NAME, version: SDK_VERSION },
       app: this.config.app,
-      session: {
-        id: this.sessionId,
-        startedAt: this.sessionStartedAt,
-        lastSeenAt: this.lastSeenAt
-      },
+      session: { id: this.sessionId, startedAt: this.sessionStartedAt, lastSeenAt: this.lastSeenAt },
       user: this.userId ? { id: this.userId, traits: this.userTraits } : undefined,
-      events: batch
+      events: [] as AnyEvent[]
     };
+    let bytes = utf8Bytes(payload);
+    let n = 0;
+    for (const event of this.queue.slice(0, this.config.batch.maxEvents)) {
+      const size = utf8Bytes(event) + (n && 1);
+      if (n && bytes + size > limit) break;
+      bytes += size;
+      n += 1;
+    }
+    payload.events = this.queue.splice(0, n);
+    return { batch: payload.events, body: JSON.stringify(payload), bytes };
+  }
 
+  private async sendBatch(force = false, taken?: ReturnType<TrackerImpl["takeBatch"]>) {
+    if (!taken && this.queue.length === 0) return true;
+    if (!force && this.backoffMs > 0 && this.retryTimer) return false;
+
+    const { batch, body, bytes } = taken ?? this.takeBatch(KEEPALIVE_MAX_BODY_BYTES);
     try {
       const res = await fetch(this.config.endpoint, {
         method: "POST",
@@ -659,8 +665,9 @@ class TrackerImpl implements Tracker {
           "x-project-key": this.config.projectKey,
           ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {})
         },
-        body: JSON.stringify(payload),
-        keepalive: true
+        body,
+        // A lone event over the limit can't go keepalive; send it as a normal request.
+        keepalive: bytes <= KEEPALIVE_MAX_BODY_BYTES
       });
 
       if (!res.ok) {

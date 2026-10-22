@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { init } from "./index";
+import { KEEPALIVE_MAX_BODY_BYTES } from "./page-exit";
 
 const ENDPOINT = "http://localhost:4000/ingest";
 const quiet = { click: true, move: { enabled: false, throttleMs: 80 }, scroll: false, pageview: false };
@@ -60,16 +61,30 @@ describe("flush on page exit (#28)", () => {
     await tracker.shutdown();
   });
 
-  it("splits a large queue into requests under the keepalive body limit", async () => {
+  it("keeps the UTF-8 bytes of all keepalive bodies started on exit under the shared limit", async () => {
     const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet });
-    const big = "x".repeat(5_000);
-    for (let i = 0; i < 30; i += 1) tracker.track(`e${i}`, { big });
+    const big = "日本語".repeat(400);
+    for (let i = 0; i < 40; i += 1) tracker.track(`e${i}`, { big });
 
     window.dispatchEvent(new Event("pagehide"));
 
-    expect(fetchMock.mock.calls.length).toBeGreaterThan(1);
-    for (const [, request] of fetchMock.mock.calls) expect(request.body.length).toBeLessThan(64 * 1024);
-    expect(sentEvents(fetchMock)).toHaveLength(30);
+    const bytes = (body: string) => new TextEncoder().encode(body).length;
+    const exitBodies = fetchMock.mock.calls.map(([, request]) => request.body as string);
+    expect(exitBodies.length).toBeGreaterThan(0);
+    expect(exitBodies.reduce((sum, body) => sum + bytes(body), 0)).toBeLessThanOrEqual(KEEPALIVE_MAX_BODY_BYTES);
+    // What did not fit stays queued and goes out on the next flush, each event once.
+    await tracker.flush();
+    expect(new Set(sentEvents(fetchMock).map((e: any) => e.name)).size).toBe(40);
+    expect(sentEvents(fetchMock)).toHaveLength(40);
+    await tracker.shutdown();
+  });
+
+  it("sends a lone event over the keepalive limit as a normal request", async () => {
+    const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet });
+    tracker.track("huge", { big: "x".repeat(KEEPALIVE_MAX_BODY_BYTES) });
+    await tracker.flush();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].keepalive).toBe(false);
     await tracker.shutdown();
   });
 
@@ -99,16 +114,5 @@ describe("flush on page exit (#28)", () => {
     await tracker.shutdown();
     window.dispatchEvent(new Event("pagehide"));
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("logs one debug line per exit in debug mode", async () => {
-    const info = vi.spyOn(console, "info").mockImplementation(() => {});
-    const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet, debug: true });
-    tracker.track("a");
-    tracker.track("b");
-    window.dispatchEvent(new Event("pagehide"));
-    expect(info).toHaveBeenCalledTimes(1);
-    expect(info).toHaveBeenCalledWith("heat-sdk: flushed 2 events via fetch keepalive on pagehide");
-    await tracker.shutdown();
   });
 });
