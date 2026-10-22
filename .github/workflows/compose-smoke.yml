@@ -42,14 +42,18 @@ jobs:
 
       - name: Resolve Playwright version
         id: pw
-        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+        run: |
+          set -euo pipefail
+          v=$(pnpm exec playwright --version | awk '{print $2}')
+          test -n "$v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}-chromium
 
       # Downloads flake (10-min timeouts on #109/#112): bounded attempts, then fail loudly.
       - name: Install Playwright Chromium
@@ -61,7 +65,7 @@ jobs:
             cmd="pnpm exec playwright install --with-deps chromium"
           fi
           for i in 1 2 3; do
-            timeout 240 $cmd && exit 0
+            timeout --kill-after=15 240 $cmd && exit 0
             echo "::warning::playwright install attempt $i failed"; sleep 10
           done
           exit 1
