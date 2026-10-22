@@ -38,7 +38,8 @@ if (params.has("shell")) {
       snippet: createElement(ProjectSnippet, {
         publicCollectorUrl: window.location.origin,
         projectId,
-        collectorUrl: window.location.origin
+        collectorUrl: window.location.origin,
+        copy
       })
     })
   );

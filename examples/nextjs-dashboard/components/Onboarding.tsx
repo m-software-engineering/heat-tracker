@@ -35,7 +35,7 @@ export default function Onboarding({ publicCollectorUrl, copy, onProject }: Prop
   return (
     <div className="onboarding-card" data-testid="snippet-screen">
       <p>
-        Paste this before <code>&lt;/body&gt;</code> on every page you want to track.
+        {copy.pasteBefore} <code>&lt;/body&gt;</code> {copy.pasteAfter}
       </p>
       <pre data-testid="snippet" tabIndex={0}>
         {snippet}

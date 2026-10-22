@@ -88,7 +88,7 @@ export default function EntryTable<T>(props: Props<T>) {
       </table>
       {props.hasMore && (
         <button type="button" className="entry-more" onClick={props.onMore} disabled={props.loadingMore}>
-          {props.loadingMore ? "Loading…" : "Show more"}
+          {props.loadingMore ? props.copy.loading : props.copy.showMore}
         </button>
       )}
     </>

@@ -17,11 +17,11 @@ type Props = {
   snippet?: ReactNode;
 };
 
-const columnsFor = (locale: string | undefined): Column<PopularPage>[] => {
+const columnsFor = (copy: Copy, locale: string | undefined): Column<PopularPage>[] => {
   const number = (value: number) => new Intl.NumberFormat(locale).format(value);
   return [
     {
-      label: "Page",
+      label: copy.colPage,
       cell: (p) => (
         // Long titles truncate; the full title shows on hover (title) and focus (CSS), RTL/CJK safe.
         <span className="entry-title" title={p.title} dir="auto">
@@ -30,15 +30,15 @@ const columnsFor = (locale: string | undefined): Column<PopularPage>[] => {
       )
     },
     {
-      label: "Path",
+      label: copy.colPath,
       cell: (p) => (
         <code className="entry-path" title={p.path}>
           {p.path}
         </code>
       )
     },
-    { label: "Sessions", numeric: true, cell: (p) => number(p.sessions) },
-    { label: "Clicks", numeric: true, cell: (p) => number(p.clicks) }
+    { label: copy.colSessions, numeric: true, cell: (p) => number(p.sessions) },
+    { label: copy.colClicks, numeric: true, cell: (p) => number(p.clicks) }
   ];
 };
 
@@ -98,9 +98,9 @@ export default function PopularPages({ collectorUrl, projectId, hrefFor, copy, l
         </div>
       )}
       <EntryTable
-        caption="Popular pages, by sessions"
+        caption={copy.popularPages}
         testId="popular-pages"
-        columns={columnsFor(locale)}
+        columns={columnsFor(copy, locale)}
         {...listing}
         copy={copy}
         onMore={listing.more}

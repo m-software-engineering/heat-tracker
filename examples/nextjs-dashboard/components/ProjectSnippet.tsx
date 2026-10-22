@@ -3,27 +3,21 @@
 import { useEffect, useState } from "react";
 import { fetchProjects } from "../lib/api";
 import { trackingSnippet } from "../lib/onboarding";
+import type { Copy } from "../lib/copy";
 import CopyButton from "./CopyButton";
 
 type Props = {
   publicCollectorUrl: string;
   projectId: string;
   collectorUrl: string;
-  copiedLabel?: string;
-  copyLabel?: string;
+  copy: Copy;
 };
 
 /**
  * #24's install snippet for a project that has no pages yet. The key comes from `GET /api/projects`
  * (admin-only, Margot #64), so the snippet shows in any signed-in browser.
  */
-export default function ProjectSnippet({
-  publicCollectorUrl,
-  projectId,
-  collectorUrl,
-  copiedLabel = "Copied",
-  copyLabel = "Copy"
-}: Props) {
+export default function ProjectSnippet({ publicCollectorUrl, projectId, collectorUrl, copy }: Props) {
   const [projectKey, setProjectKey] = useState<string>();
 
   useEffect(() => {
@@ -47,12 +41,12 @@ export default function ProjectSnippet({
   return (
     <div className="onboarding-card">
       <p>
-        Paste this before <code>&lt;/body&gt;</code> on every page you want to track.
+        {copy.pasteBefore} <code>&lt;/body&gt;</code> {copy.pasteAfter}
       </p>
       <pre data-testid="snippet" tabIndex={0}>
         {snippet}
       </pre>
-      <CopyButton text={() => snippet} label={copyLabel} done={copiedLabel} />
+      <CopyButton text={() => snippet} label={copy.copy} done={copy.copied} />
     </div>
   );
 }

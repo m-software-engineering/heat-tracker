@@ -129,8 +129,7 @@ export default function Page() {
               publicCollectorUrl={session!.publicCollectorUrl}
               projectId={projectId}
               collectorUrl={PROXY_URL}
-              copiedLabel={copy.copied}
-              copyLabel={copy.copy}
+              copy={copy}
             />
           }
         />

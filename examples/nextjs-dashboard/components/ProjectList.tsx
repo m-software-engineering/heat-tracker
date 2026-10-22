@@ -15,15 +15,15 @@ type Props = {
   empty?: ReactNode;
 };
 
-const columnsFor = (locale: string | undefined): Column<ProjectListItem>[] => [
+const columnsFor = (copy: Copy, locale: string | undefined): Column<ProjectListItem>[] => [
   {
-    label: "Project",
+    label: copy.colProject,
     cell: (p) => (
       <span className="entry-name">
         <span
           className={p.receivingData ? "data-dot live" : "data-dot"}
           role="img"
-          aria-label={p.receivingData ? "Receiving data" : "No data in the last 24 h"}
+          aria-label={p.receivingData ? copy.receivingData : copy.noData24h}
           title={
             p.lastEventAt
               ? new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" }).format(p.lastEventAt)
@@ -61,7 +61,7 @@ export default function ProjectList({ collectorUrl, hrefFor, copy, locale, creat
     <EntryTable
       caption={copy.projects}
       testId="project-list"
-      columns={columnsFor(locale)}
+      columns={columnsFor(copy, locale)}
       {...listing}
       copy={copy}
       onMore={listing.more}

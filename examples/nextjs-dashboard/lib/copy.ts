@@ -28,6 +28,18 @@ export type Copy = {
   skipToContent: string;
   openInNewTab: string;
   pagesEmpty24h: string;
+  pasteBefore: string;
+  pasteAfter: string;
+  popularPages: string;
+  colPage: string;
+  colPath: string;
+  colSessions: string;
+  colClicks: string;
+  colProject: string;
+  receivingData: string;
+  noData24h: string;
+  showMore: string;
+  loading: string;
 };
 
 const en: Copy = {
@@ -56,7 +68,19 @@ const en: Copy = {
   newProject: "New project",
   copy: "Copy",
   skipToContent: "Skip to content",
-  openInNewTab: "Open page in new tab"
+  openInNewTab: "Open page in new tab",
+  pasteBefore: "Paste this before",
+  pasteAfter: "on every page you want to track.",
+  popularPages: "Popular pages, by sessions",
+  colPage: "Page",
+  colPath: "Path",
+  colSessions: "Sessions",
+  colClicks: "Clicks",
+  colProject: "Project",
+  receivingData: "Receiving data",
+  noData24h: "No data in the last 24 h",
+  showMore: "Show more",
+  loading: "Loading…"
 };
 
 const ptBR: Copy = {
@@ -85,7 +109,19 @@ const ptBR: Copy = {
   newProject: "Novo projeto",
   copy: "Copiar",
   skipToContent: "Pular para o conteúdo",
-  openInNewTab: "Abrir página em nova aba"
+  openInNewTab: "Abrir página em nova aba",
+  pasteBefore: "Cole isto antes de",
+  pasteAfter: "em todas as páginas que você quer acompanhar.",
+  popularPages: "Páginas mais visitadas, por sessões",
+  colPage: "Página",
+  colPath: "Caminho",
+  colSessions: "Sessões",
+  colClicks: "Cliques",
+  colProject: "Projeto",
+  receivingData: "Recebendo dados",
+  noData24h: "Sem dados nas últimas 24 h",
+  showMore: "Mostrar mais",
+  loading: "Carregando…"
 };
 
 /** Pages empty text for the selected period (1 day reads "24 hours"). */
