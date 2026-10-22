@@ -3,14 +3,9 @@ name: Heatmap DB
 # Heatmap aggregation runs in the database (#26). This checks it on real engines: the golden test
 # on Postgres, MySQL and MongoDB, and the 1 M-event Postgres bench (p95 <= 500 ms, flat RSS).
 on:
+  # No trigger-level `paths`: a skipped workflow never reports, so it cannot be a required check and
+  # misses changes outside the old list (#95). The `changes` job decides; `golden-status` always reports.
   pull_request:
-    paths:
-      - "packages/heat-collector/src/heatmap*.ts"
-      - "packages/heat-collector/src/__fixtures__/heatmap-*"
-      - "packages/heat-collector/src/schema.ts"
-      - "packages/heat-collector/src/db.ts"
-      - "packages/heat-collector/bench/**"
-      - ".github/workflows/heatmap-db.yml"
   schedule:
     - cron: "17 4 * * *"
   workflow_dispatch:
@@ -23,8 +18,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect heatmap-db changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      golden: ${{ steps.filter.outputs.golden }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        if: github.event_name != 'pull_request'
+        with:
+          persist-credentials: false
+
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            golden:
+              - "packages/heat-collector/src/**"
+              - "packages/heat-collector/package.json"
+              - "packages/heat-collector/bench/**"
+              - "fixtures/**"
+              - "pnpm-lock.yaml"
+              - ".github/workflows/heatmap-db.yml"
+
   heatmap-db:
     name: Golden (pg, mysql, mongo) + bench (pg)
+    needs: changes
+    if: needs.changes.outputs.golden == 'true' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     services:
@@ -92,3 +116,22 @@ jobs:
         run: pnpm -C packages/heat-collector bench:heatmap
         env:
           DATABASE_URL: postgres://heat:heat@127.0.0.1:5432/heat_tracker
+
+  golden-status:
+    name: golden-status
+    needs: [changes, heatmap-db]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check Golden result
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          GOLDEN: ${{ needs.heatmap-db.result }}
+        run: |
+          echo "changes=$CHANGES heatmap-db=$GOLDEN"
+          if [ "$CHANGES" != "success" ]; then echo "::error::changes job $CHANGES"; exit 1; fi
+          case "$GOLDEN" in
+            success|skipped) exit 0 ;;
+            *) echo "::error::Golden $GOLDEN"; exit 1 ;;
+          esac
