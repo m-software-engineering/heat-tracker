@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { HeatTrackerError, SDK_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import { KEEPALIVE_MAX_BODY_BYTES, onPageExit } from "./page-exit";
 import { announceToParentFrame } from "./frame-handshake";
 import { createErrorReporter, ingestHttpError, ingestNetworkError, type ReportError } from "./errors";
 import { pagePath, pageTitle } from "./page-info";
@@ -485,6 +486,7 @@ class TrackerImpl implements Tracker {
   private lastTitle?: string;
   private sessionStore: StorageLike;
   private queueStore: StorageLike;
+  private detachPageExit?: () => void;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
@@ -501,6 +503,7 @@ class TrackerImpl implements Tracker {
     this.restoreQueue();
 
     this.attachListeners();
+    this.detachPageExit = onPageExit(this.flushOnExit);
     this.flushTimer = window.setInterval(() => {
       void this.flush();
     }, this.config.batch.flushIntervalMs);
@@ -555,7 +558,28 @@ class TrackerImpl implements Tracker {
       clearTimeout(this.retryTimer);
     }
     this.detachListeners();
+    this.detachPageExit?.();
   }
+
+  /**
+   * Page hidden or unloading: start every pending batch now, synchronously, with fetch keepalive
+   * (survives the unload; keeps the project-key/auth headers), ignoring the retry backoff. Events of
+   * a batch that fails stay queued (and persisted) for the next flush or page load.
+   */
+  private flushOnExit = (reason: "hidden" | "pagehide") => {
+    if (this.stopped) return;
+    this.enqueueMoveEvent();
+    const pending = this.queue.length;
+    let requests = 0;
+    while (this.queue.length > 0 && requests < pending) {
+      requests += 1;
+      void this.sendBatch(true);
+    }
+    if (this.config.debug && pending > 0) {
+      // eslint-disable-next-line no-console -- debug-only, once per exit (#28)
+      console.info(`heat-sdk: flushed ${pending} events via fetch keepalive on ${reason}`);
+    }
+  };
 
   private async flushInternal() {
     this.enqueueMoveEvent();
@@ -606,11 +630,15 @@ class TrackerImpl implements Tracker {
     this.enqueue(evt, false);
   }
 
-  private async sendBatch() {
+  private async sendBatch(force = false) {
     if (this.queue.length === 0) return true;
-    if (this.backoffMs > 0 && this.retryTimer) return false;
+    if (!force && this.backoffMs > 0 && this.retryTimer) return false;
 
     const batch = this.queue.splice(0, this.config.batch.maxEvents);
+    // Keep each keepalive body under the browser's limit; the rest goes in the next request.
+    while (batch.length > 1 && JSON.stringify(batch).length > KEEPALIVE_MAX_BODY_BYTES) {
+      this.queue.unshift(batch.pop()!);
+    }
     const payload = {
       sdk: { name: SDK_NAME, version: SDK_VERSION },
       app: this.config.app,
