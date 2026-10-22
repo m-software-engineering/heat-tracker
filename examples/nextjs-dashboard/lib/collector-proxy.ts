@@ -1,4 +1,4 @@
-import { createHeatError, DASHBOARD_ERRORS, QUERY_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import { createHeatError, DASHBOARD_ERRORS, HeatTrackerError, QUERY_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
 
 /**
  * Server-only. The admin token lives in an HttpOnly cookie; browser JS never sees it. Over HTTPS
@@ -70,22 +70,24 @@ export const clearedAdminCookie = (request: Request) => {
 const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || null;
 
 /**
- * The canonical origin from `HEAT_DASHBOARD_URL`, or undefined when unset. A set value that isn't an
- * http(s) URL throws: falling back to request headers would silently drop the strict Origin check.
+ * The canonical origin from `HEAT_DASHBOARD_URL`, or undefined when unset. Anything but a bare http(s)
+ * origin (no path, trailing slash, default port, query or credentials) throws: guessing what was meant,
+ * or falling back to request headers, would silently weaken the strict Origin check.
  */
 export const configuredOrigin = (): string | undefined => {
   const configured = process.env.HEAT_DASHBOARD_URL?.trim();
   if (!configured) return undefined;
-  let url: URL | undefined;
+  let origin: string | undefined;
   try {
-    url = new URL(configured);
+    const url = new URL(configured);
+    if (url.protocol === "http:" || url.protocol === "https:") origin = url.origin.toLowerCase();
   } catch {
     // Reported below.
   }
-  if (!url || (url.protocol !== "http:" && url.protocol !== "https:")) {
-    throw new Error(`HEAT_DASHBOARD_URL must be an http:// or https:// URL, got ${JSON.stringify(configured)}`);
+  if (!origin || origin !== configured.toLowerCase()) {
+    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID, `HEAT_DASHBOARD_URL is ${JSON.stringify(configured)}`);
   }
-  return url.origin.toLowerCase();
+  return origin;
 };
 
 /**

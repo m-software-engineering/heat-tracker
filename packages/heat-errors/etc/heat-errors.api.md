@@ -57,7 +57,12 @@ export const DASHBOARD_ERRORS: {
     readonly HEAT_E_DASHBOARD_ORIGIN: {
         readonly code: "HEAT_E_DASHBOARD_ORIGIN";
         readonly message: "The dashboard session request came from another site.";
-        readonly fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.";
+        readonly fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, set HEAT_DASHBOARD_URL to the dashboard's public origin, or make the proxy overwrite the Host, X-Forwarded-Host and X-Forwarded-Proto headers.";
+    };
+    readonly HEAT_E_CONFIG_INVALID: {
+        readonly code: "HEAT_E_CONFIG_INVALID";
+        readonly message: "HEAT_DASHBOARD_URL is not a valid URL.";
+        readonly fix: "Use the dashboard's full origin, with http or https and no trailing slash. Example: `https://dash.example.com`.";
     };
     readonly HEAT_E_DASHBOARD_FETCH: {
         readonly code: "HEAT_E_DASHBOARD_FETCH";

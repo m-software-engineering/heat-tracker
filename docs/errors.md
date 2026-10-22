@@ -421,7 +421,12 @@ console.log(body.error.message); // "The JWT has expired."
 ## HEAT_E_DASHBOARD_ORIGIN
 
 - Message: The dashboard session request came from another site.
-- Fix: Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged.
+- Fix: Paste the token on the dashboard page itself. Behind a reverse proxy, set HEAT_DASHBOARD_URL to the dashboard's public origin, or make the proxy overwrite the Host, X-Forwarded-Host and X-Forwarded-Proto headers.
+
+## HEAT_E_CONFIG_INVALID
+
+- Message: HEAT_DASHBOARD_URL is not a valid URL.
+- Fix: Use the dashboard's full origin, with http or https and no trailing slash. Example: `https://dash.example.com`.
 
 ## HEAT_E_DASHBOARD_FETCH
 

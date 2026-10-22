@@ -46,7 +46,12 @@ export const DASHBOARD_ERRORS = {
   HEAT_E_DASHBOARD_ORIGIN: {
     code: "HEAT_E_DASHBOARD_ORIGIN",
     message: "The dashboard session request came from another site.",
-    fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, forward the Host (or X-Forwarded-Host) and X-Forwarded-Proto headers unchanged."
+    fix: "Paste the token on the dashboard page itself. Behind a reverse proxy, set HEAT_DASHBOARD_URL to the dashboard's public origin, or make the proxy overwrite the Host, X-Forwarded-Host and X-Forwarded-Proto headers."
+  },
+  HEAT_E_CONFIG_INVALID: {
+    code: "HEAT_E_CONFIG_INVALID",
+    message: "HEAT_DASHBOARD_URL is not a valid URL.",
+    fix: "Use the dashboard's full origin, with http or https and no trailing slash. Example: `https://dash.example.com`."
   },
   HEAT_E_DASHBOARD_FETCH: {
     code: "HEAT_E_DASHBOARD_FETCH",
