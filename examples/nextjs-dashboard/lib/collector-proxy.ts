@@ -1,4 +1,10 @@
-import { createHeatError, DASHBOARD_ERRORS, HeatTrackerError, QUERY_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import {
+  createHeatError,
+  DASHBOARD_ERRORS,
+  HeatTrackerError,
+  QUERY_ERRORS,
+  type HeatError
+} from "@m-software-engineering/heat-errors";
 
 /**
  * Server-only. The admin token lives in an HttpOnly cookie; browser JS never sees it. Over HTTPS
@@ -74,6 +80,9 @@ const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || nul
  * origin (no path, trailing slash, default port, query or credentials) throws: guessing what was meant,
  * or falling back to request headers, would silently weaken the strict Origin check.
  */
+/** Masks user:password so the startup error never prints a secret. */
+const redactUserinfo = (value: string) => value.replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/?#]*@/i, "$1***@");
+
 export const configuredOrigin = (): string | undefined => {
   const configured = process.env.HEAT_DASHBOARD_URL?.trim();
   if (!configured) return undefined;
@@ -85,7 +94,10 @@ export const configuredOrigin = (): string | undefined => {
     // Reported below.
   }
   if (!origin || origin !== configured.toLowerCase()) {
-    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID, `HEAT_DASHBOARD_URL is ${JSON.stringify(configured)}`);
+    throw new HeatTrackerError(
+      DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID,
+      `HEAT_DASHBOARD_URL is ${JSON.stringify(redactUserinfo(configured))}`
+    );
   }
   return origin;
 };
