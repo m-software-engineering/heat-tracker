@@ -123,7 +123,7 @@ Query flow (heatmap):
 4. Then type counts, per-bucket counts (`meta.viewportBuckets`, ignoring the `viewport` filter), the count of plottable events without a position (`meta.excluded.noCoordinates`, skipped on every database) and one `GROUP BY (bx, by)` query for the grid. No raw event rows reach Node.
 5. Default behavior when `type` omitted: request `click`, fallback to `all` when no click rows.
 6. Return points (sorted by y, x) and metadata including `totalEvents`, `sampled: false`, plotted/ignored/excluded counts.
-7. `src/heatmap.golden.test.ts` pins one recording for every database (equal to the pre-#26 MongoDB path, which already skipped rows without a position) (SQLite always; Postgres/MySQL/MongoDB when `HEAT_TEST_*_URL` is set, as in `.github/workflows/heatmap-db.yml`). `bench/heatmap-bench.mjs` seeds 1 M Postgres events as an older install would hold them, restarts the collector so the migration builds the rollup, warms up for 5 s and gates p95 ≤ 500 ms and flat RSS (nightly and on PRs touching the query).
+7. `src/heatmap.golden.test.ts` pins one recording for every database (equal to the pre-#26 MongoDB path, which already skipped rows without a position) (SQLite always; Postgres/MySQL/MongoDB when `HEAT_TEST_*_URL` is set, as in `.github/workflows/heatmap-db.yml`). `bench/heatmap-bench.mjs` seeds 1 M Postgres events as an older install would hold them, restarts the collector so the migration builds the rollup, warms up for 5 s and gates p95 ≤ 500 ms and flat RSS (nightly and on PRs touching collector sources, fixtures or the lockfile; see `golden-status`).
 
 Query flow (sessions):
 
