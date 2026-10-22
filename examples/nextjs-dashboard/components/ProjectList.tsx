@@ -59,7 +59,7 @@ export default function ProjectList({ collectorUrl, hrefFor, copy, locale, creat
   const listing = useListing(load);
   return (
     <EntryTable
-      caption="Projects"
+      caption={copy.projects}
       testId="project-list"
       columns={columnsFor(locale)}
       {...listing}

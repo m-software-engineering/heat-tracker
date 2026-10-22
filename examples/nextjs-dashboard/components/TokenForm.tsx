@@ -33,7 +33,7 @@ export default function TokenForm({ onSignedIn, copy }: Props) {
   return (
     <form className="onboarding-card" onSubmit={submit} data-testid="sign-in">
       <label className="control">
-        Admin token
+        {copy.adminToken}
         <input
           type="password"
           autoComplete="off"
@@ -45,7 +45,7 @@ export default function TokenForm({ onSignedIn, copy }: Props) {
         />
       </label>
       <button type="submit" disabled={busy || !token.trim()}>
-        Continue
+        {copy.continue}
       </button>
       {failed ? (
         <p role="alert" id="token-error" className="ph-error">

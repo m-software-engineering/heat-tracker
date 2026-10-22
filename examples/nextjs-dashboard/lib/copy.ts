@@ -1,7 +1,4 @@
-/**
- * Final dashboard copy from the #29 spec (EN / PT-BR), verbatim. `{url}` and `{n}` are filled by `fill`.
- * Strings the spec gives only in English (nav, field labels, buttons outside the table) stay English in both.
- */
+/** Final dashboard copy from the #29 spec and product answers on #112 (EN / PT-BR), verbatim. `{url}`/`{n}` via `fill`. */
 export type Locale = "en" | "pt-BR";
 
 export type Copy = {
@@ -21,6 +18,16 @@ export type Copy = {
   partial: string;
   copyDetails: string;
   copied: string;
+  signIn: string;
+  adminToken: string;
+  continue: string;
+  projects: string;
+  pages: string;
+  newProject: string;
+  copy: string;
+  skipToContent: string;
+  openInNewTab: string;
+  pagesEmpty24h: string;
 };
 
 const en: Copy = {
@@ -34,12 +41,22 @@ const en: Copy = {
   snippetStill: "Still nothing. Check that the snippet is on the page and that Do Not Track is off in this browser.",
   snippetSuccess: "Receiving events.",
   snippetSuccessLink: "Open your pages",
-  pagesEmpty: "No visits in the last 7 days.",
+  pagesEmpty: "No visits in the last {n} days.",
+  pagesEmpty24h: "No visits in the last 24 hours.",
   changePeriod: "Change period",
   heatmapEmpty: "No clicks for this screen size in this period",
-  partial: "Showing a sample of {n} visits",
+  partial: "Showing a sample of the data",
   copyDetails: "Copy details",
-  copied: "Copied"
+  copied: "Copied",
+  signIn: "Sign in",
+  adminToken: "Admin token",
+  continue: "Continue",
+  projects: "Projects",
+  pages: "Pages",
+  newProject: "New project",
+  copy: "Copy",
+  skipToContent: "Skip to content",
+  openInNewTab: "Open page in new tab"
 };
 
 const ptBR: Copy = {
@@ -53,13 +70,27 @@ const ptBR: Copy = {
   snippetStill: "Ainda nada. Confira se o snippet está na página e se o Do Not Track está desligado neste navegador.",
   snippetSuccess: "Recebendo eventos.",
   snippetSuccessLink: "Ver suas páginas",
-  pagesEmpty: "Nenhuma visita nos últimos 7 dias.",
+  pagesEmpty: "Nenhuma visita nos últimos {n} dias.",
+  pagesEmpty24h: "Nenhuma visita nas últimas 24 horas.",
   changePeriod: "Mudar período",
   heatmapEmpty: "Nenhum clique neste tamanho de tela no período",
-  partial: "Mostrando uma amostra de {n} visitas",
+  partial: "Mostrando uma amostra dos dados",
   copyDetails: "Copiar detalhes",
-  copied: "Copiado"
+  copied: "Copiado",
+  signIn: "Entrar",
+  adminToken: "Token de admin",
+  continue: "Continuar",
+  projects: "Projetos",
+  pages: "Páginas",
+  newProject: "Novo projeto",
+  copy: "Copiar",
+  skipToContent: "Pular para o conteúdo",
+  openInNewTab: "Abrir página em nova aba"
 };
+
+/** Pages empty text for the selected period (1 day reads "24 hours"). */
+export const pagesEmptyText = (copy: Copy, days: number) =>
+  days === 1 ? copy.pagesEmpty24h : fill(copy.pagesEmpty, { n: String(days) });
 
 export const COPY: Record<Locale, Copy> = { en, "pt-BR": ptBR };
 

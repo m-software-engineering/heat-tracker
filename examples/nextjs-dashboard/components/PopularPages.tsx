@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { fetchPages, type PopularPage } from "../lib/api";
-import type { Copy } from "../lib/copy";
+import { pagesEmptyText, type Copy } from "../lib/copy";
 import { POLL_MS } from "../lib/use-first-event";
 import { useListing } from "../lib/use-listing";
 import { PERIOD_DAYS } from "../lib/view-state";
@@ -108,7 +108,7 @@ export default function PopularPages({ collectorUrl, projectId, hrefFor, copy, l
         rowHref={hrefFor}
         empty={
           <div className="entry-empty" data-testid="pages-empty">
-            <p className="ph-empty">{copy.pagesEmpty}</p>
+            <p className="ph-empty">{pagesEmptyText(copy, days)}</p>
             <PeriodPicker copy={copy} locale={locale} days={days} onChange={setDays} />
             {snippet ? (
               <div data-testid="waiting-first-event">

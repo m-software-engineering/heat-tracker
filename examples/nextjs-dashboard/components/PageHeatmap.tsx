@@ -17,7 +17,7 @@ import {
 } from "../lib/view-state";
 import { HANDSHAKE_TIMEOUT_MS } from "../lib/frame-handshake";
 import { useFrameHandshake } from "../lib/use-frame-handshake";
-import { COPY, fill, type Copy } from "../lib/copy";
+import { COPY, type Copy } from "../lib/copy";
 import ErrorPanel from "./ErrorPanel";
 import FrameBlockedNotice from "./FrameBlockedNotice";
 import FrameCheckFailedNotice from "./FrameCheckFailedNotice";
@@ -95,9 +95,8 @@ export default function PageHeatmap({
   path,
   frameCheckUrl = "/api/frame-check",
   handshakeTimeoutMs = HANDSHAKE_TIMEOUT_MS,
-  copy = COPY.en,
-  locale
-}: Props & { copy?: Copy; locale?: string }) {
+  copy = COPY.en
+}: Props & { copy?: Copy }) {
   const [state, update] = useViewState();
   const [data, setData] = useState<HeatmapResponse | null>(null);
   const [error, setError] = useState<HeatError | null>(null);
@@ -227,7 +226,7 @@ export default function PageHeatmap({
       {data && clicks === 0 && <p className="ph-empty">{copy.heatmapEmpty}</p>}
       {data?.meta.sampled && (
         <p className="ph-note" data-testid="partial-note">
-          {fill(copy.partial, { n: new Intl.NumberFormat(locale).format(data.meta.total) })}
+          {copy.partial}
         </p>
       )}
       {noPosition > 0 && (
@@ -241,7 +240,9 @@ export default function PageHeatmap({
       {notAllowed && <SiteNotAllowedNotice siteOrigin={new URL(siteOrigin).origin} />}
       {refused && <FrameCheckFailedNotice reason={verdict.detail} />}
       {blocked && <FrameBlockedNotice reason={verdict.detail} dashboardOrigin={window.location.origin} />}
-      {framed && handshake.status === "no-response" && <FrameNoResponseNotice pageUrl={pageUrl} />}
+      {framed && handshake.status === "no-response" && (
+        <FrameNoResponseNotice pageUrl={pageUrl} label={copy.openInNewTab} />
+      )}
       {framed && handshake.status === "redirected" && <FrameRedirectedNotice href={handshake.href} />}
       <TopAreasTable areas={areas} visible={state.view === "table"} caption={summary} />
       <div

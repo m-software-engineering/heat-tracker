@@ -11,7 +11,7 @@ import ProjectSnippet from "../components/ProjectSnippet";
 import TokenForm from "../components/TokenForm";
 import { pageHref, projectHref, siteOf } from "../lib/entry-links";
 import { lastProject, rememberProject } from "../lib/last-project";
-import type { SessionState } from "../lib/onboarding";
+import type { ProjectSummary, SessionState } from "../lib/onboarding";
 import { useLocale } from "../lib/use-locale";
 
 /** Collector calls go through the dashboard server (app/api/collector), which adds the admin token. */
@@ -38,6 +38,8 @@ export default function Page() {
   const [session, setSession] = useState<SessionState>();
   const [route, setRoute] = useState<Route>({ projectId: "", path: "", site: "", isNew: false, ready: false });
   const [siteOrigin, setSiteOrigin] = useState("");
+  // The new project, once its first event names it after the site's origin (as the collector does).
+  const [created, setCreated] = useState<ProjectSummary>();
 
   const loadSession = useCallback(async () => {
     setSession(undefined);
@@ -71,18 +73,19 @@ export default function Page() {
     !session || !route.ready
       ? "Heat Tracker"
       : !signedIn
-        ? "Sign in"
+        ? copy.signIn
         : isNew
-          ? "New project"
+          ? (created?.name ?? copy.newProject)
           : !projectId
-            ? "Projects"
+            ? copy.projects
             : !path
-              ? "Pages"
+              ? copy.pages
               : "Heatmap";
   const current = !signedIn ? null : !projectId && !isNew ? "projects" : projectId && !path ? "pages" : null;
 
   return (
     <AppShell
+      copy={copy}
       heading={heading}
       pagesHref={signedIn ? pagesHref : undefined}
       current={current}
@@ -102,7 +105,9 @@ export default function Page() {
         <CollectorUnreachable collectorUrl={session.collectorUrl} copy={copy} onRetry={loadSession} />
       ) : null}
       {session && !unreachable && !session.signedIn ? <TokenForm onSignedIn={loadSession} copy={copy} /> : null}
-      {signedIn && isNew ? <Onboarding publicCollectorUrl={session!.publicCollectorUrl} copy={copy} /> : null}
+      {signedIn && isNew ? (
+        <Onboarding publicCollectorUrl={session!.publicCollectorUrl} copy={copy} onProject={setCreated} />
+      ) : null}
       {signedIn && route.ready && !isNew && !projectId ? (
         <ProjectList
           collectorUrl={PROXY_URL}
@@ -125,6 +130,7 @@ export default function Page() {
               projectId={projectId}
               collectorUrl={PROXY_URL}
               copiedLabel={copy.copied}
+              copyLabel={copy.copy}
             />
           }
         />
@@ -141,14 +147,7 @@ export default function Page() {
               />
             </label>
           </div>
-          <PageHeatmap
-            collectorUrl={PROXY_URL}
-            projectId={projectId}
-            siteOrigin={siteOrigin}
-            path={path}
-            copy={copy}
-            locale={locale}
-          />
+          <PageHeatmap collectorUrl={PROXY_URL} projectId={projectId} siteOrigin={siteOrigin} path={path} copy={copy} />
         </>
       ) : null}
     </AppShell>

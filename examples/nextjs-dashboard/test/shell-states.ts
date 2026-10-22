@@ -23,21 +23,21 @@ export const renderShellState = (root: Root, params: URLSearchParams) => {
   const copy = COPY[locale];
   const state = params.get("shell");
   const views: Record<string, [string, () => ReactNode]> = {
-    "sign-in": ["Sign in", () => createElement(TokenForm, { copy, onSignedIn: () => undefined })],
+    "sign-in": [copy.signIn, () => createElement(TokenForm, { copy, onSignedIn: () => undefined })],
     unreachable: [
-      "Sign in",
+      copy.signIn,
       () =>
         createElement(CollectorUnreachable, { copy, collectorUrl: "http://collector:4000", onRetry: () => undefined })
     ],
-    "projects-empty": ["Projects", () => createElement(ProjectsEmpty, { copy, createHref: "?shell=new-project" })],
+    "projects-empty": [copy.projects, () => createElement(ProjectsEmpty, { copy, createHref: "?shell=new-project" })],
     "new-project": [
-      "New project",
+      copy.newProject,
       () => createElement(Onboarding, { copy, publicCollectorUrl: window.location.origin })
     ],
-    waiting: ["New project", () => createElement(LiveCheck, { copy, received: false })],
-    received: ["New project", () => createElement(LiveCheck, { copy, received: true, pagesHref: "?project=p1" })],
+    waiting: [copy.newProject, () => createElement(LiveCheck, { copy, received: false })],
+    received: [copy.newProject, () => createElement(LiveCheck, { copy, received: true, pagesHref: "?project=p1" })],
     error: [
-      "Projects",
+      copy.projects,
       () =>
         createElement(ErrorPanel, {
           copy,
@@ -48,5 +48,5 @@ export const renderShellState = (root: Root, params: URLSearchParams) => {
     loading: ["Heat Tracker", () => createElement("div", { className: "skeleton-card", "aria-busy": "true" })]
   };
   const [heading, view] = views[state ?? ""] ?? views.loading;
-  root.render(createElement(AppShell, { heading, current: null, pagesHref: "?project=p1", children: view() }));
+  root.render(createElement(AppShell, { copy, heading, current: null, pagesHref: "?project=p1", children: view() }));
 };

@@ -5,13 +5,25 @@ import { fetchProjects } from "../lib/api";
 import { trackingSnippet } from "../lib/onboarding";
 import CopyButton from "./CopyButton";
 
-type Props = { publicCollectorUrl: string; projectId: string; collectorUrl: string; copiedLabel?: string };
+type Props = {
+  publicCollectorUrl: string;
+  projectId: string;
+  collectorUrl: string;
+  copiedLabel?: string;
+  copyLabel?: string;
+};
 
 /**
  * #24's install snippet for a project that has no pages yet. The key comes from `GET /api/projects`
  * (admin-only, Margot #64), so the snippet shows in any signed-in browser.
  */
-export default function ProjectSnippet({ publicCollectorUrl, projectId, collectorUrl, copiedLabel = "Copied" }: Props) {
+export default function ProjectSnippet({
+  publicCollectorUrl,
+  projectId,
+  collectorUrl,
+  copiedLabel = "Copied",
+  copyLabel = "Copy"
+}: Props) {
   const [projectKey, setProjectKey] = useState<string>();
 
   useEffect(() => {
@@ -37,8 +49,8 @@ export default function ProjectSnippet({ publicCollectorUrl, projectId, collecto
       <p>
         Paste this before <code>&lt;/body&gt;</code> on every page you want to track.
       </p>
-      <pre data-testid="snippet">{snippet}</pre>
-      <CopyButton text={() => snippet} label="Copy" done={copiedLabel} />
+      <pre data-testid="snippet" tabIndex={0}>{snippet}</pre>
+      <CopyButton text={() => snippet} label={copyLabel} done={copiedLabel} />
     </div>
   );
 }
