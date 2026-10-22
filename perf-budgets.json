@@ -1,0 +1,25 @@
+{
+  "budgets": [
+    {
+      "name": "SDK dist/index.js (min+gzip)",
+      "kind": "min+gzip",
+      "file": "packages/heat-sdk/dist/index.js",
+      "build": "run: corepack pnpm --filter \"@m-software-engineering/heat-sdk...\" build",
+      "maxBytes": 7900
+    },
+    {
+      "name": "SDK dist/index.mjs (min+gzip)",
+      "kind": "min+gzip",
+      "file": "packages/heat-sdk/dist/index.mjs",
+      "build": "run: corepack pnpm --filter \"@m-software-engineering/heat-sdk...\" build",
+      "maxBytes": 7150
+    },
+    {
+      "name": "Dashboard / first-load JS (gzip)",
+      "kind": "next-route-gzip",
+      "route": "/page",
+      "build": "run: corepack pnpm --filter nextjs-dashboard... build",
+      "maxBytes": 117000
+    }
+  ]
+}
