@@ -20,8 +20,16 @@ const SENSITIVE_NAMES = new Set(
   ).split(" ")
 );
 // 3. Or a token ends in token/secret/sessid, or is <one of these>key (secretkey; not turkey or monkey).
+// 4. Exceptions may only remove false positives of the 65d8344 rule (a guardrail test enforces it), so they are
+//    exact names (Margot on #92): `key` after a non-secret word, `pass` outside a password, and the narrow
+//    _id/_count stems. Variants (stripe_key, token_id, session_id, ticketId) still drop.
+const KEPT_NAMES = new Set(
+  "primary_key sort_key cache-key publishable_key key_id ticket_id session_count boarding_pass pass_type".split(" ")
+);
 const SENSITIVE_SUFFIXES = ["token", "secret", "sessid"];
-const KEY_PREFIXES = new Set(["secret", "private", "access", "api", "my", "client", "session"]);
+const KEY_PREFIXES = new Set(
+  "secret private access api my client session signing encryption master shared app consumer".split(" ")
+);
 const FILE_EXTENSIONS = new Set(
   (
     "png jpg jpeg gif svg webp avif bmp ico heic heif tiff tif js mjs cjs ts css map json html htm xml txt csv tsv " +
@@ -66,6 +74,7 @@ export const isSensitiveParamName = (raw: string) => {
   const decoded = decodeLenient(raw);
   if (!decoded.ok) return true;
   const name = decoded.text.normalize("NFKC").trim();
+  if (KEPT_NAMES.has(name.toLowerCase())) return false;
   const tokens = name
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
