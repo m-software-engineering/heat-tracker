@@ -40,9 +40,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}-chromium
+
+      # Downloads flake (10-min timeouts on #109/#112): bounded attempts, then fail loudly.
       - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-        timeout-minutes: 10
+        timeout-minutes: 15
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            cmd="pnpm exec playwright install-deps chromium"
+          else
+            cmd="pnpm exec playwright install --with-deps chromium"
+          fi
+          for i in 1 2 3; do
+            timeout 240 $cmd && exit 0
+            echo "::warning::playwright install attempt $i failed"; sleep 10
+          done
+          exit 1
 
       # Built before the timed run, so the cold-start budget (120 s) matches "with images pulled".
       - name: Build images from this checkout
