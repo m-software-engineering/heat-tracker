@@ -4,7 +4,12 @@ import pg from "pg";
 
 // #74: the root docker-compose.yml must not interpolate POSTGRES_PASSWORD into DATABASE_URL unencoded.
 const compose = readFileSync(new URL("../../../docker-compose.yml", import.meta.url), "utf8");
-const collectorEnv = (name: string) => compose.match(new RegExp(`^\\s+${name}: (.+)$`, "m"))?.[1];
+const collectorEnv = (name: string) =>
+  compose
+    .split("\n")
+    .map((line) => line.trim())
+    .find((line) => line.startsWith(`${name}: `))
+    ?.slice(name.length + 2);
 
 describe("docker-compose collector database settings", () => {
   it("keeps the password out of DATABASE_URL and passes it as PGPASSWORD", () => {
