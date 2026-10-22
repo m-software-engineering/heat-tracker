@@ -91,6 +91,17 @@ describe("flush on page exit (#28)", () => {
     await tracker.shutdown();
   });
 
+  it("sends a lone event over the limit without keepalive while the page stays open", async () => {
+    const onError = vi.fn();
+    const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet, onError });
+    tracker.track("huge", { big: "x".repeat(KEEPALIVE_MAX_BODY_BYTES) });
+    await tracker.flush();
+    expect(sentEvents(fetchMock).map((e: any) => e.name)).toEqual(["huge"]);
+    expect(fetchMock.mock.calls[0][1].keepalive).toBe(false);
+    expect(onError).not.toHaveBeenCalled();
+    await tracker.shutdown();
+  });
+
   it("logs one debug line per exit in debug mode", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => {});
     const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet, debug: true });

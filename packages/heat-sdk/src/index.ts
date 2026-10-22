@@ -666,8 +666,9 @@ class TrackerImpl implements Tracker {
     if (!force && this.backoffMs > 0 && this.retryTimer) return false;
 
     const { batch, body, bytes } = taken ?? this.takeBatch(KEEPALIVE_MAX_BODY_BYTES);
-    if (bytes > KEEPALIVE_MAX_BODY_BYTES) {
-      // Only a lone event can exceed the limit; truncating would corrupt it, so drop it loudly.
+    const keepalive = bytes <= KEEPALIVE_MAX_BODY_BYTES;
+    if (!keepalive && taken) {
+      // On exit a non-keepalive request dies silently and truncating corrupts the event: drop it loudly.
       this.reportError(
         createHeatError(SDK_ERRORS.HEAT_E_EVENT_TOO_LARGE, `event is ${bytes} bytes, limit ${KEEPALIVE_MAX_BODY_BYTES}`)
       );
@@ -683,7 +684,7 @@ class TrackerImpl implements Tracker {
           ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {})
         },
         body,
-        keepalive: true
+        keepalive
       });
 
       if (!res.ok) {
