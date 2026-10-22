@@ -8,6 +8,8 @@ export function register() {
   } catch (error) {
     if (process.env.NEXT_RUNTIME !== "nodejs") throw error;
     if (!(error instanceof HeatTrackerError)) throw error;
+    // Startup failure on the server: stderr is the only channel before Next serves anything.
+    // eslint-disable-next-line no-console
     console.error(
       [
         `${error.code}: ${error.message}`,

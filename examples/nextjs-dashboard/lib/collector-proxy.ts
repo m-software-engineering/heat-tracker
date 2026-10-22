@@ -81,11 +81,12 @@ const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || nul
  * or falling back to request headers, would silently weaken the strict Origin check.
  */
 /** Masks user and password in the cause itself, so no later log can print the secret. */
-const redactUserinfo = (value: string) =>
-  value.replace(
-    /^([a-z][a-z0-9+.-]*:\/\/)([^/?#@]*)@/i,
-    (_, scheme: string, info: string) => `${scheme}${info.includes(":") ? "***:***" : "***"}@`
-  );
+export const redactUserinfo = (value: string) => {
+  // Mask up to the LAST "@": a raw @ # / ? inside the password must not leak. Over-masking is safe.
+  const match = /^([a-z][a-z0-9+.-]*:\/\/)(.*)@/is.exec(value);
+  if (!match) return value;
+  return `${match[1]}${match[2].includes(":") ? "***:***" : "***"}@${value.slice(match[0].length)}`;
+};
 
 export const configuredOrigin = (): string | undefined => {
   const configured = process.env.HEAT_DASHBOARD_URL;
