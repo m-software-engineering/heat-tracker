@@ -37,7 +37,9 @@ export default function Onboarding({ publicCollectorUrl, copy, onProject }: Prop
       <p>
         Paste this before <code>&lt;/body&gt;</code> on every page you want to track.
       </p>
-      <pre data-testid="snippet" tabIndex={0}>{snippet}</pre>
+      <pre data-testid="snippet" tabIndex={0}>
+        {snippet}
+      </pre>
       <CopyButton text={() => snippet} label={copy.copy} done={copy.copied} />
       <LiveCheck
         copy={copy}
