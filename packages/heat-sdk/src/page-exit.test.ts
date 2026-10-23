@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { init } from "./index";
+import type { init as Init } from "./index";
+let init: typeof Init;
 import { KEEPALIVE_MAX_BODY_BYTES } from "./page-exit";
 
 const ENDPOINT = "http://localhost:4000/ingest";
@@ -15,7 +16,10 @@ describe("flush on page exit (#28)", () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   const originalDnt = Object.getOwnPropertyDescriptor(Navigator.prototype, "doNotTrack");
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    // A fresh module graph represents a new page lifetime (and keepalive budget).
+    vi.resetModules();
+    ({ init } = await import("./index"));
     document.body.innerHTML = `<button id="leave">Leave</button>`;
     localStorage.clear();
     sessionStorage.clear();
@@ -67,6 +71,14 @@ describe("flush on page exit (#28)", () => {
     for (let i = 0; i < 40; i += 1) tracker.track(`e${i}`, { big });
 
     window.dispatchEvent(new Event("pagehide"));
+    // Another signal, even after the requests settle, cannot reset the lifetime budget.
+    await Promise.resolve();
+    setVisibility("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    setVisibility("visible");
+    document.dispatchEvent(new Event("visibilitychange"));
+    setVisibility("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
 
     const bytes = (body: string) => new TextEncoder().encode(body).length;
     const exitBodies = fetchMock.mock.calls.map(([, request]) => request.body as string);
@@ -79,15 +91,44 @@ describe("flush on page exit (#28)", () => {
     await tracker.shutdown();
   });
 
-  it("drops a lone event over the limit and reports HEAT_E_EVENT_TOO_LARGE with its size", async () => {
+  it("persists an oversized event on exit while sending smaller events", async () => {
     const onError = vi.fn();
     const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet, onError });
     tracker.track("huge", { big: "x".repeat(KEEPALIVE_MAX_BODY_BYTES) });
     tracker.track("small");
     window.dispatchEvent(new Event("pagehide"));
     expect(sentEvents(fetchMock).map((e: any) => e.name)).toEqual(["small"]);
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "HEAT_E_EVENT_TOO_LARGE" }));
-    expect(onError.mock.calls[0][0].cause).toMatch(/event is \d+ bytes, limit 60000/);
+    expect(onError).not.toHaveBeenCalled();
+    await Promise.resolve();
+    const key = Object.keys(sessionStorage).find((key) => key.endsWith(":queue"))!;
+    expect(JSON.parse(sessionStorage.getItem(key)!).map((e: any) => e.name)).toEqual(["huge"]);
+    await tracker.shutdown();
+  });
+
+  it("shares the lifetime budget across trackers", async () => {
+    const trackers = ["one", "two"].map((projectKey) => init({ endpoint: ENDPOINT, projectKey, capture: quiet }));
+    for (const tracker of trackers) tracker.track("big", { data: "x".repeat(35_000) });
+    window.dispatchEvent(new Event("pagehide"));
+    setVisibility("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].keepalive).toBe(true);
+    await Promise.all(trackers.map((tracker) => tracker.shutdown()));
+  });
+
+  it.each(["rejection", "throw"])("does not repeat an exit event after a fetch %s", async (failure) => {
+    if (failure === "rejection") fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    else
+      fetchMock.mockImplementationOnce(() => {
+        throw new TypeError("offline");
+      });
+    const tracker = init({ endpoint: ENDPOINT, projectKey: "test-key", capture: quiet });
+    tracker.track("once");
+    window.dispatchEvent(new Event("pagehide"));
+    await Promise.resolve();
+    setVisibility("hidden");
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(sentEvents(fetchMock).map((e: any) => e.name)).toEqual(["once"]);
     await tracker.shutdown();
   });
 

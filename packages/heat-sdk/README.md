@@ -34,6 +34,12 @@ await tracker.flush();
 4. Optional methods (`identify`, `track`, `setAuthToken`) enrich and control payloads.
 5. If you set `dashboardOrigins` (the dashboard's snippet fills it in) and the page is shown in a frame, `init` posts `{ type: "heat-tracker:frame-hello", href: origin + pathname }` to each listed origin, using that origin as the exact `targetOrigin` (never `*`), so the heat-tracker dashboard knows the page really loaded and where it ended up. The query string and hash are never sent. Without the option nothing is sent. The pathname goes through the same privacy rules as event paths (`;matrix` params dropped, email-looking segments become `[email]`). Nothing is sent when Do Not Track is on; sampling does not stop it, since it carries no events.
 
+## Delivery
+
+Delivery is at-least-once: unsent and unacknowledged events are saved in sessionStorage and sent on the next load in the same tab, so duplicates after reload are possible. Queue persistence is fixed to sessionStorage; closing the tab clears it. Session identity is configured separately via `session.persist`.
+
+Pagehide and visibility changes to hidden share one 60,000-byte keepalive budget for the page lifetime, across trackers. Events that do not fit stay persisted for reload. If events cannot be delivered or persisted, `onError` receives `HEAT_E_EVENTS_DROPPED` with `details.dropped` (the lost count); queue-limit drops use the same error.
+
 ## Coordinate model
 
 - `click` and `move` coordinates are recorded in page/document space (`client + scroll offset`) instead of only viewport space.
@@ -65,7 +71,7 @@ Optional fields:
 
 - `app`: app name/version/environment
 - `session`: persistence (`tab` or `browser`) and idle timeout
-- `batch`: batch limits and queue strategy
+- `batch`: event count, flush interval, queue size limits, and storage strategy
 - `sampling`: sampling rate (0..1)
 - `privacy`: selector masking and blocking options; `keepQueryParams: ["utm_source", ...]` keeps those query
   params in the stored path (default `[]`: the path is `location.pathname` only, no query string or hash).

@@ -80,7 +80,6 @@ export type InitConfig = {
         maxEvents?: number;
         flushIntervalMs?: number;
         maxQueueBytes?: number;
-        storage?: "memory" | "localStorage";
     };
     sampling?: number;
     privacy?: {

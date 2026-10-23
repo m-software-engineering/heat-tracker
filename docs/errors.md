@@ -57,6 +57,11 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: An event was dropped because it is larger than one request can carry.
 - Fix: Send less data in track() properties; a single event must fit in 60,000 bytes of JSON.
 
+## HEAT_E_EVENTS_DROPPED
+
+- Message: Queued events were dropped before delivery.
+- Fix: Allow sessionStorage, free storage space, or send smaller events and flush more often; details.dropped gives the lost count.
+
 ## HEAT_E_INGEST_HTTP
 
 - Message: The collector rejected an event batch.

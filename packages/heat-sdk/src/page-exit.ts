@@ -16,8 +16,9 @@ export const onPageExit = (onExit: (reason: "hidden" | "pagehide") => void, win:
   };
 };
 
-/** keepalive requests share a 64 KiB in-flight body limit per page; stay under it per request. */
+/** One conservative keepalive budget for the entire page lifetime, shared by all trackers and exits. */
 export const KEEPALIVE_MAX_BODY_BYTES = 60_000;
+export const exitBudget = { remaining: KEEPALIVE_MAX_BODY_BYTES };
 
 const encoder = new TextEncoder();
 /** UTF-8 size of `value` as a JSON body; the keepalive limit counts bytes, not UTF-16 code units. */

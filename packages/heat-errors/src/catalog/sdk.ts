@@ -18,6 +18,11 @@ export const SDK_ERRORS = {
     message: "An event was dropped because it is larger than one request can carry.",
     fix: "Send less data in track() properties; a single event must fit in 60,000 bytes of JSON."
   },
+  HEAT_E_EVENTS_DROPPED: {
+    code: "HEAT_E_EVENTS_DROPPED",
+    message: "Queued events were dropped before delivery.",
+    fix: "Allow sessionStorage, free storage space, or send smaller events and flush more often; details.dropped gives the lost count."
+  },
   HEAT_E_INGEST_HTTP: {
     code: "HEAT_E_INGEST_HTTP",
     message: "The collector rejected an event batch.",
