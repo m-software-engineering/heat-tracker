@@ -1,4 +1,10 @@
-import { createHeatError, DASHBOARD_ERRORS, QUERY_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import {
+  createHeatError,
+  DASHBOARD_ERRORS,
+  HeatTrackerError,
+  QUERY_ERRORS,
+  type HeatError
+} from "@m-software-engineering/heat-errors";
 
 /**
  * Server-only. The admin token lives in an HttpOnly cookie; browser JS never sees it. Over HTTPS
@@ -45,8 +51,9 @@ export const readAdminToken = (request: Request) => {
 
 export const secureRequest = (request: Request) =>
   process.env.HEAT_DASHBOARD_SECURE_COOKIE === "true" ||
+  configuredOrigin()?.startsWith("https:") ||
   new URL(request.url).protocol === "https:" ||
-  request.headers.get("x-forwarded-proto") === "https";
+  firstValue(request.headers.get("x-forwarded-proto")) === "https";
 
 export const adminCookie = (request: Request, token: string) => {
   const secure = secureRequest(request);
@@ -65,11 +72,49 @@ export const clearedAdminCookie = (request: Request) => {
   return `${secure ? SECURE_ADMIN_COOKIE : ADMIN_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0${secure ? "; Secure" : ""}`;
 };
 
-/** The dashboard's own origin as the browser sees it (honours a reverse proxy's X-Forwarded-*). */
+/** First value of a header a proxy chain may have appended to ("a, b" → "a"). */
+const firstValue = (value: string | null) => value?.split(",")[0]?.trim() || null;
+
+/**
+ * The canonical origin from `HEAT_DASHBOARD_URL`, or undefined when unset. Anything but a bare http(s)
+ * origin (no path, trailing slash, default port, query or credentials) throws: guessing what was meant,
+ * or falling back to request headers, would silently weaken the strict Origin check.
+ */
+/** Masks user and password in the cause itself, so no later log can print the secret. */
+/** Any "@" may be credentials: echo none of the value, so no masking edge case can leak a secret. */
+/** A rejected value may carry a secret anywhere (userinfo, query, fragment), so it never reaches the log. */
+export const hiddenValue = (value: string) => `(hidden, ${value.length} characters)`;
+
+export const configuredOrigin = (): string | undefined => {
+  const configured = process.env.HEAT_DASHBOARD_URL;
+  // Only a truly empty value means unset; whitespace is a typo and must fail.
+  if (configured === undefined || configured === "") return undefined;
+  let origin: string | undefined;
+  try {
+    const url = new URL(configured);
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      // "host." is a different origin from "host".
+      if (!url.hostname.endsWith(".")) origin = url.origin.toLowerCase();
+    }
+  } catch {
+    // Reported below.
+  }
+  if (!origin || origin !== configured.toLowerCase()) {
+    throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_CONFIG_INVALID, hiddenValue(configured));
+  }
+  return origin;
+};
+
+/**
+ * The dashboard's own origin as the browser sees it. `HEAT_DASHBOARD_URL`, when set, is the canonical
+ * origin and the request headers are ignored; otherwise Host / X-Forwarded-* (first hop) decide.
+ */
 const ownOrigin = (request: Request) => {
+  const configured = configuredOrigin();
+  if (configured) return configured;
   const url = new URL(request.url);
-  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? url.host;
-  const proto = request.headers.get("x-forwarded-proto") ?? url.protocol.replace(/:$/, "");
+  const host = firstValue(request.headers.get("x-forwarded-host")) ?? request.headers.get("host") ?? url.host;
+  const proto = firstValue(request.headers.get("x-forwarded-proto")) ?? url.protocol.replace(/:$/, "");
   return `${proto}://${host}`.toLowerCase();
 };
 

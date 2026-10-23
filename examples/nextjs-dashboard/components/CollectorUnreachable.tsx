@@ -1,18 +1,19 @@
 "use client";
 
-import type { SessionState } from "../lib/onboarding";
+import { useEffect, useRef } from "react";
+import { fill, type Copy } from "../lib/copy";
 
-type Props = { error: NonNullable<SessionState["error"]>; onRetry: () => void };
+type Props = { collectorUrl: string; copy: Copy; onRetry: () => void };
 
-/** "Can't reach the collector at {url}. Check that the collector container is running: `docker compose ps`." */
-export default function CollectorUnreachable({ error, onRetry }: Props) {
+/** Sign-in when the collector can't be reached (#29): the spec line with {url}, then Retry (focused). */
+export default function CollectorUnreachable({ collectorUrl, copy, onRetry }: Props) {
+  const retry = useRef<HTMLButtonElement>(null);
+  useEffect(() => retry.current?.focus(), []);
   return (
-    <div role="alert" className="onboarding-card">
-      <p>
-        {error.message} {error.fix}
-      </p>
-      <button type="button" onClick={onRetry}>
-        Retry
+    <div role="alert" className="onboarding-card" data-code="HEAT_E_COLLECTOR_UNREACHABLE">
+      <p>{fill(copy.unreachable, { url: collectorUrl })}</p>
+      <button type="button" ref={retry} onClick={onRetry}>
+        {copy.retry}
       </button>
     </div>
   );

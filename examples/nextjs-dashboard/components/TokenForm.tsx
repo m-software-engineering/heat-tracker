@@ -1,48 +1,55 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import type { SessionState } from "../lib/onboarding";
+import type { Copy } from "../lib/copy";
 
-type Props = { onSignedIn: () => void };
+type Props = { onSignedIn: () => void; copy: Copy };
 
-/** Sends the token once to the dashboard server, which keeps it in an HttpOnly cookie. */
-export default function TokenForm({ onSignedIn }: Props) {
+/**
+ * Sign in (#29 step 1): one "Admin token" field; Enter or "Continue" sends it once to the dashboard
+ * server, which keeps it in an HttpOnly cookie (#24). The field is cleared and never shown again.
+ */
+export default function TokenForm({ onSignedIn, copy }: Props) {
   const [token, setToken] = useState("");
-  const [error, setError] = useState<SessionState["error"]>();
+  const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
-    setError(undefined);
+    setFailed(false);
     const res = await fetch("/api/session", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ token })
-    });
+    }).catch(() => null);
     setBusy(false);
     setToken("");
-    if (res.ok) return onSignedIn();
-    setError((await res.json().catch(() => null))?.error);
+    // A dead collector re-checks the session, which shows the unreachable message instead.
+    if (res?.ok || res?.status === 502) return onSignedIn();
+    setFailed(true);
   };
 
   return (
-    <form className="onboarding-card" onSubmit={submit}>
-      <h2>Paste your admin token</h2>
-      <p>
-        It is printed in the collector logs. Show it again with{" "}
-        <code>docker compose exec collector heat-collector token</code>.
-      </p>
+    <form className="onboarding-card" onSubmit={submit} data-testid="sign-in">
       <label className="control">
-        Admin token
-        <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} required />
+        {copy.adminToken}
+        <input
+          type="password"
+          autoComplete="off"
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          aria-invalid={failed || undefined}
+          aria-describedby={failed ? "token-error" : undefined}
+          required
+        />
       </label>
       <button type="submit" disabled={busy || !token.trim()}>
-        Continue
+        {copy.continue}
       </button>
-      {error ? (
-        <p role="alert" className="ph-error">
-          {error.message} {error.fix}
+      {failed ? (
+        <p role="alert" id="token-error" className="ph-error">
+          {copy.signInError}
         </p>
       ) : null}
     </form>

@@ -21,5 +21,6 @@
       "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.ts", "test/*.ts"]
     }
   },
+  "ignoreDependencies": ["esbuild"],
   "ignoreExportsUsedInFile": true
 }

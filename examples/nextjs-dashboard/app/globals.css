@@ -20,16 +20,32 @@ body {
   color: var(--ink);
 }
 
+.shell > *,
 main > * {
   min-width: 0;
 }
 
-main {
+/* Shell (#29): nav, content, optional aside; one column below 1024 px, down to 360 px. */
+.shell {
   display: grid;
-  grid-template-columns: 280px 1fr 320px;
+  grid-template-columns: 240px minmax(0, 1fr) 280px;
   min-height: 100vh;
   gap: 24px;
   padding: 24px;
+}
+
+.shell:not(:has(> aside)) {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+main:focus {
+  outline: none;
 }
 
 .sidebar {
@@ -42,7 +58,13 @@ main {
   gap: 20px;
 }
 
-.sidebar h1 {
+.brand {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.topbar h1 {
   font-size: 22px;
   margin: 0;
 }
@@ -54,6 +76,9 @@ main {
 }
 
 .sidebar a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
   text-decoration: none;
   color: var(--ink);
   font-weight: 600;
@@ -108,7 +133,7 @@ main {
   background: #fbfaf7;
 }
 
-.metric-card h3 {
+.metric-card h2 {
   margin: 0 0 6px 0;
   font-size: 14px;
   color: var(--muted);
@@ -121,8 +146,10 @@ main {
 }
 
 @media (max-width: 1024px) {
-  main {
+  .shell,
+  .shell:not(:has(> aside)) {
     grid-template-columns: 1fr;
+    padding: 12px;
   }
 }
 
@@ -395,11 +422,11 @@ main {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--border);
+  background: #8a8580;
 }
 
 .data-dot.live {
-  background: #2e9d5b;
+  background: #1e7a43;
 }
 
 .skeleton {
@@ -431,7 +458,7 @@ main {
 }
 
 .waiting.ready {
-  color: #2e9d5b;
+  color: #1e7a43;
 }
 
 .entry-more {
@@ -464,4 +491,87 @@ main {
 
 .ph-error {
   color: #b42318;
+}
+
+/* Dashboard shell a11y (#29) */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: -48px;
+  z-index: 10;
+  padding: 8px 12px;
+  background: var(--panel);
+  color: var(--ink);
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+/* Visible focus on every control (WCAG 2.4.11). */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 3px solid #0b4bb3;
+  outline-offset: 2px;
+}
+
+/* Targets at least 24 x 24 px (WCAG 2.5.8). */
+button,
+a.button,
+select,
+input {
+  min-height: 24px;
+  min-width: 24px;
+}
+
+a.button {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: #0b4bb3;
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.ph-alert .actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.live-icon {
+  font-weight: 700;
+}
+
+/* Reserves the space of the first screen, so nothing shifts when it arrives. */
+.skeleton-card {
+  min-height: 240px;
+  border-radius: var(--radius);
+  background: #ebe7df;
+}
+
+/* State changes only, 150-200 ms; none with reduced motion. */
+.waiting,
+.ph-alert,
+.onboarding-card {
+  transition:
+    color 150ms ease-out,
+    background-color 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }

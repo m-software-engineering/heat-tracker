@@ -41,7 +41,9 @@ services:
     image: ghcr.io/m-software-engineering/heat-collector:0.4.0
     user: node
     environment:
-      DATABASE_URL: postgres://heat:${POSTGRES_PASSWORD:-heat}@postgres:5432/heat_tracker
+      # No password in the URL: pg reads PGPASSWORD as-is, so @ : / # ? in POSTGRES_PASSWORD need no URL-encoding.
+      DATABASE_URL: postgres://heat@postgres:5432/heat_tracker
+      PGPASSWORD: ${POSTGRES_PASSWORD:-heat}
       HEAT_DATA_DIR: /data
       HEAT_DASHBOARD_URL: ${HEAT_DASHBOARD_URL:-http://localhost:3000}
       # Empty = use the token generated into the collector-data volume (min. 32 chars if set).
@@ -72,6 +74,8 @@ services:
     user: node
     environment:
       HEAT_COLLECTOR_URL: http://collector:4000
+      # Set to the public URL behind a reverse proxy: login then checks Origin against it instead of Host/X-Forwarded-*.
+      HEAT_DASHBOARD_URL: ${HEAT_DASHBOARD_URL:-}
       # true behind an HTTPS reverse proxy that does not send X-Forwarded-Proto.
       HEAT_DASHBOARD_SECURE_COOKIE: ${HEAT_DASHBOARD_SECURE_COOKIE:-false}
       # Sites the heatmap may load in a frame, e.g. https://shop.example.com (comma-separated).

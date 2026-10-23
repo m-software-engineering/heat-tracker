@@ -44,10 +44,37 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Resolve Playwright version
+        id: pw
+        if: matrix.node == 22
+        run: |
+          set -euo pipefail
+          v=$(pnpm exec playwright --version | awk '{print $2}')
+          test -n "$v"
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        if: matrix.node == 22
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw.outputs.version }}-chromium
+
+      # Downloads flake (10-min timeouts on #109/#112): bounded attempts, then fail loudly.
       - name: Install Playwright Chromium
         if: matrix.node == 22
-        run: pnpm exec playwright install --with-deps chromium
-        timeout-minutes: 10
+        timeout-minutes: 15
+        run: |
+          # OS deps go through apt once: a killed attempt would leave apt-get (run via sudo) holding the dpkg lock.
+          pnpm exec playwright install-deps chromium
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" != "true" ]; then
+            for i in 1 2 3; do
+              timeout --kill-after=15 240 pnpm exec playwright install chromium && exit 0
+              echo "::warning::playwright browser download attempt $i failed"; sleep 10
+            done
+            exit 1
+          fi
 
       - name: Run deterministic verification with E2E
         id: verify_e2e
