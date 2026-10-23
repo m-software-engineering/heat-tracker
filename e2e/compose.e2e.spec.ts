@@ -50,7 +50,12 @@ test.describe("docker compose quick start", () => {
     await page.goto("http://localhost:3000/");
     await page.getByLabel("Admin token").fill(token);
     await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByTestId("ingest-status")).toHaveText("Waiting for your first event…");
+    // #29 flow: empty projects → "Create project" → snippet screen (named from the origin on first event).
+    await page.getByRole("link", { name: "Create project" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("New project");
+    await expect(page.getByTestId("ingest-status")).toHaveText(
+      "Waiting for your first event… Open your site in another tab."
+    );
     expect(await page.evaluate(() => document.cookie)).not.toContain("heat_admin");
 
     const snippet = await page.getByTestId("snippet").innerText();
@@ -63,9 +68,10 @@ test.describe("docker compose quick start", () => {
       body: JSON.stringify(clickBatch())
     });
     expect(ingest.status).toBe(200);
-    await expect(page.getByTestId("ingest-status")).toHaveText("Receiving events from https://shop.example.com", {
+    await expect(page.getByTestId("ingest-status")).toHaveText("✓ Receiving events. Open your pages", {
       timeout: 10_000
     });
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("https://shop.example.com");
 
     compose("down");
     compose("up", "-d", "--wait", "--wait-timeout", "120");
