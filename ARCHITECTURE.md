@@ -124,7 +124,7 @@ Package-level highlights:
 - **Hook safety**: `hooks.onBeforeInsert` output is revalidated before persistence.
 - **Operational metadata**: request IDs, structured logs, consistent error payloads, no-store headers.
 - **Privacy-by-default capture**: SDK DNT respect, sensitive selector/input guards, allowlist modes that capture nothing without selectors, and private-target move filtering.
-- **Resilience**: SDK storage fallback, namespaced queue persistence, multi-batch flush/shutdown draining, exponential backoff, and per-collector-instance rate limiting with bucket pruning.
+- **Resilience**: SDK storage fallback, namespaced queue persistence, multi-batch flush/shutdown draining, exponential backoff, and per-collector-instance rate limiting with bucket pruning. SDK keepalive bodies share a 60,000-byte page-lifetime budget across trackers and exit signals (#111). Queues include unacknowledged batches, default to sessionStorage (with the existing storage options preserved), and replay on reload (at-least-once delivery). Actual loss reports `HEAT_E_EVENTS_DROPPED` with `details.dropped`. A real click-then-tab-close E2E checks keepalive delivery to the collector; custom auth headers require fetch rather than sendBeacon. The minified + gzip -9 SDK limits are 8,500 bytes (CommonJS) and 7,750 bytes (ESM), including the durable unload queue (#111).
 
 ## 8) Anti-patterns and risks
 
