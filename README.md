@@ -54,6 +54,8 @@ End-to-end stack for product analytics heatmaps and session analysis: browser SD
 
 ## Quick setup (local development)
 
+Requires Node.js 22 or newer (CI runs 22 and 24) and pnpm 10. The dev install pulls `better-sqlite3` 13, which does not build on Node 20.
+
 ### 1) Start local infrastructure
 
 ```bash
