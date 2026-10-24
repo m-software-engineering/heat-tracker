@@ -1,5 +1,5 @@
 /** Pinned SDK release used in the snippet (keep in step with packages/heat-sdk/package.json). */
-export const SDK_VERSION = "0.3.0";
+export const SDK_VERSION = "0.4.0";
 export const PROJECT_KEY_STORAGE = "heat-dashboard:projectKey";
 
 export type ProjectSummary = { id: string; name: string; createdAt: number };
