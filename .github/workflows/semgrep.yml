@@ -13,7 +13,7 @@ permissions:
 jobs:
   semgrep:
     name: semgrep/semgrep
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: semgrep/semgrep
 
