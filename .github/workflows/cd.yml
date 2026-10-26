@@ -108,7 +108,7 @@ jobs:
 
   resolve-dispatch:
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       published: ${{ steps.check.outputs.published }}
@@ -145,7 +145,7 @@ jobs:
       ${{ !cancelled() && !failure() &&
       (needs.release.outputs.published || needs.resolve-dispatch.outputs.published) == 'true' &&
       (needs.release.outputs.collector_version || needs.resolve-dispatch.outputs.collector_version) != '' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
