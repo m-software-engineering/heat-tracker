@@ -10,3 +10,4 @@ temp/
 *.log
 *.db
 dist-server/
+/ci-metrics/
