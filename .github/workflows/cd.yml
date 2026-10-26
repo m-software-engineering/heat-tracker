@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing heat-collector release version to (re)publish images for (must equal packages/heat-collector/package.json and be on npm)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,12 +20,16 @@ concurrency:
 
 jobs:
   release:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: write
       id-token: write
       pull-requests: write
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      collector_version: ${{ steps.collector.outputs.version }}
     steps:
       - name: Generate release app token
         id: app-token
@@ -66,9 +76,23 @@ jobs:
         id: changesets
         uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
         with:
+          version: pnpm version-packages
           publish: pnpm release
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Resolve published collector version
+        id: collector
+        if: ${{ steps.changesets.outputs.published == 'true' }}
+        env:
+          PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
+        run: |
+          node -e '
+            const pkgs = JSON.parse(process.env.PUBLISHED_PACKAGES || "[]");
+            const hit = pkgs.find((p) => p.name === "@m-software-engineering/heat-collector");
+            const v = hit && /^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$/.test(hit.version) ? hit.version : "";
+            require("node:fs").appendFileSync(process.env.GITHUB_OUTPUT, `version=${v}\n`);
+          '
 
       - name: Write release summary
         if: ${{ always() }}
@@ -79,3 +103,104 @@ jobs:
           CHANGESETS_PUBLISHED: ${{ steps.changesets.outputs.published }}
           CHANGESETS_PUBLISHED_PACKAGES: ${{ steps.changesets.outputs.publishedPackages }}
         run: node scripts/github-summary.mjs cd
+
+  resolve-dispatch:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      published: ${{ steps.check.outputs.published }}
+      collector_version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Verify requested version is the current published release
+        id: check
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "::error::Image re-publishing must be dispatched from main (got $GITHUB_REF)."
+            exit 1
+          fi
+          current="$(node -p 'require("./packages/heat-collector/package.json").version')"
+          if [ "$INPUT_VERSION" != "$current" ]; then
+            echo "::error::Requested version '$INPUT_VERSION' does not match packages/heat-collector/package.json ($current)."
+            exit 1
+          fi
+          if ! npm view "@m-software-engineering/heat-collector@${current}" version >/dev/null 2>&1; then
+            echo "::error::@m-software-engineering/heat-collector@${current} is not published on npm."
+            exit 1
+          fi
+          echo "published=true" >> "$GITHUB_OUTPUT"
+          echo "version=${current}" >> "$GITHUB_OUTPUT"
+
+  publish-images:
+    needs: [release, resolve-dispatch]
+    if: >-
+      ${{ !cancelled() && !failure() &&
+      (needs.release.outputs.published || needs.resolve-dispatch.outputs.published) == 'true' &&
+      (needs.release.outputs.collector_version || needs.resolve-dispatch.outputs.collector_version) != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VERSION: ${{ needs.release.outputs.collector_version || needs.resolve-dispatch.outputs.collector_version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: heat-collector
+            dockerfile: packages/heat-collector/Dockerfile
+          - name: heat-dashboard
+            dockerfile: examples/nextjs-dashboard/Dockerfile
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check whether tag already exists
+        id: exists
+        env:
+          IMAGE: ghcr.io/m-software-engineering/${{ matrix.name }}
+        run: |
+          if out="$(docker manifest inspect "${IMAGE}:${VERSION}" 2>&1)"; then
+            echo "::notice::${IMAGE}:${VERSION} already exists; skipping push."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          elif printf '%s' "$out" | grep -qiE 'manifest unknown|not found|no such manifest'; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Could not determine whether ${IMAGE}:${VERSION} exists: $out"
+            exit 1
+          fi
+
+      - name: Build and push ${{ matrix.name }}
+        if: ${{ steps.exists.outputs.exists == 'false' }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ghcr.io/m-software-engineering/${{ matrix.name }}:${{ env.VERSION }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.title=${{ matrix.name }}
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
