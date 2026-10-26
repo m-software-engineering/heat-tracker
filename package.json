@@ -15,7 +15,7 @@
     "lint:fix": "eslint . --fix",
     "test": "corepack pnpm test:unit && corepack pnpm test:e2e",
     "test:unit": "corepack pnpm test:scripts && corepack pnpm -r test",
-    "test:scripts": "node --test scripts/check-npm-publishable.test.mjs scripts/check-perf-budgets.test.mjs",
+    "test:scripts": "node --test scripts/check-npm-publishable.test.mjs scripts/sync-compose-tag.test.mjs scripts/check-perf-budgets.test.mjs",
     "check:perf": "node scripts/check-perf-budgets.mjs",
     "test:coverage": "corepack pnpm test:scripts && corepack pnpm -r test:coverage",
     "test:e2e": "corepack pnpm --filter \"@m-software-engineering/heat-sdk...\" build && corepack pnpm exec playwright test",
@@ -26,7 +26,7 @@
     "verify": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm build && corepack pnpm test:coverage && corepack pnpm test:e2e && corepack pnpm check:deps && corepack pnpm check:arch && corepack pnpm check:pkg",
     "verify:non-e2e": "corepack pnpm format:check && corepack pnpm lint && corepack pnpm typecheck && corepack pnpm build && corepack pnpm test:coverage && corepack pnpm check:deps && corepack pnpm check:arch && corepack pnpm check:pkg",
     "changeset": "changeset",
-    "version-packages": "changeset version",
+    "version-packages": "changeset version && node scripts/sync-compose-tag.mjs",
     "release": "changeset publish"
   },
   "devDependencies": {
