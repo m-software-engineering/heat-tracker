@@ -181,7 +181,7 @@ export default function PageHeatmap({
     void renderHeatmap(
       canvas,
       data.points,
-      // #174: a lone click must read as ≥ 24 × 24 screen px at half opacity at any frame scale. The
+      // #174: a lone click must read as ≥ 24 × 24 screen px at ≥ 50% on-screen alpha at any frame scale. The
       // half-opacity core of a blob is ~1.5 × radius wide, but blur spreads it thin; 28 screen px of radius clears 24 × 24 (measured).
       { width, height, radius: Math.max(bucket * 2, 28 / scale) },
       () => cancelled
