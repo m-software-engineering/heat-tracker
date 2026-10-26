@@ -126,7 +126,7 @@ Query endpoints also send:
 - `Cache-Control: no-store`
 - `X-Total-Count` or endpoint-specific count headers.
 
-Error payload format is consistent across routes (full catalog: [docs/errors.md](../../docs/errors.md)):
+Error payload format is consistent across routes (full catalog: [docs/errors.md](https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md)):
 
 ```json
 {
@@ -147,7 +147,7 @@ Error payload format is consistent across routes (full catalog: [docs/errors.md]
 }
 ```
 
-Top-level `code`, `message`, `requestId`, and `details` are deprecated and will be removed in the next major version; read `error.code`, `error.message`, `error.requestId`, and `error.details` instead. Responses that still carry them send `Deprecation: true` and a `Link` to the [migration section](../../docs/errors.md#migrating-from-legacy-fields), and the collector logs one deprecation warning per process.
+Top-level `code`, `message`, `requestId`, and `details` are deprecated and will be removed in the next major version; read `error.code`, `error.message`, `error.requestId`, and `error.details` instead. Responses that still carry them send `Deprecation: true` and a `Link` to the [migration section](https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md#migrating-from-legacy-fields), and the collector logs one deprecation warning per process.
 
 **Breaking:** the old top-level `error` string was removed; `error` is now the object.
 
