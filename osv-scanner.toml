@@ -2,12 +2,33 @@
 # Only advisories with no patched release in the affected line may be ignored here.
 # Every entry must name the dependency path, explain the exposure, and expire so it is re-reviewed.
 
-[[IgnoredVulns]]
-id = "GHSA-vfj7-8cjw-p6xm"
-ignoreUntil = 2027-01-19
-reason = "braces 3.0.3 has no patched release. It is only reached through micromatch 4.0.8 in dev-only @changesets/cli 2.x (@changesets/config, @changesets/git), which matches repository-authored config globs at release time and is not shipped in any published package. @changesets/cli 3.x drops micromatch but requires Node >=22.11 and changes the changelog/config contract, so that major upgrade is deferred to a dedicated change."
 
 [[IgnoredVulns]]
-id = "GHSA-hp3w-g68c-fv3c"
-ignoreUntil = 2027-01-19
-reason = "sprintf-js 1.0.3 has no patched release. It is only reached through argparse 1.0.10 in dev-only @microsoft/api-extractor (@rushstack/ts-command-line, still pinned to argparse ~1.0.9 in the latest 7.59.x), which formats CLI help for local API report checks and is not shipped in any published package."
+id = "GHSA-xhq7-xmqj-769h"
+ignoreUntil = 2026-10-27
+reason = "fast-uri 3.1.8, dev-only via @microsoft/api-extractor. Fix 3.1.9 is blocked by the 7-day minimumReleaseAge until 2026-10-26. Tracked in #186."
+
+[[IgnoredVulns]]
+id = "GHSA-wjr9-j795-jxcr"
+ignoreUntil = 2026-10-27
+reason = "fast-uri 3.1.8, see GHSA-xhq7-xmqj-769h. Tracked in #186."
+
+[[IgnoredVulns]]
+id = "GHSA-w74x-v6f9-j3xg"
+ignoreUntil = 2026-10-27
+reason = "fast-uri 3.1.8, see GHSA-xhq7-xmqj-769h. Tracked in #186."
+
+[[IgnoredVulns]]
+id = "GHSA-333x-w4r6-6crp"
+ignoreUntil = 2026-10-27
+reason = "fast-uri 3.1.8, see GHSA-xhq7-xmqj-769h. Tracked in #186."
+
+[[IgnoredVulns]]
+id = "GHSA-27r3-jxmh-p828"
+ignoreUntil = 2026-10-30
+reason = "body-parser 1.20.6, runtime via express 4.22.2 in heat-collector. Fix 1.20.9 is blocked by the 7-day minimumReleaseAge until 2026-10-29. Blocks the 0.5.0 publish. Tracked in #187."
+
+[[IgnoredVulns]]
+id = "GHSA-mrhx-c7xc-m3w5"
+ignoreUntil = 2026-11-15
+reason = "zod 3.25.76, direct runtime dependency of heat-collector. No fix exists in 3.x. Removed by the zod 4 migration tracked in #188. zod 4.x is already overridden to 4.6.6."
