@@ -3,14 +3,9 @@ name: Heatmap DB
 # Heatmap aggregation runs in the database (#26). This checks it on real engines: the golden test
 # on Postgres, MySQL and MongoDB, and the 1 M-event Postgres bench (p95 <= 500 ms, flat RSS).
 on:
+  # No trigger-level `paths`: a skipped workflow never reports, so it cannot be a required check and
+  # misses changes outside the old list (#95). The `changes` job decides; `golden-status` always reports.
   pull_request:
-    paths:
-      - "packages/heat-collector/src/heatmap*.ts"
-      - "packages/heat-collector/src/__fixtures__/heatmap-*"
-      - "packages/heat-collector/src/schema.ts"
-      - "packages/heat-collector/src/db.ts"
-      - "packages/heat-collector/bench/**"
-      - ".github/workflows/heatmap-db.yml"
   schedule:
     - cron: "17 4 * * *"
   workflow_dispatch:
@@ -23,9 +18,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect heatmap-db changes
+    runs-on: ubuntu-24.04
+    # Only pull_request has a base to diff against; schedule/dispatch always run Golden.
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      golden: ${{ steps.filter.outputs.golden }}
+    steps:
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: |
+            golden:
+              - "packages/heat-collector/src/**"
+              - "packages/heat-collector/package.json"
+              - "packages/heat-collector/bench/**"
+              - "packages/heat-collector/vitest.config.ts"
+              - "packages/heat-collector/tsconfig*.json"
+              - "packages/heat-errors/**"
+              - "tsconfig.base.json"
+              - "package.json"
+              - "pnpm-workspace.yaml"
+              - "fixtures/**"
+              - "pnpm-lock.yaml"
+              - ".github/workflows/heatmap-db.yml"
+
   heatmap-db:
     name: Golden (pg, mysql, mongo) + bench (pg)
-    runs-on: ubuntu-latest
+    needs: changes
+    # always() so a skipped `changes` (non-PR events) does not skip Golden; a failed `changes` on a PR
+    # skips Golden here and golden-status turns that into a failure.
+    if: >-
+      always() && (github.event_name != 'pull_request' ||
+      (needs.changes.result == 'success' && needs.changes.outputs.golden == 'true'))
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -90,3 +121,27 @@ jobs:
         run: pnpm -C packages/heat-collector bench:heatmap
         env:
           DATABASE_URL: postgres://heat:heat@127.0.0.1:5432/heat_tracker
+
+  golden-status:
+    name: golden-status
+    needs: [changes, heatmap-db]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check Golden result
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          GOLDEN: ${{ needs.heatmap-db.result }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          echo "event=$EVENT changes=$CHANGES heatmap-db=$GOLDEN"
+          if [ "$EVENT" != "pull_request" ]; then
+            [ "$GOLDEN" = "success" ] && exit 0
+            echo "::error::Golden $GOLDEN on $EVENT"; exit 1
+          fi
+          if [ "$CHANGES" != "success" ]; then echo "::error::changes job $CHANGES"; exit 1; fi
+          case "$GOLDEN" in
+            success|skipped) exit 0 ;;
+            *) echo "::error::Golden $GOLDEN"; exit 1 ;;
+          esac

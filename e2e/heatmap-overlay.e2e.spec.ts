@@ -147,9 +147,9 @@ test("a frame check that does not answer in time fails closed: no iframe, could-
   await expect(page.getByTestId("heatmap-canvas")).toHaveClass(/ready/);
 });
 
-test("empty page says so and names the period", async ({ page }) => {
+test("empty page shows the #29 heatmap empty copy", async ({ page }) => {
   await openDashboard(page, "path=/empty");
-  await expect(page.getByText("No clicks on this page in the last 7 days.")).toBeVisible();
+  await expect(page.getByText("No clicks for this screen size in this period")).toBeVisible();
 });
 
 test("axe finds no serious or critical violations on the heatmap view", async ({ page }) => {

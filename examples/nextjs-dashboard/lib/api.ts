@@ -70,8 +70,10 @@ export const fetchProjects = async (baseUrl: string, cursor?: string | null) => 
   return body as Listing<"projects", ProjectListItem>;
 };
 
-export const fetchPages = async (baseUrl: string, projectId: string, cursor?: string | null) => {
-  const url = `${baseUrl}/api/projects/${encodeURIComponent(projectId)}/pages${withCursor(cursor)}`;
+/** `days` (default 7, the collector's own window) sets `from`; a cursor already carries its window. */
+export const fetchPages = async (baseUrl: string, projectId: string, cursor?: string | null, days = 7) => {
+  const range = !cursor && days !== 7 ? `?from=${Date.now() - days * 86_400_000}` : "";
+  const url = `${baseUrl}/api/projects/${encodeURIComponent(projectId)}/pages${withCursor(cursor) || range}`;
   const body = await getJson(baseUrl, url);
   if (!body || !Array.isArray(body.pages)) {
     throw new HeatTrackerError(DASHBOARD_ERRORS.HEAT_E_DASHBOARD_FETCH, "collector response has no pages array");
