@@ -166,7 +166,7 @@ export default function PageHeatmap({
     // Whole percent, rounded down, so the scaled frame never overflows (no horizontal scroll).
     // A hidden scroller (table view) measures 0; keep the last scale, or the radius below divides by 0.
     const observer = new ResizeObserver(() => {
-      if (scroller.clientWidth > 0) setScale(Math.min(1, Math.floor((scroller.clientWidth / width) * 100) / 100));
+      if (scroller.clientWidth > 0) setScale(Math.max(0.01, Math.min(1, Math.floor((scroller.clientWidth / width) * 100) / 100)));
     });
     observer.observe(scroller);
     return () => observer.disconnect();
