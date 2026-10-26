@@ -21,6 +21,7 @@
       "project": ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.ts", "test/*.ts"]
     }
   },
+  "ignoreBinaries": ["gh"],
   "ignoreDependencies": ["esbuild"],
   "ignoreExportsUsedInFile": true
 }
