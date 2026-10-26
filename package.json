@@ -2,6 +2,9 @@
   "name": "heat-tracker",
   "private": true,
   "packageManager": "pnpm@10.26.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "corepack pnpm -r build",
     "dev": "corepack pnpm -r dev",
