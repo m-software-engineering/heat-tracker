@@ -31,7 +31,3 @@ export const trackingSnippet = (publicCollectorUrl: string, projectKey: string, 
     `  init({ endpoint: ${scriptString(`${publicCollectorUrl}/ingest`)}, projectKey: ${scriptString(projectKey)}, dashboardOrigins: [${scriptString(dashboardOrigin)}] });`,
     "</script>"
   ].join("\n");
-
-/** Live state under the snippet. */
-export const receivingLabel = (project: ProjectSummary | null) =>
-  project ? `Receiving events from ${project.name}` : "Waiting for your first event…";

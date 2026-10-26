@@ -8,14 +8,25 @@ import ProjectList from "../components/ProjectList";
 import ProjectSnippet from "../components/ProjectSnippet";
 import { pageHref, projectHref } from "../lib/entry-links";
 import { renderHeatmap } from "../lib/heatmap-render";
+import { COPY } from "../lib/copy";
+import { renderShellState } from "./shell-states";
 
 const params = new URLSearchParams(window.location.search);
 const projectId = params.get("project");
 const root = () => createRoot(document.getElementById("root")!);
+const copy = COPY.en;
 // Entry flow (#25): no project → project list; project without path → popular pages.
-if (!projectId) {
+// ?shell=<state> renders one #29 shell state on its own (copy, a11y and axe checks).
+if (params.has("shell")) {
+  renderShellState(root(), params);
+} else if (!projectId) {
   root().render(
-    createElement(ProjectList, { collectorUrl: window.location.origin, hrefFor: (p) => projectHref(p.id) })
+    createElement(ProjectList, {
+      collectorUrl: window.location.origin,
+      hrefFor: (p) => projectHref(p.id),
+      copy,
+      createHref: "?shell=new-project"
+    })
   );
 } else if (!params.has("path")) {
   root().render(
@@ -23,10 +34,12 @@ if (!projectId) {
       collectorUrl: window.location.origin,
       projectId,
       hrefFor: (p) => pageHref(projectId, p.path),
+      copy,
       snippet: createElement(ProjectSnippet, {
         publicCollectorUrl: window.location.origin,
         projectId,
-        collectorUrl: window.location.origin
+        collectorUrl: window.location.origin,
+        copy
       })
     })
   );

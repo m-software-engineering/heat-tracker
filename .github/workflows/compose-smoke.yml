@@ -18,7 +18,7 @@ concurrency:
 jobs:
   compose:
     name: docker compose quick start
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -59,16 +59,15 @@ jobs:
       - name: Install Playwright Chromium
         timeout-minutes: 15
         run: |
-          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
-            cmd="pnpm exec playwright install-deps chromium"
-          else
-            cmd="pnpm exec playwright install --with-deps chromium"
+          # OS deps go through apt once: a killed attempt would leave apt-get (run via sudo) holding the dpkg lock.
+          pnpm exec playwright install-deps chromium
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" != "true" ]; then
+            for i in 1 2 3; do
+              timeout --kill-after=15 240 pnpm exec playwright install chromium && exit 0
+              echo "::warning::playwright browser download attempt $i failed"; sleep 10
+            done
+            exit 1
           fi
-          for i in 1 2 3; do
-            timeout --kill-after=15 240 $cmd && exit 0
-            echo "::warning::playwright install attempt $i failed"; sleep 10
-          done
-          exit 1
 
       # Built before the timed run, so the cold-start budget (120 s) matches "with images pulled".
       - name: Build images from this checkout

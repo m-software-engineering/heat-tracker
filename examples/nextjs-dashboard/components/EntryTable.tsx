@@ -1,5 +1,7 @@
 import type { KeyboardEvent, ReactNode } from "react";
 import type { HeatError } from "@m-software-engineering/heat-errors";
+import type { Copy } from "../lib/copy";
+import ErrorPanel from "./ErrorPanel";
 
 export type Column<T> = { label: string; numeric?: boolean; cell: (item: T) => ReactNode };
 
@@ -15,6 +17,8 @@ type Props<T> = {
   hasMore: boolean;
   loadingMore: boolean;
   onMore: () => void;
+  copy: Copy;
+  retry: () => void;
 };
 
 const SKELETON_ROWS = 6;
@@ -37,11 +41,7 @@ export default function EntryTable<T>(props: Props<T>) {
   };
 
   if (error) {
-    return (
-      <div role="alert" className="ph-alert" data-code={error.code}>
-        <strong>{error.code}</strong> {error.message} Cause: {error.cause}. Fix: {error.fix}
-      </div>
-    );
+    return <ErrorPanel error={error} copy={props.copy} onRetry={props.retry} />;
   }
   if (items && items.length === 0) return <>{props.empty}</>;
 
@@ -88,7 +88,7 @@ export default function EntryTable<T>(props: Props<T>) {
       </table>
       {props.hasMore && (
         <button type="button" className="entry-more" onClick={props.onMore} disabled={props.loadingMore}>
-          {props.loadingMore ? "Loading…" : "Show more"}
+          {props.loadingMore ? props.copy.loading : props.copy.showMore}
         </button>
       )}
     </>

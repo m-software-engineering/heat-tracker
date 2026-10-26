@@ -3,7 +3,13 @@ import { DASHBOARD_ERRORS } from "@m-software-engineering/heat-errors";
 const OPTION = "dashboardOrigins";
 
 /** HEAT_E_FRAME_NO_RESPONSE: no valid handshake within 8 s (offline, no SDK or no `dashboardOrigins`, or DNT on). */
-export function FrameNoResponseNotice({ pageUrl }: { pageUrl: string }) {
+export function FrameNoResponseNotice({
+  pageUrl,
+  label = "Open page in new tab"
+}: {
+  pageUrl: string;
+  label?: string;
+}) {
   const error = DASHBOARD_ERRORS.HEAT_E_FRAME_NO_RESPONSE;
   // The catalog keeps plain text; the option name is wrapped in <code> here (React elements, no raw HTML).
   const [before, after] = error.message.split(OPTION);
@@ -15,7 +21,7 @@ export function FrameNoResponseNotice({ pageUrl }: { pageUrl: string }) {
         {after}
       </p>
       <a href={pageUrl} target="_blank" rel="noopener noreferrer">
-        Open page in new tab
+        {label}
       </a>
     </div>
   );
