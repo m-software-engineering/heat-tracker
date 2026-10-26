@@ -252,7 +252,9 @@ test("a container narrower than the bucket scales the frame to fit and labels it
   await expect(page.getByTestId("frame-scale")).toHaveText(`1400 px, ${percent}%`);
 });
 
-test("#174: a single click reads as at least 24 × 24 screen px at half on-screen alpha at a 44% frame scale", async ({ page }) => {
+test("#174: a single click reads as at least 24 × 24 screen px at half on-screen alpha at a 44% frame scale", async ({
+  page
+}) => {
   await page.setViewportSize({ width: 622, height: 800 });
   await openDashboard(page, "path=/blocked");
   await expect(page.getByTestId("heatmap-summary")).toHaveText(/^1 clicks? · Last 7 days · desktop$/);
