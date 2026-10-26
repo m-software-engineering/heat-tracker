@@ -81,6 +81,16 @@ const hotspot = (page: Page) =>
     };
   });
 
+/** Page-px area the heatmap paints clearly (alpha ≥ 50%): a lone click must read as a spot, not a dot. */
+const paintedArea = (page: Page) =>
+  page.getByTestId("heatmap-canvas").evaluate((canvas: HTMLCanvasElement) => {
+    const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+    let cells = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i] >= 128) cells += 1;
+    const cell = Number(canvas.style.width.replace("px", "")) / canvas.width;
+    return cells * cell * cell;
+  });
+
 const buttonCenter = async (page: Page) => {
   const box = await page.frameLocator("iframe").locator("#buy").boundingBox();
   if (!box) throw new Error("button not rendered in the frame");
@@ -106,6 +116,8 @@ test("heatmap overlays the framed page and stays aligned while scrolling", async
     expect(Math.abs(hot.y - button.y)).toBeLessThanOrEqual(tolerance);
   };
   await check();
+  // #174: one hot spot must be at least a 32 × 32 page-px patch, or it hides under the button it marks.
+  expect(await paintedArea(page)).toBeGreaterThanOrEqual(32 * 32);
   await page.getByTestId("heatmap-scroller").evaluate((el) => el.scrollTo(0, 700));
   await check();
 });

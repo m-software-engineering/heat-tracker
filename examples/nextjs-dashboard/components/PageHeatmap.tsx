@@ -180,7 +180,8 @@ export default function PageHeatmap({
     void renderHeatmap(
       canvas,
       data.points,
-      { width, height, radius: Math.max(12, bucket * 1.2) },
+      // #174: a lone click must read as a spot (≥ 32 × 32 page px at half opacity), not a dot under its button.
+      { width, height, radius: Math.max(40, bucket * 2) },
       () => cancelled
     ).then((ms) => {
       if (cancelled) return;
