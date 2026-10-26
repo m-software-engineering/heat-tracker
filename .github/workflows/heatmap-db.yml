@@ -20,7 +20,7 @@ concurrency:
 jobs:
   changes:
     name: Detect heatmap-db changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Only pull_request has a base to diff against; schedule/dispatch always run Golden.
     if: github.event_name == 'pull_request'
     timeout-minutes: 5
@@ -56,7 +56,7 @@ jobs:
     if: >-
       always() && (github.event_name != 'pull_request' ||
       (needs.changes.result == 'success' && needs.changes.outputs.golden == 'true'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -128,7 +128,7 @@ jobs:
     name: golden-status
     needs: [changes, heatmap-db]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Check Golden result
