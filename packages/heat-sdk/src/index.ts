@@ -221,7 +221,9 @@ const DEFAULT_CONFIG: ResolvedConfig = {
 };
 
 const SDK_NAME = "@m-software-engineering/heat-sdk";
-const SDK_VERSION = "0.2.6";
+/** Injected at build time from package.json (tsup.config.ts / vitest.config.ts). */
+declare const __HEAT_SDK_VERSION__: string;
+const SDK_VERSION = __HEAT_SDK_VERSION__;
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
