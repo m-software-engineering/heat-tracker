@@ -1,5 +1,7 @@
-/** Pinned SDK release used in the snippet (keep in step with packages/heat-sdk/package.json). */
-export const SDK_VERSION = "0.3.0";
+import sdkPackage from "../../../packages/heat-sdk/package.json";
+
+/** SDK release the snippet pins: the heat-sdk package version, published by the same release that bumps it (#184). */
+export const SDK_VERSION: string = sdkPackage.version;
 export const PROJECT_KEY_STORAGE = "heat-dashboard:projectKey";
 
 export type ProjectSummary = { id: string; name: string; createdAt: number };

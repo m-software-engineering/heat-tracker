@@ -33,7 +33,7 @@
 - Keep queued events, localStorage persistence, storage namespace, retry/backoff, invalid `maxEvents` guardrails, and flush semantics stable unless the task targets them.
 - If adding capture config, update `InitConfig`, resolved defaults, event handling, docs, and tests together.
 - If adding or changing event types, update the `AnyEvent` union and collector validation/ingest/query behavior in the same change.
-- Keep `SDK_VERSION` aligned with `package.json` when the package version changes.
+- `SDK_VERSION` comes from `package.json` at build time; never hardcode it.
 
 ## Verification
 
