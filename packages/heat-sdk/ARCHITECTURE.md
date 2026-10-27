@@ -132,7 +132,7 @@ When adding event types:
 ## 8) Anti-patterns and risks
 
 - **Single-file concentration**: almost all SDK logic is in `src/index.ts`, making targeted changes harder.
-- **Literal SDK version constant** (`SDK_VERSION`) can drift from `package.json` if not kept in sync.
+- `SDK_VERSION` is injected at build time from `package.json` (`tsup.config.ts`, `vitest.config.ts`).
 - **Global patching of History API** is reference-counted across SDK instances and restored on shutdown, but remains fragile if an app/framework replaces history methods after the SDK patches them.
 - **Best-effort queue byte sizing** via `JSON.stringify(queue).length` may differ from actual transport/storage byte counts.
 - **In-memory storage fallback** keeps init non-crashing when storage is blocked, but cannot persist across reloads.

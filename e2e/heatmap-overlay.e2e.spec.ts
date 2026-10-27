@@ -61,24 +61,39 @@ const openDashboard = async (page: Page, query: string) => {
   return Date.now() - started;
 };
 
-/** Brightest canvas pixel, in page (screen) coordinates. */
+/** Centre of the brightest canvas area (the core saturates to a plateau), in page (screen) coordinates. */
 const hotspot = (page: Page) =>
   page.getByTestId("heatmap-canvas").evaluate((canvas: HTMLCanvasElement) => {
     const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
     let best = 0;
-    let at = 0;
+    for (let i = 3; i < data.length; i += 4) best = Math.max(best, data[i]);
+    let sx = 0;
+    let sy = 0;
+    let n = 0;
     for (let i = 3; i < data.length; i += 4) {
-      if (data[i] > best) {
-        best = data[i];
-        at = (i - 3) / 4;
-      }
+      if (data[i] !== best) continue;
+      const p = (i - 3) / 4;
+      sx += p % canvas.width;
+      sy += Math.floor(p / canvas.width);
+      n += 1;
     }
     const rect = canvas.getBoundingClientRect();
     return {
-      x: rect.left + ((at % canvas.width) + 0.5) * (rect.width / canvas.width),
-      y: rect.top + (Math.floor(at / canvas.width) + 0.5) * (rect.height / canvas.height),
+      x: rect.left + (sx / n + 0.5) * (rect.width / canvas.width),
+      y: rect.top + (sy / n + 0.5) * (rect.height / canvas.height),
       scale: rect.width / Number(canvas.style.width.replace("px", ""))
     };
+  });
+
+/** On-screen CSS px² the heatmap paints clearly: canvas alpha × the canvas's CSS opacity ≥ 50%, as the person sees it. */
+const paintedScreenArea = (page: Page) =>
+  page.getByTestId("heatmap-canvas").evaluate((canvas: HTMLCanvasElement) => {
+    const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+    const opacity = Number(getComputedStyle(canvas).opacity);
+    let cells = 0;
+    for (let i = 3; i < data.length; i += 4) if ((data[i] / 255) * opacity >= 0.5) cells += 1;
+    const cell = canvas.getBoundingClientRect().width / canvas.width;
+    return cells * cell * cell;
   });
 
 const buttonCenter = async (page: Page) => {
@@ -235,4 +250,15 @@ test("a container narrower than the bucket scales the frame to fit and labels it
   expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   const percent = Math.floor((clientWidth / 1400) * 100);
   await expect(page.getByTestId("frame-scale")).toHaveText(`1400 px, ${percent}%`);
+});
+
+test("#174: a single click reads as at least 24 × 24 screen px at half on-screen alpha at a 44% frame scale", async ({
+  page
+}) => {
+  await page.setViewportSize({ width: 622, height: 800 });
+  await openDashboard(page, "path=/blocked");
+  await expect(page.getByTestId("heatmap-summary")).toHaveText(/^1 clicks? · Last 7 days · desktop$/);
+  await expect(page.getByTestId("frame-scale")).toHaveText("1400 px, 44%");
+  // The canvas fades in (opacity 0 → --heat-opacity) after render; poll until it settles.
+  await expect.poll(() => paintedScreenArea(page)).toBeGreaterThanOrEqual(24 * 24);
 });
