@@ -101,15 +101,16 @@ const sqlCount = async (config: DbAdapterConfig, query: string): Promise<number>
 
 describe.each(targets)("ingest dedupe golden ($name)", (target) => {
   it.each([
-    { name: "identical", eventIds: [1, 2, 3], expected: 3 },
-    { name: "partially overlapping", eventIds: [2, 4, 3, 5], expected: 5 }
+    { name: "identical", eventIds: [1, 2, 3], newEventIds: [], expected: 3 },
+    { name: "partially overlapping", eventIds: [2, 4, 3, 5], newEventIds: [4, 5], expected: 5 }
   ])(
     "counts only unique clicks after a $name batch",
-    async ({ eventIds, expected }) => {
+    async ({ eventIds, newEventIds, expected }) => {
       const config = await target.db();
       const collector = await createCollector({
         db: config,
         auth: { mode: "projectKey" },
+        // Disable only the catch-up timer; ingest-time rollup writes must still run.
         heatmap: { rollupCatchUpIntervalMs: 0 }
       });
       collectors.push(collector);
@@ -140,9 +141,18 @@ describe.each(targets)("ingest dedupe golden ($name)", (target) => {
       };
 
       await assertCounts(3);
+      const rollupBefore =
+        config.dialect === "mongodb"
+          ? null
+          : await sqlCount(config, "select coalesce(sum(cnt), 0) as n from heatmap_rollup");
       // Stable ids and fields make the identical case resend exactly the original payload.
+      // The partial batch has new ids {4, 5} (2 rows) and duplicate ids {2, 3}.
       await ingest(batch(eventIds));
       await assertCounts(expected);
+      if (rollupBefore !== null) {
+        const rollupAfter = await sqlCount(config, "select coalesce(sum(cnt), 0) as n from heatmap_rollup");
+        expect(rollupAfter - rollupBefore).toBe(newEventIds.length);
+      }
     },
     60_000
   );

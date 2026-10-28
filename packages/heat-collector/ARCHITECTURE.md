@@ -169,7 +169,7 @@ Discovered tests:
 
 - `src/collector.test.ts`: SQLite integration tests via Express + supertest.
 - `src/mongodb.test.ts`: fake Mongo implementation tests migration + API behavior.
-- `src/ingest-dedupe.golden.test.ts`: cross-dialect resent-batch dedupe (identical and partially overlapping click batches), asserting stored events, SQL rollup counts and heatmap totals. Included in `test:golden`; SQLite always runs, with Postgres/MySQL/MongoDB enabled by `HEAT_TEST_*_URL`.
+- `src/ingest-dedupe.golden.test.ts`: cross-dialect resent-batch dedupe (identical and partially overlapping click batches), asserting stored events, SQL rollup counts and heatmap totals before and after resends. SQL rollup deltas must equal the number of new ids (0 for identical, 2 for partial overlap), with only the catch-up timer disabled so ingest-time rollup writes are exercised. MongoDB checks stored events and heatmap totals without a rollup table. Included in `test:golden`; SQLite always runs, with Postgres/MySQL/MongoDB enabled by `HEAT_TEST_*_URL`.
 - `src/logger.test.ts`: structured warn/error logging and context normalization.
 - `src/jwt.test.ts`: malformed-token and unsupported-algorithm rejection.
 - Current reliability coverage includes malformed/oversized JSON, per-instance rate limit isolation, hook-output revalidation, and session path filtering before pagination for SQL and MongoDB.
