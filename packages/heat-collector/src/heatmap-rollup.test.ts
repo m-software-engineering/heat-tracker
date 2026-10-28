@@ -164,4 +164,26 @@ describe("heatmap rollup", () => {
       expect(body.points.every((p: any) => p.x > 0 && p.y > 0)).toBe(true);
     }
   });
+
+  it("backfills 20k old events with distinct positions in one batch (#196)", async () => {
+    const client = new Database(":memory:");
+    const app = await collectorOn(client);
+    const projectId = await ingest(app, client, [click(1, T0 + 1000, 10, 10)]);
+    const insert = client.prepare(
+      "insert into events (id, project_id, session_id, type, ts, path, x, y, meta_json) values (?, ?, 's1', 'click', ?, '/', ?, ?, ?)"
+    );
+    const meta = JSON.stringify({ viewport: { w: 1440, h: 900 }, meta: {} });
+    const OLD = 20_000;
+    client.transaction(() => {
+      for (let i = 0; i < OLD; i += 1)
+        insert.run(`old-${i}`, projectId, T0 + 2000, 1 + (i % 200), 1 + Math.floor(i / 200), meta);
+    })();
+
+    const migrated = await collectorOn(client);
+    const body = await heatmap(migrated, projectId, { from: T0, to: T0 + HOUR - 1 });
+
+    expect(client.prepare("select count(*) as n from events where rollup_state is null").get()).toEqual({ n: 0 });
+    expect(client.prepare("select sum(cnt) as n from heatmap_rollup").get()).toEqual({ n: OLD + 1 });
+    expect(body.meta).toMatchObject({ total: OLD + 1, plotted: OLD + 1 });
+  });
 });

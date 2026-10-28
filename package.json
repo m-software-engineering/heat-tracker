@@ -1,7 +1,10 @@
 {
   "name": "heat-tracker",
   "private": true,
-  "packageManager": "pnpm@10.26.0",
+  "packageManager": "pnpm@10.34.7",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "corepack pnpm -r build",
     "dev": "corepack pnpm -r dev",
@@ -12,8 +15,10 @@
     "lint:fix": "eslint . --fix",
     "test": "corepack pnpm test:unit && corepack pnpm test:e2e",
     "test:unit": "corepack pnpm test:scripts && corepack pnpm -r test",
-    "test:scripts": "node --test scripts/check-npm-publishable.test.mjs scripts/sync-compose-tag.test.mjs scripts/check-perf-budgets.test.mjs",
+    "test:scripts": "node --test scripts/check-npm-publishable.test.mjs scripts/sync-compose-tag.test.mjs scripts/check-perf-budgets.test.mjs scripts/check-playwright-pin.test.mjs",
     "check:perf": "node scripts/check-perf-budgets.mjs",
+    "check:playwright-pin": "node scripts/check-playwright-pin.mjs",
+    "ci:metrics": "node scripts/ci-metrics.mjs",
     "test:coverage": "corepack pnpm test:scripts && corepack pnpm -r test:coverage",
     "test:e2e": "corepack pnpm --filter \"@m-software-engineering/heat-sdk...\" build && corepack pnpm exec playwright test",
     "check:deps": "knip",
@@ -51,10 +56,11 @@
     "overrides": {
       "brace-expansion@>=1.0.0 <1.1.21": "1.1.21",
       "brace-expansion@>=5.0.0 <5.0.12": "5.0.12",
-      "fast-uri@>=3.0.0 <3.1.8": "3.1.8",
+      "fast-uri@>=3.0.0 <3.1.9": "3.1.9",
       "flatted@>=3.0.0 <3.4.2": "3.4.2",
       "form-data@>=4.0.0 <4.0.6": "4.0.6",
       "glob@>=10.2.0 <10.5.0": "10.5.0",
+      "zod@>=4.0.0 <4.6.6": "4.6.6",
       "js-yaml@>=3.0.0 <3.15.2": "3.15.2",
       "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
       "minimatch@>=3.0.0 <3.1.4": "3.1.4",
@@ -70,7 +76,7 @@
       "sharp@>=0.35.0 <0.35.5": "0.35.5",
       "smol-toml@>=1.0.0 <1.9.0": "1.9.0",
       "source-map-js@>=1.0.0 <1.2.2": "1.2.2",
-      "vitest@4.1.11>vite": "6.4.3",
+      "vitest@4.1.12>vite": "6.4.4",
       "ws@>=8.0.0 <8.21.0": "8.21.0"
     }
   }

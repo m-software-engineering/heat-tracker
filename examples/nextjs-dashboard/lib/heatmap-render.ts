@@ -39,7 +39,7 @@ const yieldToEventLoop = () =>
 
 const hexToRgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 
-/** 256-entry RGBA lookup indexed by intensity; alpha rises with intensity so low counts stay faint. */
+/** 256-entry RGBA lookup indexed by intensity; alpha rises with intensity so low counts stay faint, and the core reaches full alpha so it still reads ≥ 50% through the overlay's CSS opacity (0.6 default, #174). */
 const buildLut = () => {
   const lut = new Uint8ClampedArray(256 * 4);
   for (let i = 0; i < 256; i += 1) {
@@ -54,7 +54,7 @@ const buildLut = () => {
     const a = hexToRgb(c1);
     const b = hexToRgb(c2);
     for (let k = 0; k < 3; k += 1) lut[i * 4 + k] = a[k] + (b[k] - a[k]) * f;
-    lut[i * 4 + 3] = i === 0 ? 0 : 60 + i * 0.75;
+    lut[i * 4 + 3] = i === 0 ? 0 : Math.min(255, 60 + i * 1.5);
   }
   return lut;
 };

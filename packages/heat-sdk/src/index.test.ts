@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { init } from "./index";
+import sdkPackage from "../package.json";
 
 const storageKeys = (storage: Storage) => {
   const keys: string[] = [];
@@ -67,6 +68,20 @@ describe("heat-sdk", () => {
     const clickEvent = body.events.find((event: any) => event.type === "click");
     expect(clickEvent).toBeDefined();
     await tracker.shutdown();
+  });
+
+  it("reports the package.json version as sdk.version (#184)", async () => {
+    const tracker = init({
+      endpoint: "http://localhost:4000/ingest",
+      projectKey: "test-key",
+      capture: { pageview: false }
+    });
+    document.getElementById("btn")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await tracker.flush();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).sdk).toEqual({
+      name: expect.any(String),
+      version: sdkPackage.version
+    });
   });
 
   it("sends identified users with bearer authentication", async () => {

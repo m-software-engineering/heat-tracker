@@ -10,3 +10,6 @@ onlyBuiltDependencies:
   - better-sqlite3
   - esbuild
   - unrs-resolver
+
+trustPolicyExclude:
+  - "semver@6.3.1"

@@ -192,16 +192,29 @@ export const inTransaction = async (
   return ctx.db.transaction(async (tx: any) => work(tx, (query: any) => query));
 };
 
-/** Adds the rows' counts to the rollup inside `tx` (see `inTransaction`). */
+/**
+ * Rollup rows per upsert statement. Each row binds ~10 parameters, so 1,000 rows stay far below
+ * SQLite's 32,766 bound-variable limit (and pg's 65,535) however large the backfill batch is (#196).
+ */
+export const UPSERT_CHUNK = 1000;
+
+/**
+ * Adds the rows' counts to the rollup inside `tx` (see `inTransaction`), one statement per
+ * `UPSERT_CHUNK` rollup rows. Returns each `run` result in order; await them one at a time on pg/mysql.
+ */
 export const upsertRollup = (
   tx: any,
   dialect: SqlDialect,
   table: any,
   rows: RollupEvent[],
   run: (q: any) => unknown
-) => {
+): unknown[] => {
   const values = toRollupRows(rows);
-  return values.length === 0 ? undefined : run(upsertQuery(tx, dialect, table, values));
+  const results: unknown[] = [];
+  for (let start = 0; start < values.length; start += UPSERT_CHUNK) {
+    results.push(run(upsertQuery(tx, dialect, table, values.slice(start, start + UPSERT_CHUNK))));
+  }
+  return results;
 };
 
 /** Inserts events marked as counted (`rollup_state = 1`) and their rollup increments, atomically. */
@@ -217,6 +230,6 @@ export const insertEventsWithRollup = (ctx: { db: any; dialect: string; schema: 
   }
   return inTransaction(ctx, async (tx) => {
     await tx.insert(events).values(counted);
-    await upsertRollup(tx, dialect, heatmapRollup, rows, (q) => q);
+    for (const statement of upsertRollup(tx, dialect, heatmapRollup, rows, (q) => q)) await statement;
   });
 };

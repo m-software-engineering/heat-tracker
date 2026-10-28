@@ -164,9 +164,11 @@ export default function PageHeatmap({
     const scroller = scrollerRef.current;
     if (!scroller) return;
     // Whole percent, rounded down, so the scaled frame never overflows (no horizontal scroll).
-    const observer = new ResizeObserver(() =>
-      setScale(Math.min(1, Math.floor((scroller.clientWidth / width) * 100) / 100))
-    );
+    // A hidden scroller (table view) measures 0; keep the last scale, or the radius below divides by 0.
+    const observer = new ResizeObserver(() => {
+      if (scroller.clientWidth > 0)
+        setScale(Math.max(0.01, Math.min(1, Math.floor((scroller.clientWidth / width) * 100) / 100)));
+    });
     observer.observe(scroller);
     return () => observer.disconnect();
   }, [width]);
@@ -180,7 +182,9 @@ export default function PageHeatmap({
     void renderHeatmap(
       canvas,
       data.points,
-      { width, height, radius: Math.max(12, bucket * 1.2) },
+      // #174: a lone click must read as ≥ 24 × 24 screen px at ≥ 50% on-screen alpha at any frame scale. The
+      // half-opacity core of a blob is ~1.5 × radius wide, but blur spreads it thin; 28 screen px of radius clears 24 × 24 (measured).
+      { width, height, radius: Math.max(bucket * 2, 28 / scale) },
       () => cancelled
     ).then((ms) => {
       if (cancelled) return;
@@ -190,7 +194,7 @@ export default function PageHeatmap({
     return () => {
       cancelled = true;
     };
-  }, [data, width, height]);
+  }, [data, width, height, scale]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {

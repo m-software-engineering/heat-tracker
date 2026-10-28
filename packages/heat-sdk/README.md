@@ -84,7 +84,7 @@ Optional fields:
 - `debug`: logs each error code once per page load; the SDK is silent otherwise
 - `dashboardOrigins`: origins of heat-tracker dashboards that may show this page in a frame, e.g. `["https://heat.example.com"]`. When framed, the SDK sends each of them only `origin + pathname` (never the query or hash), with that origin as the exact `postMessage` target, the path masked by the privacy rules, and nothing with Do Not Track on. Omit it and nothing is sent. The dashboard's onboarding snippet fills it in.
 
-`init()` throws a `HeatTrackerError` (`HEAT_E_CONFIG_MISSING`, `HEAT_E_NOT_BROWSER`). See [docs/errors.md](../../docs/errors.md).
+`init()` throws a `HeatTrackerError` (`HEAT_E_CONFIG_MISSING`, `HEAT_E_NOT_BROWSER`). See [docs/errors.md](https://github.com/m-software-engineering/heat-tracker/blob/main/docs/errors.md).
 
 ### Tracker methods
 

@@ -47,6 +47,7 @@ export default tseslint.config(
         projectService: {
           allowDefaultProject: [
             "packages/heat-sdk/vitest.config.ts",
+            "packages/heat-sdk/tsup.config.ts",
             "packages/heat-collector/vitest.config.ts",
             "packages/heat-errors/vitest.config.ts"
           ]
