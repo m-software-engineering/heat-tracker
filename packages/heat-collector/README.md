@@ -21,7 +21,7 @@ yarn add @m-software-engineering/heat-collector
 
 ## Quick start (Express)
 
-Also install `express`, `cors`, and (for TypeScript) `@types/cors`. `createCollector` does not enable CORS; the host app must, just like NestJS `app.enableCors()`. Default `cors()` allows any origin on every route (broader than the `heat-collector` bin, which only answers CORS on `/ingest`).
+Also install `express`, `cors`, and (for TypeScript) `@types/cors`. `createCollector` does not enable CORS; the host app must scope it to `/ingest` (same policy as the `heat-collector` bin).
 
 ```ts
 import cors from "cors";
@@ -35,8 +35,8 @@ const collector = await createCollector({
 });
 
 const app = express();
-// SDK runs in the browser on another origin; match NestJS `app.enableCors()`.
-app.use(cors());
+// CORS only on ingest; read routes must not be exposed to other origins.
+app.use("/ingest", cors());
 app.use(collector.router);
 // ...your own routes, including under /api...
 // Optional: JSON 404 { error: HeatError } with code HEAT_E_ROUTE_NOT_FOUND. Mount it last.

@@ -20,10 +20,10 @@ const portOf = (server: Server) => {
 };
 
 /**
- * Page+SDK on one origin, Express quick-start collector (with `app.use(cors())`) on another.
- * Proves the browser can ingest cross-origin without HEAT_E_INGEST_NETWORK.
+ * Page+SDK on one origin, Express quick-start collector (`app.use("/ingest", cors())`) on another.
+ * Proves cross-origin ingest succeeds and cross-origin read gets no Access-Control-Allow-Origin.
  */
-test("SDK on another origin ingests through Express quick-start CORS", async ({ page }) => {
+test("SDK on another origin ingests through Express quick-start CORS; read stays same-origin", async ({ page }) => {
   const dir = mkdtempSync(path.join(tmpdir(), "heat-cors-e2e-"));
   const dbFile = path.join(dir, "collector.db");
   const collector = await createCollector({
@@ -33,7 +33,8 @@ test("SDK on another origin ingests through Express quick-start CORS", async ({ 
   });
 
   const collectorApp = express();
-  collectorApp.use(cors());
+  // CORS only on ingest; read routes must not be exposed to other origins.
+  collectorApp.use("/ingest", cors());
   collectorApp.use(collector.router);
   const collectorServer = await listen(collectorApp);
   const collectorUrl = `http://127.0.0.1:${portOf(collectorServer)}`;
@@ -87,6 +88,11 @@ test("SDK on another origin ingests through Express quick-start CORS", async ({ 
       n: number;
     };
     expect(events.n).toBeGreaterThan(0);
+
+    const readRes = await fetch(`${collectorUrl}/api/projects/${project!.id}/events?limit=10`, {
+      headers: { Origin: pageUrl }
+    });
+    expect(readRes.headers.get("access-control-allow-origin")).toBeNull();
   } finally {
     await Promise.all([
       new Promise<void>((r) => collectorServer.close(() => r())),

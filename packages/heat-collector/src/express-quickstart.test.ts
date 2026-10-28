@@ -9,9 +9,8 @@ import { createCollector } from "./collector";
 
 /**
  * Mirrors the Express quick-start host pattern (README + examples/express-collector):
- * `app.use(cors())` then `app.use(collector.router)`, matching NestJS `app.enableCors()`.
- * createCollector itself has no CORS option; the heat-collector bin enables ingest CORS in
- * server-main only.
+ * `app.use("/ingest", cors())` then `app.use(collector.router)`, matching the bin's
+ * ingest-only CORS in server-main. createCollector itself has no CORS option.
  */
 const createQuickStartApp = async () => {
   const dir = mkdtempSync(path.join(tmpdir(), "heat-express-qs-"));
@@ -21,7 +20,8 @@ const createQuickStartApp = async () => {
     autoMigrate: true
   });
   const app = express();
-  app.use(cors());
+  // CORS only on ingest; read routes must not be exposed to other origins.
+  app.use("/ingest", cors());
   app.use(collector.router);
   return app;
 };
@@ -59,7 +59,6 @@ describe("Express quick start CORS", () => {
       .set("Access-Control-Request-Headers", "content-type, x-project-key")
       .expect(204);
 
-    // Default `cors()` mirrors NestJS `enableCors()`: `*` (or the request origin).
     expect(preflight.headers["access-control-allow-origin"]).toBeTruthy();
     expect(["*", origin]).toContain(preflight.headers["access-control-allow-origin"]);
     expect(String(preflight.headers["access-control-allow-headers"] || "").toLowerCase()).toContain("x-project-key");
@@ -73,5 +72,25 @@ describe("Express quick start CORS", () => {
 
     expect(ingest.headers["access-control-allow-origin"]).toBeTruthy();
     expect(["*", origin]).toContain(ingest.headers["access-control-allow-origin"]);
+  });
+
+  it("does not send Access-Control-Allow-Origin on cross-origin read routes", async () => {
+    const app = await createQuickStartApp();
+    const origin = "https://app.example.com";
+
+    const ingest = await request(app)
+      .post("/ingest")
+      .set("Origin", origin)
+      .set("x-project-key", "dev-project-key")
+      .send(buildPayload())
+      .expect(200);
+    expect(ingest.headers["access-control-allow-origin"]).toBeTruthy();
+
+    const projects = await request(app).get("/api/projects").expect(200);
+    const projectId = projects.body.projects[0].id;
+
+    const read = await request(app).get(`/api/projects/${projectId}/events`).set("Origin", origin);
+
+    expect(read.headers["access-control-allow-origin"]).toBeUndefined();
   });
 });

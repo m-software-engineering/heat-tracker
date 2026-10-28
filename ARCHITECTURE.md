@@ -12,18 +12,18 @@ Primary goals observed in code:
 
 ## 2) Monorepo map
 
-| Path                         | Role                                                                   |
-| ---------------------------- | ---------------------------------------------------------------------- |
-| `packages/heat-sdk`          | Browser SDK package (`@m-software-engineering/heat-sdk`).              |
-| `packages/heat-collector`    | Express collector package (`@m-software-engineering/heat-collector`).  |
-| `packages/heat-errors`       | Zero-dependency `HEAT_E_*` error catalog shared by SDK and collector.  |
-| `docs/errors.md`             | Error reference generated from the `heat-errors` catalog.              |
-| `examples/express-collector` | Minimal app that mounts collector router (enables CORS for SDK hosts). |
-| `examples/nextjs-dashboard`  | Reference dashboard consuming collector APIs.                          |
-| `examples/docker-compose`    | Local MySQL/Postgres bootstrap for SQL adapter testing.                |
-| `e2e`                        | Playwright E2E validating SDK + collector integration.                 |
-| `package.json`               | Workspace-level build/test/lint/typecheck commands.                    |
-| `pnpm-workspace.yaml`        | Declares workspace packages under `packages/*` and `examples/*`.       |
+| Path                         | Role                                                                       |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| `packages/heat-sdk`          | Browser SDK package (`@m-software-engineering/heat-sdk`).                  |
+| `packages/heat-collector`    | Express collector package (`@m-software-engineering/heat-collector`).      |
+| `packages/heat-errors`       | Zero-dependency `HEAT_E_*` error catalog shared by SDK and collector.      |
+| `docs/errors.md`             | Error reference generated from the `heat-errors` catalog.                  |
+| `examples/express-collector` | Minimal app that mounts collector router (ingest-only CORS for SDK hosts). |
+| `examples/nextjs-dashboard`  | Reference dashboard consuming collector APIs.                              |
+| `examples/docker-compose`    | Local MySQL/Postgres bootstrap for SQL adapter testing.                    |
+| `e2e`                        | Playwright E2E validating SDK + collector integration.                     |
+| `package.json`               | Workspace-level build/test/lint/typecheck commands.                        |
+| `pnpm-workspace.yaml`        | Declares workspace packages under `packages/*` and `examples/*`.           |
 
 Discovered package roots for architecture docs:
 

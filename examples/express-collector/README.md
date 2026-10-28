@@ -16,4 +16,4 @@ Use this example to validate SDK ingestion quickly and test query endpoints with
 
 ## Cross-origin SDK
 
-The example enables CORS with `app.use(cors())` (same idea as NestJS `app.enableCors()`), so a browser SDK on another origin can `POST /ingest` without `HEAT_E_INGEST_NETWORK`.
+The example enables CORS on `/ingest` only (`app.use("/ingest", cors())`, same policy as the `heat-collector` bin), so a browser SDK on another origin can `POST /ingest` without `HEAT_E_INGEST_NETWORK` while read routes stay same-origin.

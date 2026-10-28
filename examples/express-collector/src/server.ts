@@ -4,8 +4,8 @@ import { createCollector } from "@m-software-engineering/heat-collector";
 
 const app = express();
 
-// SDK runs in the browser on another origin; match NestJS `app.enableCors()`.
-app.use(cors());
+// CORS only on ingest; read routes must not be exposed to other origins.
+app.use("/ingest", cors());
 
 const collector = await createCollector({
   db: { dialect: "sqlite", file: "./heat-tracker.db" },
