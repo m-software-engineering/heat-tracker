@@ -84,11 +84,17 @@ tracker.track("cta_click", { source: "hero" });
 
 ## Collector integration (Express)
 
+Install `cors` (and `@types/cors` for TypeScript) alongside Express. Same idea as NestJS `app.enableCors()`.
+
 ```ts
+import cors from "cors";
 import express from "express";
 import { createCollector } from "@m-software-engineering/heat-collector";
 
 const app = express();
+// SDK runs in the browser on another origin; match NestJS `app.enableCors()`.
+app.use(cors());
+
 const collector = await createCollector({
   db: { dialect: "sqlite", file: "./heat.db" },
   auth: { mode: "projectKey" },

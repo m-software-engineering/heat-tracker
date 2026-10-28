@@ -49,12 +49,18 @@ importers:
       '@playwright/test':
         specifier: ^1.51.0
         version: 1.58.0
+      '@types/cors':
+        specifier: ^2.8.19
+        version: 2.8.19
       axe-core:
         specifier: 4.11.1
         version: 4.11.1
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
+      cors:
+        specifier: ^2.8.6
+        version: 2.8.6
       dependency-cruiser:
         specifier: ^17.4.3
         version: 17.4.3
@@ -100,10 +106,16 @@ importers:
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
+      cors:
+        specifier: ^2.8.6
+        version: 2.8.6
       express:
         specifier: ^4.22.2
         version: 4.22.2
     devDependencies:
+      '@types/cors':
+        specifier: ^2.8.19
+        version: 2.8.19
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -172,6 +184,9 @@ importers:
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
+      '@types/cors':
+        specifier: ^2.8.19
+        version: 2.8.19
       '@types/express':
         specifier: ^4.17.21
         version: 4.17.25
@@ -190,6 +205,9 @@ importers:
       better-sqlite3:
         specifier: ^13.0.3
         version: 13.0.3
+      cors:
+        specifier: ^2.8.6
+        version: 2.8.6
       mongodb:
         specifier: ^6.10.0
         version: 6.21.0
@@ -1559,6 +1577,9 @@ packages:
   '@types/cookiejar@2.1.5':
     resolution: {integrity: sha512-he+DHOWReW0nghN24E1WUqM0efK4kI9oTqDm6XmK8ZPe2djZ90BSNdGnIyCLzCPw7/pogPlGbzI2wHGGmi4O/Q==}
 
+  '@types/cors@2.8.19':
+    resolution: {integrity: sha512-mFNylyeyqN93lfe/9CSxOGREz8cpzAhH+E93xJ4xWQf62V8sQ/24reV2nyzUWM6H6Xji+GGHpkbLe7pVoUEskg==}
+
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
 
@@ -2242,6 +2263,10 @@ packages:
 
   cookiejar@2.1.4:
     resolution: {integrity: sha512-LDx6oHrK+PhzLKJU9j5S7/Y3jM/mUHvD/DeI1WQmJn652iPC5Y4TBzC9l+5OMOXlyTTA+SmVUPm0HQUwpD5Jqw==}
+
+  cors@2.8.6:
+    resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
+    engines: {node: '>= 0.10'}
 
   create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
@@ -5731,6 +5756,10 @@ snapshots:
 
   '@types/cookiejar@2.1.5': {}
 
+  '@types/cors@2.8.19':
+    dependencies:
+      '@types/node': 20.19.30
+
   '@types/deep-eql@4.0.2': {}
 
   '@types/esrecurse@4.3.1': {}
@@ -6453,6 +6482,11 @@ snapshots:
   cookie@0.7.2: {}
 
   cookiejar@2.1.4: {}
+
+  cors@2.8.6:
+    dependencies:
+      object-assign: 4.1.1
+      vary: 1.1.2
 
   create-require@1.1.1: {}
 
