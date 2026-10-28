@@ -34,6 +34,7 @@ Core runtime in `src/index.ts`; event/config types, resolved defaults, and brows
   - Session identity in `sessionStorage` or `localStorage` (configurable `session.persist`).
   - Session and queue keys are namespaced by a stable hash of `projectKey|endpoint`, which prevents same-page trackers from replaying one project's data through another.
   - Queue persistence always uses `sessionStorage`, with no configuration option; it survives reload in the same tab and is cleared when the tab closes.
+  - Each event gets a stable `eventId` at creation; the sessionStorage queue persists it so exit resends and next-page replay reuse the same id (collector dedupes on it).
   - Queued and in-flight events remain persisted until acknowledgement; init immediately flushes restored queues. Delivery is at-least-once, so reload can replay a delivered but unacknowledged event.
   - Session identity falls back to memory when storage is blocked. Queue storage failures keep events in memory until an exit cannot deliver/persist them; actual drops report `HEAT_E_EVENTS_DROPPED` with `details.dropped`.
 - **Transport**:

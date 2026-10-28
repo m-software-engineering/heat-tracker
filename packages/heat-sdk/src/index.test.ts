@@ -82,6 +82,7 @@ describe("heat-sdk", () => {
       name: expect.any(String),
       version: sdkPackage.version
     });
+    await tracker.shutdown();
   });
 
   it("sends identified users with bearer authentication", async () => {

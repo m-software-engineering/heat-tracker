@@ -119,4 +119,28 @@ describe("queue persistence", () => {
     await tracker.shutdown();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("keeps the same eventId across exit resend and next-page replay", async () => {
+    fetchMock.mockRejectedValueOnce(new TypeError("offline"));
+    const first = init(config);
+    first.track("stable-id");
+    window.dispatchEvent(new Event("pagehide"));
+    await Promise.resolve();
+    const [queued] = persisted(sessionStorage);
+    expect(queued.eventId).toEqual(expect.any(String));
+    expect(queued.eventId.length).toBeGreaterThan(0);
+    const exitBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(exitBody.events[0].eventId).toBe(queued.eventId);
+
+    await first.shutdown();
+    vi.resetModules();
+    fetchMock.mockClear();
+    fetchMock.mockResolvedValue({ ok: true });
+    const { init: reload } = await import("./index");
+    const next = reload(config);
+    await next.flush();
+    const replay = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(replay.events.map((e: any) => e.eventId)).toEqual([queued.eventId]);
+    await next.shutdown();
+  });
 });

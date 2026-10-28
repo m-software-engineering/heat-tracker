@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import * as mysqlCore from "drizzle-orm/mysql-core";
 import * as pgCore from "drizzle-orm/pg-core";
 import * as sqliteCore from "drizzle-orm/sqlite-core";
@@ -217,19 +217,99 @@ export const upsertRollup = (
   return results;
 };
 
-/** Inserts events marked as counted (`rollup_state = 1`) and their rollup increments, atomically. */
-export const insertEventsWithRollup = (ctx: { db: any; dialect: string; schema: any }, rows: RollupEvent[]) => {
+type InsertEvent = RollupEvent & { id: string };
+
+/** First occurrence of each row id (within-batch dedupe). */
+const uniqueById = <T extends { id: string }>(rows: T[]) => {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    if (seen.has(row.id)) return false;
+    seen.add(row.id);
+    return true;
+  });
+};
+
+/**
+ * Inserts events marked as counted (`rollup_state = 1`) and their rollup increments, atomically.
+ * Rows whose id already exists (same project+eventId deterministic id) are skipped so a resent
+ * batch is stored and counted in the rollup exactly once (#28 / PR #111).
+ */
+export const insertEventsWithRollup = (ctx: { db: any; dialect: string; schema: any }, rows: InsertEvent[]) => {
   const { events, heatmapRollup } = ctx.schema;
   const dialect = ctx.dialect as SqlDialect;
-  const counted = rows.map((row) => ({ ...row, rollupState: 1 }));
+  const candidates = uniqueById(rows);
+  if (candidates.length === 0) return;
+
+  const selectExisting = (tx: any, ids: string[]) => {
+    const found = new Set<string>();
+    for (let start = 0; start < ids.length; start += UPSERT_CHUNK) {
+      const chunk = ids.slice(start, start + UPSERT_CHUNK);
+      const query = tx.select({ id: events.id }).from(events).where(inArray(events.id, chunk));
+      const result = dialect === "sqlite" ? query.all() : query;
+      for (const row of result as Array<{ id: string }>) found.add(row.id);
+    }
+    return found;
+  };
+
   if (dialect === "sqlite") {
     return inTransaction(ctx, (tx, run) => {
-      run(tx.insert(events).values(counted));
-      upsertRollup(tx, dialect, heatmapRollup, rows, run);
+      const existing = selectExisting(
+        tx,
+        candidates.map((row) => row.id)
+      );
+      const fresh = candidates.filter((row) => !existing.has(row.id));
+      if (fresh.length === 0) return;
+      run(tx.insert(events).values(fresh.map((row) => ({ ...row, rollupState: 1 }))));
+      upsertRollup(tx, dialect, heatmapRollup, fresh, run);
     });
   }
+
   return inTransaction(ctx, async (tx) => {
-    await tx.insert(events).values(counted);
-    for (const statement of upsertRollup(tx, dialect, heatmapRollup, rows, (q) => q)) await statement;
+    // Prefer insert-on-conflict so a concurrent retry cannot 500 the whole batch; rollup only
+    // the ids this statement actually inserted (RETURNING on pg; pre-filter + ignore on mysql).
+    if (dialect === "pg") {
+      const inserted: InsertEvent[] = [];
+      for (let start = 0; start < candidates.length; start += UPSERT_CHUNK) {
+        const chunk = candidates.slice(start, start + UPSERT_CHUNK);
+        const rows = await tx
+          .insert(events)
+          .values(chunk.map((row) => ({ ...row, rollupState: 1 })))
+          .onConflictDoNothing()
+          .returning({ id: events.id });
+        const got = new Set((rows as Array<{ id: string }>).map((row) => row.id));
+        for (const row of chunk) if (got.has(row.id)) inserted.push(row);
+      }
+      if (inserted.length === 0) return;
+      for (const statement of upsertRollup(tx, dialect, heatmapRollup, inserted, (q) => q)) await statement;
+      return;
+    }
+
+    const existing = new Set<string>();
+    for (let start = 0; start < candidates.length; start += UPSERT_CHUNK) {
+      const chunk = candidates.slice(start, start + UPSERT_CHUNK).map((row) => row.id);
+      const rowsFound = await tx.select({ id: events.id }).from(events).where(inArray(events.id, chunk));
+      for (const row of rowsFound as Array<{ id: string }>) existing.add(row.id);
+    }
+    const fresh = candidates.filter((row) => !existing.has(row.id));
+    if (fresh.length === 0) return;
+    try {
+      await tx.insert(events).values(fresh.map((row) => ({ ...row, rollupState: 1 })));
+    } catch (error: any) {
+      // MySQL concurrent duplicate: re-filter and insert only what is still missing.
+      const code = error?.code || error?.errno || error?.cause?.code || error?.cause?.errno;
+      if (code !== "ER_DUP_ENTRY" && code !== 1062) throw error;
+      const still = new Set<string>();
+      for (let start = 0; start < fresh.length; start += UPSERT_CHUNK) {
+        const chunk = fresh.slice(start, start + UPSERT_CHUNK).map((row) => row.id);
+        const rowsFound = await tx.select({ id: events.id }).from(events).where(inArray(events.id, chunk));
+        for (const row of rowsFound as Array<{ id: string }>) still.add(row.id);
+      }
+      const retry = fresh.filter((row) => !still.has(row.id));
+      if (retry.length === 0) return;
+      await tx.insert(events).values(retry.map((row) => ({ ...row, rollupState: 1 })));
+      for (const statement of upsertRollup(tx, dialect, heatmapRollup, retry, (q) => q)) await statement;
+      return;
+    }
+    for (const statement of upsertRollup(tx, dialect, heatmapRollup, fresh, (q) => q)) await statement;
   });
 };
