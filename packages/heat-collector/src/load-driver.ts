@@ -10,7 +10,10 @@ export const loadDriver = async <T>(
   } catch (error) {
     const code = (error as { code?: unknown }).code;
     const message = error instanceof Error ? error.message : "";
-    if ((code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") && message.includes(`'${pkg}`)) {
+    if (
+      (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") &&
+      new RegExp(`'${pkg}(/[^']*)?'`).test(message)
+    ) {
       throw new HeatTrackerError(
         SERVER_ERRORS.HEAT_E_DB_DRIVER_MISSING,
         `database driver "${pkg}" is not installed; run: npm install ${pkg}`

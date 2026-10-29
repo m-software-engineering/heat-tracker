@@ -17,6 +17,11 @@ describe("loadDriver", () => {
     await expect(loadDriver("pg", () => Promise.reject(other))).rejects.toBe(other);
   });
 
+  it("does not blame the driver for a missing sibling like pg-native", async () => {
+    const native = missing("pg-native");
+    await expect(loadDriver("pg", () => Promise.reject(native))).rejects.toBe(native);
+  });
+
   it("returns the loaded module", async () => {
     await expect(loadDriver("pg", async () => ({ Pool: 1 }))).resolves.toEqual({ Pool: 1 });
   });
