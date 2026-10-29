@@ -1,5 +1,6 @@
 import { HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import type { Dialect } from "./schema";
+import { loadDriver } from "./load-driver";
 import {
   buildAddEventColumnSql,
   buildCreatePendingIndexSql,
@@ -52,8 +53,8 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
   }
 
   if (config.dialect === "pg") {
-    const { drizzle } = await import("drizzle-orm/node-postgres");
-    const { Pool } = await import("pg");
+    const { drizzle } = await loadDriver("pg", () => import("drizzle-orm/node-postgres"));
+    const { Pool } = await loadDriver("pg", () => import("pg"));
     if (!config.client && !config.connectionString) {
       throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_CONFIG, 'dialect "pg" has no connectionString or client');
     }
@@ -63,8 +64,8 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
   }
 
   if (config.dialect === "mysql") {
-    const { drizzle } = await import("drizzle-orm/mysql2");
-    const mysql = await import("mysql2/promise");
+    const { drizzle } = await loadDriver("mysql2", () => import("drizzle-orm/mysql2"));
+    const mysql = await loadDriver("mysql2", () => import("mysql2/promise"));
     if (!config.client && !config.connectionString) {
       throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_CONFIG, 'dialect "mysql" has no connectionString or client');
     }
@@ -78,7 +79,7 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
       return { db: config.db, dialect: "mongodb", schema };
     }
 
-    const { MongoClient } = await import("mongodb");
+    const { MongoClient } = await loadDriver("mongodb", () => import("mongodb"));
     if (!config.client && !config.connectionString) {
       throw new HeatTrackerError(SERVER_ERRORS.HEAT_E_DB_CONFIG, 'dialect "mongodb" has no connectionString or client');
     }
@@ -93,8 +94,8 @@ export const createDb = async (config: DbAdapterConfig): Promise<DbContext> => {
     return { db, dialect: "mongodb", schema };
   }
 
-  const { drizzle } = await import("drizzle-orm/better-sqlite3");
-  const sqlite = await import("better-sqlite3");
+  const { drizzle } = await loadDriver("better-sqlite3", () => import("drizzle-orm/better-sqlite3"));
+  const sqlite = await loadDriver("better-sqlite3", () => import("better-sqlite3"));
   const file = config.file || config.connectionString || "./heat-tracker.db";
   const client = config.client ?? new sqlite.default(file);
   const db = drizzle({ client });
