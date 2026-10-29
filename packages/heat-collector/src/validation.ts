@@ -13,7 +13,7 @@ export const deviceSchema = z.object({
 });
 
 const baseEventSchema = z.object({
-  eventId: z.string(),
+  eventId: z.string().min(1),
   sessionId: z.string(),
   ts: z.number(),
   path: z.string(),

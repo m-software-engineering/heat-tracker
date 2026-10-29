@@ -50,3 +50,6 @@ export const ingestNetworkError = (err: unknown) =>
     SDK_ERRORS.HEAT_E_INGEST_NETWORK,
     `fetch failed: ${err instanceof Error ? err.message : String(err)}`
   );
+
+export const eventsDroppedError = (dropped: number, cause: string) =>
+  createHeatError(SDK_ERRORS.HEAT_E_EVENTS_DROPPED, cause, { details: { dropped } });

@@ -186,4 +186,45 @@ describe("heatmap rollup", () => {
     expect(client.prepare("select sum(cnt) as n from heatmap_rollup").get()).toEqual({ n: OLD + 1 });
     expect(body.meta).toMatchObject({ total: OLD + 1, plotted: OLD + 1 });
   });
+
+  it("stores and rollups a resent batch exactly once (same eventIds)", async () => {
+    const client = new Database(":memory:");
+    const app = await collectorOn(client);
+    const batch = [click(10, T0 + 1000, 10, 10), click(11, T0 + 2000, 20, 20)];
+    const projectId = await ingest(app, client, batch);
+    await ingest(app, client, batch); // identical retry (keepalive / next-page replay)
+
+    expect(client.prepare("select count(*) as n from events").get()).toEqual({ n: 2 });
+    expect(client.prepare("select sum(cnt) as n from heatmap_rollup").get()).toEqual({ n: 2 });
+    const whole = await heatmap(app, projectId, { from: T0, to: T0 + HOUR - 1 });
+    expect(whole.meta.plotted).toBe(2);
+  });
+
+  it("dedupes duplicate eventIds inside one batch", async () => {
+    const client = new Database(":memory:");
+    const app = await collectorOn(client);
+    const dup = click(20, T0 + 1000, 10, 10);
+    await ingest(app, client, [dup, { ...dup, x: 99, y: 99 }]);
+    expect(client.prepare("select count(*) as n from events").get()).toEqual({ n: 1 });
+    expect(client.prepare("select x, y from events").get()).toEqual({ x: 10, y: 10 });
+    expect(client.prepare("select sum(cnt) as n from heatmap_rollup").get()).toEqual({ n: 1 });
+  });
+
+  it("allows the same client eventId under different projects", async () => {
+    const client = new Database(":memory:");
+    const app = await collectorOn(client);
+    const shared = click(30, T0 + 1000, 10, 10);
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", KEY)
+      .send({ session: { id: "s1", startedAt: T0, lastSeenAt: T0 }, events: [shared] })
+      .expect(200);
+    await request(app)
+      .post("/ingest")
+      .set("x-project-key", "other-key")
+      .send({ session: { id: "s2", startedAt: T0, lastSeenAt: T0 }, events: [shared] })
+      .expect(200);
+    expect(client.prepare("select count(*) as n from events").get()).toEqual({ n: 2 });
+    expect(client.prepare("select count(distinct project_id) as n from events").get()).toEqual({ n: 2 });
+  });
 });

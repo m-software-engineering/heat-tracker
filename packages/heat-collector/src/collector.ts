@@ -13,9 +13,9 @@ import {
 } from "./validation";
 import { verifyJwt, type JwtConfig } from "./jwt";
 import { aggregateHeatmap } from "./heatmap";
-import { insertEventsWithRollup, ROLLUP_HOUR_MS } from "./heatmap-rollup";
+import { ROLLUP_HOUR_MS } from "./heatmap-rollup";
+import { insertEvents } from "./ingest-events";
 import { backfillRollup, CATCH_UP_BATCHES } from "./heatmap-migrate";
-import { storedBucket } from "./viewport-bucket";
 import { pageTitlesOf, registerPageRoutes, upsertPageTitles } from "./pages";
 import { sanitizePayloadPaths } from "./path-privacy";
 import { requireAdminToken } from "./admin-auth";
@@ -129,15 +129,6 @@ const parseTime = (value?: string) => {
 const requestId = () => {
   if (crypto.randomUUID) return crypto.randomUUID();
   return crypto.randomBytes(16).toString("hex");
-};
-
-const sanitizeEventMeta = (meta: any) => {
-  if (!meta || typeof meta !== "object") return undefined;
-  const clone = { ...meta };
-  delete clone.value;
-  delete clone.text;
-  delete clone.content;
-  return clone;
 };
 
 const isMongo = (ctx: DbContext) => ctx.dialect === "mongodb";
@@ -852,74 +843,6 @@ const hashIp = (ip: string) => {
   if (!ip) return null;
   const hash = crypto.createHash("sha256").update(ip).digest("hex");
   return hash.slice(0, 32);
-};
-
-const insertEvents = async (ctx: DbContext, projectId: string, userId: string | undefined, payload: any) => {
-  const rows: any[] = [];
-
-  for (const event of payload.events) {
-    if (event.type === "input" && event.masked && /[^*]/.test(event.masked)) {
-      continue;
-    }
-
-    const base = {
-      id: crypto.randomUUID(),
-      projectId,
-      sessionId: payload.session.id,
-      userId: userId ?? null,
-      type: event.type,
-      ts: event.ts,
-      path: event.path,
-      selector: event.selector ?? null,
-      viewportBucket: storedBucket(event.viewport, sanitizeEventMeta(event.meta)),
-      metaJson: JSON.stringify({
-        viewport: event.viewport,
-        device: event.device,
-        meta: sanitizeEventMeta(event.meta)
-      })
-    };
-
-    if (event.type === "move" && Array.isArray(event.points)) {
-      for (const point of event.points) {
-        rows.push({
-          ...base,
-          id: crypto.randomUUID(),
-          ts: event.ts + point.tsOffset,
-          x: Math.round(point.x),
-          y: Math.round(point.y)
-        });
-      }
-      continue;
-    }
-
-    if (event.type === "click") {
-      rows.push({
-        ...base,
-        x: Math.round(event.x),
-        y: Math.round(event.y)
-      });
-      continue;
-    }
-
-    if (event.type === "scroll") {
-      rows.push({
-        ...base,
-        scrollDepth: Math.round(event.scrollDepthPct)
-      });
-      continue;
-    }
-
-    rows.push(base);
-  }
-
-  if (rows.length === 0) return;
-
-  if (isMongo(ctx)) {
-    await ctx.db.collection("events").insertMany(rows, { ordered: true });
-    return;
-  }
-
-  await insertEventsWithRollup(ctx, rows);
 };
 
 const listProjectEvents = async (

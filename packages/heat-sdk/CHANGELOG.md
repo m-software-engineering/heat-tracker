@@ -1,5 +1,11 @@
 # @m-software-engineering/heat-sdk
 
+## Unreleased
+
+- Share one 60 KB keepalive budget across page-exit signals and trackers.
+- Persist unsent and in-flight events in sessionStorage by default and replay them on reload; preserve localStorage and disabled persistence options.
+- Report actual event loss as `HEAT_E_EVENTS_DROPPED` with `details.dropped`; delivery is at-least-once.
+
 ## 0.3.0
 
 ### Minor Changes
