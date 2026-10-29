@@ -19,6 +19,8 @@ yarn add @m-software-engineering/heat-collector
 - SQLite: `better-sqlite3`
 - MongoDB: `mongodb`
 
+> **⚠️ Read APIs are open in projectKey mode.** Routes like `GET /api/projects/<id>/events` answer without a token and return page paths and user agents. Keep them off the public internet: put a reverse proxy or your own auth in front of everything except `/ingest`. Token-required reads land in 0.6.0 ([#168](https://github.com/m-software-engineering/heat-tracker/issues/168)).
+
 ## Quick start (Express)
 
 Also install `express`, `cors`, and (for TypeScript) `@types/cors`. `createCollector` does not enable CORS; the host app must scope it to `/ingest` (same policy as the `heat-collector` bin).
