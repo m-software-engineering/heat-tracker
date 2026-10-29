@@ -84,11 +84,17 @@ tracker.track("cta_click", { source: "hero" });
 
 ## Collector integration (Express)
 
+Install `cors` (and `@types/cors` for TypeScript) alongside Express. Scope CORS to `/ingest` only (same policy as the `heat-collector` bin).
+
 ```ts
+import cors from "cors";
 import express from "express";
 import { createCollector } from "@m-software-engineering/heat-collector";
 
 const app = express();
+// CORS only on ingest; read routes must not be exposed to other origins.
+app.use("/ingest", cors());
+
 const collector = await createCollector({
   db: { dialect: "sqlite", file: "./heat.db" },
   auth: { mode: "projectKey" },
