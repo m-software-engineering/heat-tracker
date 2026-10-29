@@ -5,14 +5,14 @@
       "kind": "min+gzip",
       "file": "packages/heat-sdk/dist/index.js",
       "build": "run: corepack pnpm --filter \"@m-software-engineering/heat-sdk...\" build",
-      "maxBytes": 7900
+      "maxBytes": 8500
     },
     {
       "name": "SDK dist/index.mjs (min+gzip)",
       "kind": "min+gzip",
       "file": "packages/heat-sdk/dist/index.mjs",
       "build": "run: corepack pnpm --filter \"@m-software-engineering/heat-sdk...\" build",
-      "maxBytes": 7150
+      "maxBytes": 7750
     },
     {
       "name": "Dashboard / first-load JS (gzip)",

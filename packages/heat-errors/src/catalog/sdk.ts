@@ -13,6 +13,16 @@ export const SDK_ERRORS = {
     message: "init() was called outside a browser, for example during server-side rendering.",
     fix: 'Call init() inside useEffect or behind typeof window !== "undefined".'
   },
+  HEAT_E_EVENT_TOO_LARGE: {
+    code: "HEAT_E_EVENT_TOO_LARGE",
+    message: "An event was dropped because it is larger than one request can carry.",
+    fix: "Send less data in track() properties; a single event must fit in 60,000 bytes of JSON."
+  },
+  HEAT_E_EVENTS_DROPPED: {
+    code: "HEAT_E_EVENTS_DROPPED",
+    message: "Queued events were dropped before delivery.",
+    fix: "Allow sessionStorage, free storage space, or send smaller events and flush more often; details.dropped gives the lost count."
+  },
   HEAT_E_INGEST_HTTP: {
     code: "HEAT_E_INGEST_HTTP",
     message: "The collector rejected an event batch.",

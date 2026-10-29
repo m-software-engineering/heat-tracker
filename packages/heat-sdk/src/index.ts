@@ -1,479 +1,69 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { HeatTrackerError, SDK_ERRORS, type HeatError } from "@m-software-engineering/heat-errors";
+import { HeatTrackerError, SDK_ERRORS } from "@m-software-engineering/heat-errors";
+import { KEEPALIVE_MAX_BODY_BYTES, exitBudget, onPageExit, utf8Bytes } from "./page-exit";
 import { announceToParentFrame } from "./frame-handshake";
-import { createErrorReporter, ingestHttpError, ingestNetworkError, type ReportError } from "./errors";
+import {
+  createErrorReporter,
+  eventsDroppedError,
+  ingestHttpError,
+  ingestNetworkError,
+  type ReportError
+} from "./errors";
 import { pagePath, pageTitle } from "./page-info";
 
 export type { HeatError, HeatErrorCode } from "@m-software-engineering/heat-errors";
 export { HeatTrackerError, isHeatError } from "@m-software-engineering/heat-errors";
 
-export type InitConfig = {
-  endpoint: string;
-  projectKey: string;
-  /** Logs each error code once per page load with its fix and docs link. */
-  debug?: boolean;
-  /** Receives every SDK and collector error; the SDK is otherwise silent after init. */
-  onError?: (err: HeatError) => void;
-  app?: { name?: string; version?: string; env?: string };
-  /**
-   * Origins of heat-tracker dashboards allowed to show this page in a frame, e.g. `["https://heat.example.com"]`.
-   * When framed, the SDK posts `{ type: "heat-tracker:frame-hello", href: origin + pathname }` to each of them
-   * (exact targetOrigin, never `*`; no query or hash) so the dashboard knows the page loaded. Omit to send nothing.
-   */
-  dashboardOrigins?: string[];
-  session?: {
-    idleTimeoutMs?: number;
-    persist?: "tab" | "browser";
-  };
-  batch?: {
-    maxEvents?: number;
-    flushIntervalMs?: number;
-    maxQueueBytes?: number;
-    storage?: "memory" | "localStorage";
-  };
-  sampling?: number;
-  privacy?: {
-    respectDoNotTrack?: boolean;
-    blockSelectors?: string[];
-    allowSelectors?: string[];
-    maskTextSelectors?: string[];
-    /** Query params kept in the stored path; every other param (and the hash) is dropped. Default `[]`. */
-    keepQueryParams?: string[];
-  };
-  capture?: {
-    click?: boolean;
-    move?: { enabled: boolean; throttleMs: number };
-    scroll?: boolean;
-    pageview?: boolean;
-    /** Send `document.title` (masked, ≤ 200 chars) on pageviews. Default `true`. */
-    pageTitle?: boolean;
-    inputs?: {
-      enabled: boolean;
-      mode: "off" | "metadata" | "masked" | "allowlist";
-      allowSelectors?: string[];
-    };
-    keyboard?: {
-      enabled: boolean;
-      mode: "off" | "metadata" | "allowlist";
-      allowSelectors?: string[];
-    };
-  };
-};
-
-export type Tracker = {
-  identify: (userId: string, traits?: Record<string, any>) => void;
-  setAuthToken: (jwt: string | null) => void;
-  track: (name: string, props?: Record<string, any>) => void;
-  flush: () => Promise<void>;
-  shutdown: () => Promise<void>;
-};
-
-type ResolvedCaptureConfig = {
-  click: boolean;
-  move: { enabled: boolean; throttleMs: number };
-  scroll: boolean;
-  pageview: boolean;
-  pageTitle: boolean;
-  inputs: {
-    enabled: boolean;
-    mode: "off" | "metadata" | "masked" | "allowlist";
-    allowSelectors?: string[];
-  };
-  keyboard: {
-    enabled: boolean;
-    mode: "off" | "metadata" | "allowlist";
-    allowSelectors?: string[];
-  };
-};
-
-type ResolvedConfig = {
-  endpoint: string;
-  projectKey: string;
-  debug?: boolean;
-  onError?: InitConfig["onError"];
-  app: { name?: string; version?: string; env?: string };
-  session: { idleTimeoutMs: number; persist: "tab" | "browser" };
-  batch: {
-    maxEvents: number;
-    flushIntervalMs: number;
-    maxQueueBytes: number;
-    storage: "memory" | "localStorage";
-  };
-  sampling: number;
-  privacy: {
-    respectDoNotTrack: boolean;
-    blockSelectors: string[];
-    allowSelectors: string[];
-    maskTextSelectors: string[];
-    keepQueryParams: string[];
-  };
-  capture: ResolvedCaptureConfig;
-};
-
-type EventBase = {
-  eventId: string;
-  sessionId: string;
-  ts: number;
-  path: string;
-  viewport: { w: number; h: number; dpr: number };
-  device: { ua: string; platform: string; language: string };
-  meta?: Record<string, any>;
-};
-
-type ClickEvent = EventBase & {
-  type: "click";
-  x: number;
-  y: number;
-  selector?: string;
-  button?: number;
-};
-
-type MoveEvent = EventBase & {
-  type: "move";
-  points: Array<{ x: number; y: number; tsOffset: number }>;
-};
-
-type ScrollEvent = EventBase & {
-  type: "scroll";
-  scrollY: number;
-  scrollDepthPct: number;
-};
-
-type PageviewEvent = EventBase & {
-  type: "pageview";
-  from?: string;
-  to: string;
-  title?: string;
-};
-
-type CustomEvent = EventBase & {
-  type: "custom";
-  name: string;
-  props?: Record<string, any>;
-};
-
-type InputEventPayload = EventBase & {
-  type: "input";
-  action: "focus" | "blur" | "change";
-  selector?: string;
-  inputType?: string;
-  length?: number;
-  masked?: string;
-};
-
-type KeyboardEventPayload = EventBase & {
-  type: "keyboard";
-  category: "navigation" | "editing" | "modifier" | "system" | "other";
-};
-
-type AnyEvent =
-  | ClickEvent
-  | MoveEvent
-  | ScrollEvent
-  | PageviewEvent
-  | CustomEvent
-  | InputEventPayload
-  | KeyboardEventPayload;
-
-const DEFAULT_BLOCK_SELECTORS = [
-  "[data-private]",
-  "input[type=password]",
-  "input[type=hidden]",
-  'input[autocomplete="one-time-code"]',
-  'input[autocomplete="current-password"]',
-  'input[autocomplete="cc-number"]',
-  'input[autocomplete="cc-csc"]',
-  'input[autocomplete="cc-exp"]'
-];
-
-const DEFAULT_CONFIG: ResolvedConfig = {
-  endpoint: "",
-  projectKey: "",
-  app: {},
-  session: {
-    idleTimeoutMs: 30 * 60 * 1000,
-    persist: "tab"
-  },
-  batch: {
-    maxEvents: 50,
-    flushIntervalMs: 2000,
-    maxQueueBytes: 1_000_000,
-    storage: "memory"
-  },
-  sampling: 1,
-  privacy: {
-    respectDoNotTrack: true,
-    blockSelectors: DEFAULT_BLOCK_SELECTORS,
-    allowSelectors: [],
-    maskTextSelectors: [],
-    keepQueryParams: []
-  },
-  capture: {
-    click: true,
-    move: { enabled: true, throttleMs: 80 },
-    scroll: true,
-    pageview: true,
-    pageTitle: true,
-    inputs: { enabled: false, mode: "off", allowSelectors: [] },
-    keyboard: { enabled: false, mode: "off", allowSelectors: [] }
-  }
-};
-
-const SDK_NAME = "@m-software-engineering/heat-sdk";
-/** Injected at build time from package.json (tsup.config.ts / vitest.config.ts). */
-declare const __HEAT_SDK_VERSION__: string;
-const SDK_VERSION = __HEAT_SDK_VERSION__;
-
-type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
-
-const createMemoryStorage = (): StorageLike => {
-  const items = new Map<string, string>();
-  return {
-    getItem: (key) => items.get(key) ?? null,
-    setItem: (key, value) => {
-      items.set(key, value);
-    },
-    removeItem: (key) => {
-      items.delete(key);
-    }
-  };
-};
-
-const getBrowserStorage = (name: "localStorage" | "sessionStorage"): StorageLike => {
-  try {
-    return window[name];
-  } catch {
-    return createMemoryStorage();
-  }
-};
-
-const stableHash = (input: string) => {
-  let hash = 5381;
-  for (let i = 0; i < input.length; i += 1) {
-    hash = (hash * 33) ^ input.charCodeAt(i);
-  }
-  return (hash >>> 0).toString(36);
-};
-
-type HistoryListener = () => void;
-
-const historyPatch = {
-  listeners: new Set<HistoryListener>(),
-  originalPushState: undefined as History["pushState"] | undefined,
-  originalReplaceState: undefined as History["replaceState"] | undefined
-};
-
-const notifyHistoryListeners = () => {
-  for (const listener of Array.from(historyPatch.listeners)) {
-    listener();
-  }
-};
-
-const ensureHistoryPatched = () => {
-  if (historyPatch.originalPushState && historyPatch.originalReplaceState) return;
-
-  historyPatch.originalPushState = history.pushState;
-  historyPatch.originalReplaceState = history.replaceState;
-
-  history.pushState = function patchedPushState(this: History, ...args: Parameters<History["pushState"]>) {
-    historyPatch.originalPushState?.apply(this, args as any);
-    notifyHistoryListeners();
-  } as History["pushState"];
-
-  history.replaceState = function patchedReplaceState(this: History, ...args: Parameters<History["replaceState"]>) {
-    historyPatch.originalReplaceState?.apply(this, args as any);
-    notifyHistoryListeners();
-  } as History["replaceState"];
-};
-
-const addHistoryListener = (listener: HistoryListener) => {
-  ensureHistoryPatched();
-  historyPatch.listeners.add(listener);
-};
-
-const removeHistoryListener = (listener: HistoryListener) => {
-  historyPatch.listeners.delete(listener);
-  if (historyPatch.listeners.size > 0) return;
-
-  if (historyPatch.originalPushState) {
-    history.pushState = historyPatch.originalPushState;
-  }
-  if (historyPatch.originalReplaceState) {
-    history.replaceState = historyPatch.originalReplaceState;
-  }
-  historyPatch.originalPushState = undefined;
-  historyPatch.originalReplaceState = undefined;
-};
-
-const safeNow = () => Date.now();
-
-const randomId = () => {
-  const cryptoObj = typeof globalThis !== "undefined" ? (globalThis as any).crypto : undefined;
-  if (cryptoObj?.randomUUID) {
-    return cryptoObj.randomUUID();
-  }
-  if (!cryptoObj || typeof cryptoObj.getRandomValues !== "function") {
-    return `m-${Math.random().toString(16).slice(2)}-${Date.now().toString(16)}`;
-  }
-  const bytes = new Uint8Array(16);
-  cryptoObj.getRandomValues(bytes);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const toHex = (n: number) => n.toString(16).padStart(2, "0");
-  const hex = Array.from(bytes, toHex).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-};
-
-const getViewport = () => ({
-  w: window.innerWidth,
-  h: window.innerHeight,
-  dpr: window.devicePixelRatio || 1
-});
-
-const getDevice = () => ({
-  ua: navigator.userAgent,
-  platform: navigator.platform || "",
-  language: navigator.language || ""
-});
-
-const elementSelector = (el: Element | null) => {
-  if (!el) return undefined;
-  const parts: string[] = [];
-  let current: Element | null = el;
-  while (current && parts.length < 4) {
-    let part = current.tagName.toLowerCase();
-    if (current.id) {
-      part += `#${current.id}`;
-      parts.unshift(part);
-      break;
-    }
-    if (current.classList.length > 0) {
-      const cls = Array.from(current.classList).slice(0, 2).join(".");
-      part += `.${cls}`;
-    }
-    parts.unshift(part);
-    current = current.parentElement;
-  }
-  const selector = parts.join(" > ");
-  return selector.length > 200 ? selector.slice(0, 200) : selector;
-};
-
-const isSensitiveInput = (el: Element | null) => {
-  if (!el || !(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement)) return false;
-  const type = el instanceof HTMLInputElement ? el.type : "text";
-  const blocked = ["password"].includes(type);
-  const autocomplete = el.getAttribute("autocomplete") || "";
-  const name = el.getAttribute("name") || "";
-  const id = el.getAttribute("id") || "";
-  const sensitiveHints = `${autocomplete} ${name} ${id}`.toLowerCase();
-  const otp = sensitiveHints.includes("one-time-code") || sensitiveHints.includes("otp");
-  const token = sensitiveHints.includes("token") || sensitiveHints.includes("secret");
-  const cc = sensitiveHints.includes("cc-") || sensitiveHints.includes("card");
-  return blocked || otp || token || cc;
-};
-
-const matchesAny = (el: Element, selectors: string[]) => {
-  return selectors.some((selector) => {
-    try {
-      return el.closest(selector);
-    } catch {
-      return false;
-    }
-  });
-};
-
-const inputLength = (el: HTMLInputElement | HTMLTextAreaElement) => {
-  try {
-    return el.value ? el.value.length : 0;
-  } catch {
-    return undefined;
-  }
-};
-
-const classifyKey = (key: string) => {
-  if (["Backspace", "Delete", "Enter", "Tab"].includes(key)) return "editing";
-  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "PageUp", "PageDown", "Home", "End"].includes(key)) {
-    return "navigation";
-  }
-  if (["Shift", "Control", "Alt", "Meta"].includes(key)) return "modifier";
-  if (["Escape", "PrintScreen"].includes(key)) return "system";
-  return "other";
-};
-
-const computeScrollDepth = () => {
-  const doc = document.documentElement;
-  const scrollTop = window.scrollY || doc.scrollTop || 0;
-  const scrollHeight = doc.scrollHeight - window.innerHeight;
-  const pct = scrollHeight > 0 ? (scrollTop / scrollHeight) * 100 : 0;
-  return { scrollTop, pct: Math.max(0, Math.min(100, pct)) };
-};
-
-const eventPagePoint = (event: MouseEvent) => {
-  const scrollX = window.scrollX || document.documentElement.scrollLeft || 0;
-  const scrollY = window.scrollY || document.documentElement.scrollTop || 0;
-  return {
-    x: event.clientX + scrollX,
-    y: event.clientY + scrollY
-  };
-};
-
-const normalizeMaxEvents = (value: number | undefined) => {
-  if (value === undefined) return DEFAULT_CONFIG.batch.maxEvents;
-  if (!Number.isFinite(value) || value < 1) return DEFAULT_CONFIG.batch.maxEvents;
-  return value;
-};
-
-const ensureConfig = (config: InitConfig): ResolvedConfig => {
-  return {
-    ...DEFAULT_CONFIG,
-    ...config,
-    app: { ...DEFAULT_CONFIG.app, ...config.app },
-    session: { ...DEFAULT_CONFIG.session, ...config.session },
-    batch: {
-      ...DEFAULT_CONFIG.batch,
-      ...config.batch,
-      maxEvents: normalizeMaxEvents(config.batch?.maxEvents)
-    },
-    privacy: {
-      ...DEFAULT_CONFIG.privacy,
-      ...config.privacy,
-      blockSelectors: config.privacy?.blockSelectors ?? DEFAULT_CONFIG.privacy.blockSelectors,
-      allowSelectors: config.privacy?.allowSelectors ?? DEFAULT_CONFIG.privacy.allowSelectors,
-      maskTextSelectors: config.privacy?.maskTextSelectors ?? DEFAULT_CONFIG.privacy.maskTextSelectors,
-      keepQueryParams: config.privacy?.keepQueryParams ?? DEFAULT_CONFIG.privacy.keepQueryParams
-    },
-    capture: {
-      ...DEFAULT_CONFIG.capture,
-      ...config.capture,
-      move: {
-        enabled: config.capture?.move?.enabled ?? DEFAULT_CONFIG.capture.move.enabled,
-        throttleMs: config.capture?.move?.throttleMs ?? DEFAULT_CONFIG.capture.move.throttleMs
-      },
-      inputs: {
-        enabled: config.capture?.inputs?.enabled ?? DEFAULT_CONFIG.capture.inputs.enabled,
-        mode: config.capture?.inputs?.mode ?? DEFAULT_CONFIG.capture.inputs.mode,
-        allowSelectors: config.capture?.inputs?.allowSelectors ?? DEFAULT_CONFIG.capture.inputs.allowSelectors
-      },
-      keyboard: {
-        enabled: config.capture?.keyboard?.enabled ?? DEFAULT_CONFIG.capture.keyboard.enabled,
-        mode: config.capture?.keyboard?.mode ?? DEFAULT_CONFIG.capture.keyboard.mode,
-        allowSelectors: config.capture?.keyboard?.allowSelectors ?? DEFAULT_CONFIG.capture.keyboard.allowSelectors
-      }
-    }
-  };
-};
+import {
+  loadSession,
+  SDK_NAME,
+  SDK_VERSION,
+  getBrowserStorage,
+  writeStorage,
+  stableHash,
+  safeNow,
+  randomId,
+  getViewport,
+  getDevice,
+  elementSelector,
+  isSensitiveInput,
+  matchesAny,
+  inputLength,
+  classifyKey,
+  computeScrollDepth,
+  eventPagePoint,
+  ensureConfig,
+  addHistoryListener,
+  removeHistoryListener,
+  type InitConfig,
+  type Tracker,
+  type ResolvedConfig,
+  type AnyEvent,
+  type StorageLike,
+  type EventBase,
+  type CustomEvent,
+  type MoveEvent,
+  type PageviewEvent,
+  type ClickEvent,
+  type ScrollEvent,
+  type InputEventPayload,
+  type KeyboardEventPayload
+} from "./runtime";
+export type { InitConfig, Tracker } from "./runtime";
 
 class TrackerImpl implements Tracker {
   private config: ResolvedConfig;
   private reportError: ReportError;
   private sessionId: string;
-  private sessionStartedAt: number;
+  private startedAt: number;
   private lastSeenAt: number;
   private userId?: string;
   private userTraits?: Record<string, any>;
   private authToken: string | null = null;
   private queue: AnyEvent[] = [];
+  private inFlight = new Set<AnyEvent>();
+  private exitSent = new WeakSet<AnyEvent>();
   private movePoints: Array<{ x: number; y: number; tsOffset: number }> = [];
   private moveBaseTs = 0;
   private flushTimer?: number;
@@ -481,12 +71,12 @@ class TrackerImpl implements Tracker {
   private backoffMs = 0;
   private stopped = false;
   private flushing?: Promise<void>;
-  private lastMoveCapture = 0;
-  private lastScrollCapture = 0;
+  private moveAt = 0;
+  private scrollAt = 0;
   private currentPath: string;
   private lastTitle?: string;
   private sessionStore: StorageLike;
-  private queueStore: StorageLike;
+  private detachPageExit?: () => void;
 
   constructor(config: ResolvedConfig) {
     this.config = config;
@@ -495,21 +85,23 @@ class TrackerImpl implements Tracker {
     this.sessionStore = getBrowserStorage(
       this.config.session.persist === "browser" ? "localStorage" : "sessionStorage"
     );
-    this.queueStore = getBrowserStorage("localStorage");
-    const session = this.loadSession();
+    const session = loadSession(this.sessionStore, this.storageKey("session"), this.config.session.idleTimeoutMs);
     this.sessionId = session.id;
-    this.sessionStartedAt = session.startedAt;
+    this.startedAt = session.startedAt;
     this.lastSeenAt = session.lastSeenAt;
     this.restoreQueue();
+    const restored = this.queue.length > 0;
 
     this.attachListeners();
+    this.detachPageExit = onPageExit(this.flushOnExit);
     this.flushTimer = window.setInterval(() => {
       void this.flush();
     }, this.config.batch.flushIntervalMs);
 
     if (this.config.capture.pageview) {
-      this.recordPageview(undefined, this.currentPath);
+      this.pageview(undefined, this.currentPath);
     }
+    if (restored) void this.flush();
   }
 
   identify(userId: string, traits?: Record<string, any>) {
@@ -557,10 +149,48 @@ class TrackerImpl implements Tracker {
       clearTimeout(this.retryTimer);
     }
     this.detachListeners();
+    this.detachPageExit?.();
   }
 
+  /**
+   * Page hidden or unloading: start every pending batch now, synchronously, with fetch keepalive
+   * (survives the unload; keeps the project-key/auth headers), ignoring the retry backoff. Events of
+   * a batch that fails stay queued (and persisted) for the next flush or page load.
+   */
+  private flushOnExit = (reason: "hidden" | "pagehide") => {
+    if (this.stopped) return;
+    this.enqueueMove();
+    const pending = this.queue.length;
+    // Failed exit sends may have requeued; only a later ordinary flush retries those events.
+    const deferred = this.queue.filter((event) => this.exitSent.has(event));
+    this.queue = this.queue.filter((event) => !this.exitSent.has(event));
+    while (this.queue.length > 0) {
+      if (this.exitSent.has(this.queue[0])) {
+        deferred.push(this.queue.shift()!);
+        continue;
+      }
+      const next = this.takeBatch(exitBudget.remaining);
+      if (next.bytes > KEEPALIVE_MAX_BODY_BYTES) {
+        deferred.push(...next.batch);
+        continue;
+      }
+      if (next.bytes > exitBudget.remaining) {
+        this.queue.unshift(...next.batch);
+        break;
+      }
+      void this.sendBatch(true, next);
+    }
+    this.queue.unshift(...deferred);
+    const sent = pending - this.queue.length;
+    if (!this.persistQueue()) this.dropQueue("exit budget exhausted and queue persistence unavailable");
+    if (this.config.debug && pending > 0) {
+      // eslint-disable-next-line no-console -- debug-only, once per exit (#28)
+      console.info(`heat-sdk: flushed ${sent}/${pending} events via fetch keepalive on ${reason}`);
+    }
+  };
+
   private async flushInternal() {
-    this.enqueueMoveEvent();
+    this.enqueueMove();
 
     while (this.queue.length > 0) {
       const sent = await this.sendBatch();
@@ -580,11 +210,14 @@ class TrackerImpl implements Tracker {
   private trimQueue() {
     const maxBytes = this.config.batch.maxQueueBytes;
     if (!maxBytes) return;
+    let dropped = 0;
     let size = this.queueSize();
     while (this.queue.length > 0 && size > maxBytes) {
       this.queue.shift();
+      dropped += 1;
       size = this.queueSize();
     }
+    if (dropped) this.reportError(eventsDroppedError(dropped, "batch.maxQueueBytes exceeded"));
   }
 
   private queueSize() {
@@ -595,7 +228,7 @@ class TrackerImpl implements Tracker {
     }
   }
 
-  private enqueueMoveEvent() {
+  private enqueueMove() {
     if (this.movePoints.length === 0) return;
     const base = this.baseEvent(this.moveBaseTs || safeNow());
     const evt: MoveEvent = {
@@ -608,23 +241,39 @@ class TrackerImpl implements Tracker {
     this.enqueue(evt, false);
   }
 
-  private async sendBatch() {
-    if (this.queue.length === 0) return true;
-    if (this.backoffMs > 0 && this.retryTimer) return false;
-
-    const batch = this.queue.splice(0, this.config.batch.maxEvents);
+  /** Splices the longest queue prefix whose request body fits `limit` UTF-8 bytes (at least one event). */
+  private takeBatch(limit: number) {
     const payload = {
       sdk: { name: SDK_NAME, version: SDK_VERSION },
       app: this.config.app,
-      session: {
-        id: this.sessionId,
-        startedAt: this.sessionStartedAt,
-        lastSeenAt: this.lastSeenAt
-      },
+      session: { id: this.sessionId, startedAt: this.startedAt, lastSeenAt: this.lastSeenAt },
       user: this.userId ? { id: this.userId, traits: this.userTraits } : undefined,
-      events: batch
+      events: [] as AnyEvent[]
     };
+    let bytes = utf8Bytes(payload);
+    let n = 0;
+    for (const event of this.queue.slice(0, this.config.batch.maxEvents)) {
+      const size = utf8Bytes(event) + (n && 1);
+      if (n && bytes + size > limit) break;
+      bytes += size;
+      n += 1;
+    }
+    payload.events = this.queue.splice(0, n);
+    return { batch: payload.events, body: JSON.stringify(payload), bytes };
+  }
 
+  private async sendBatch(force = false, taken?: ReturnType<TrackerImpl["takeBatch"]>) {
+    if (!taken && this.queue.length === 0) return true;
+    if (!force && this.backoffMs > 0 && this.retryTimer) return false;
+
+    const { batch, body, bytes } = taken ?? this.takeBatch(KEEPALIVE_MAX_BODY_BYTES);
+    const keepalive = bytes <= exitBudget.remaining;
+    if (keepalive) exitBudget.remaining -= bytes;
+    for (const event of batch) {
+      this.inFlight.add(event);
+      if (force) this.exitSent.add(event);
+    }
+    this.persistQueue();
     try {
       const res = await fetch(this.config.endpoint, {
         method: "POST",
@@ -633,28 +282,30 @@ class TrackerImpl implements Tracker {
           "x-project-key": this.config.projectKey,
           ...(this.authToken ? { Authorization: `Bearer ${this.authToken}` } : {})
         },
-        body: JSON.stringify(payload),
-        keepalive: true
+        body,
+        keepalive
       });
 
       if (!res.ok) {
         this.reportError(await ingestHttpError(res));
-        this.requeue(batch);
+        this.requeue(batch, force);
         return false;
       }
       this.backoffMs = 0;
+      for (const event of batch) this.inFlight.delete(event);
       this.persistQueue();
       return true;
     } catch (err) {
       this.reportError(ingestNetworkError(err));
-      this.requeue(batch);
+      this.requeue(batch, force);
       return false;
     }
   }
 
-  private requeue(batch: AnyEvent[]) {
+  private requeue(batch: AnyEvent[], exiting: boolean) {
+    for (const event of batch) this.inFlight.delete(event);
     this.queue = [...batch, ...this.queue];
-    this.persistQueue();
+    if (!this.persistQueue() && exiting) this.dropQueue("exit request failed and queue persistence unavailable");
     this.scheduleRetry();
   }
 
@@ -679,12 +330,12 @@ class TrackerImpl implements Tracker {
       viewport: getViewport(),
       device: getDevice(),
       meta: {
-        viewportBucket: this.viewportBucket()
+        viewportBucket: this.bucket()
       }
     };
   }
 
-  private viewportBucket() {
+  private bucket() {
     const { w, h } = getViewport();
     const bw = Math.round(w / 100) * 100;
     const bh = Math.round(h / 100) * 100;
@@ -716,13 +367,13 @@ class TrackerImpl implements Tracker {
       window.addEventListener("scroll", this.handleScroll, { passive: true });
     }
     if (capture.pageview) {
-      window.addEventListener("popstate", this.handleNavigation);
-      this.patchHistory();
+      window.addEventListener("popstate", this.onNavigation);
+      addHistoryListener(this.onNavigation);
     }
     if (capture.inputs?.enabled && capture.inputs.mode !== "off") {
-      window.addEventListener("focus", this.handleInputFocus, true);
-      window.addEventListener("blur", this.handleInputBlur, true);
-      window.addEventListener("change", this.handleInputChange, true);
+      window.addEventListener("focus", this.handleInput, true);
+      window.addEventListener("blur", this.handleInput, true);
+      window.addEventListener("change", this.handleInput, true);
     }
     if (capture.keyboard?.enabled && capture.keyboard.mode !== "off") {
       window.addEventListener("keydown", this.handleKeyboard, true);
@@ -733,35 +384,27 @@ class TrackerImpl implements Tracker {
     window.removeEventListener("click", this.handleClick, true);
     window.removeEventListener("mousemove", this.handleMove, true);
     window.removeEventListener("scroll", this.handleScroll);
-    window.removeEventListener("popstate", this.handleNavigation);
-    window.removeEventListener("focus", this.handleInputFocus, true);
-    window.removeEventListener("blur", this.handleInputBlur, true);
-    window.removeEventListener("change", this.handleInputChange, true);
+    window.removeEventListener("popstate", this.onNavigation);
+    window.removeEventListener("focus", this.handleInput, true);
+    window.removeEventListener("blur", this.handleInput, true);
+    window.removeEventListener("change", this.handleInput, true);
     window.removeEventListener("keydown", this.handleKeyboard, true);
-    this.restoreHistory();
-  }
-
-  private patchHistory() {
-    addHistoryListener(this.handleNavigation);
-  }
-
-  private restoreHistory() {
-    removeHistoryListener(this.handleNavigation);
+    removeHistoryListener(this.onNavigation);
   }
 
   private path() {
     return pagePath(this.config.privacy.keepQueryParams);
   }
 
-  private handleNavigation = () => {
+  private onNavigation = () => {
     const nextPath = this.path();
     if (nextPath === this.currentPath) return;
     const prev = this.currentPath;
     this.currentPath = nextPath;
-    this.recordPageview(prev, nextPath);
+    this.pageview(prev, nextPath);
   };
 
-  private recordPageview(from?: string, to?: string) {
+  private pageview(from?: string, to?: string) {
     const base = this.baseEvent();
     const evt: PageviewEvent = {
       ...base,
@@ -799,8 +442,8 @@ class TrackerImpl implements Tracker {
     const target = event.target as Element | null;
     if (!this.shouldCapture(target)) return;
     const now = safeNow();
-    if (now - this.lastMoveCapture < this.config.capture.move.throttleMs) return;
-    this.lastMoveCapture = now;
+    if (now - this.moveAt < this.config.capture.move.throttleMs) return;
+    this.moveAt = now;
     if (this.moveBaseTs === 0) this.moveBaseTs = now;
     const tsOffset = now - this.moveBaseTs;
     const point = eventPagePoint(event);
@@ -809,8 +452,8 @@ class TrackerImpl implements Tracker {
 
   private handleScroll = () => {
     const now = safeNow();
-    if (now - this.lastScrollCapture < 200) return;
-    this.lastScrollCapture = now;
+    if (now - this.scrollAt < 200) return;
+    this.scrollAt = now;
     const { scrollTop, pct } = computeScrollDepth();
     const base = this.baseEvent();
     const evt: ScrollEvent = {
@@ -822,19 +465,7 @@ class TrackerImpl implements Tracker {
     this.enqueue(evt);
   };
 
-  private handleInputFocus = (event: FocusEvent) => {
-    this.captureInputEvent(event, "focus");
-  };
-
-  private handleInputBlur = (event: FocusEvent) => {
-    this.captureInputEvent(event, "blur");
-  };
-
-  private handleInputChange = (event: Event) => {
-    this.captureInputEvent(event, "change");
-  };
-
-  private captureInputEvent(event: Event, action: "focus" | "blur" | "change") {
+  private handleInput = (event: Event) => {
     const target = event.target as Element | null;
     const config = this.config.capture.inputs;
     if (!config?.enabled || config.mode === "off") return;
@@ -850,7 +481,7 @@ class TrackerImpl implements Tracker {
     const evt: InputEventPayload = {
       ...base,
       type: "input",
-      action,
+      action: event.type as InputEventPayload["action"],
       selector: elementSelector(target),
       inputType: target instanceof HTMLInputElement ? target.type : "textarea",
       length
@@ -862,7 +493,7 @@ class TrackerImpl implements Tracker {
     }
 
     this.enqueue(evt);
-  }
+  };
 
   private handleKeyboard = (event: KeyboardEvent) => {
     const target = event.target as Element | null;
@@ -886,92 +517,60 @@ class TrackerImpl implements Tracker {
     this.enqueue(evt);
   };
 
-  private loadSession() {
-    const store = this.sessionStore;
-    const key = this.sessionStorageKey();
-    let stored: { id: string; startedAt: number; lastSeenAt: number } | null = null;
-    try {
-      const raw = store.getItem(key);
-      if (raw) stored = JSON.parse(raw);
-    } catch {
-      stored = null;
-    }
-
-    const now = safeNow();
-    if (!stored || now - stored.lastSeenAt > this.config.session.idleTimeoutMs) {
-      const id = randomId();
-      const session = { id, startedAt: now, lastSeenAt: now };
-      try {
-        store.setItem(key, JSON.stringify(session));
-      } catch {
-        // ignore
-      }
-      return session;
-    }
-    return stored;
-  }
-
   private persistSession() {
-    const store = this.sessionStore;
-    const key = this.sessionStorageKey();
-    const session = { id: this.sessionId, startedAt: this.sessionStartedAt, lastSeenAt: this.lastSeenAt };
-    try {
-      store.setItem(key, JSON.stringify(session));
-    } catch {
-      // ignore
-    }
+    writeStorage(this.sessionStore, this.storageKey("session"), {
+      id: this.sessionId,
+      startedAt: this.startedAt,
+      lastSeenAt: this.lastSeenAt
+    });
   }
 
-  private sessionStorageKey() {
-    return `${SDK_NAME}:${this.storageNamespace()}:session`;
+  private dropQueue(cause: string) {
+    const dropped = this.queue.length;
+    if (!dropped) return;
+    this.queue = [];
+    this.reportError(eventsDroppedError(dropped, cause));
   }
 
-  private persistQueue() {
-    if (this.config.batch.storage !== "localStorage") return;
+  private persistQueue(): boolean {
     try {
-      const key = this.queueStorageKey();
-      if (this.queue.length === 0) {
-        this.queueStore.removeItem(key);
-        return;
-      }
-      this.queueStore.setItem(key, JSON.stringify(this.queue));
+      const pending = [...this.inFlight, ...this.queue];
+      return writeStorage(window.sessionStorage, this.storageKey("queue"), pending.length ? pending : undefined);
     } catch {
-      // ignore
+      return false;
     }
   }
 
   private restoreQueue() {
-    if (this.config.batch.storage !== "localStorage") return;
     try {
-      const key = this.queueStorageKey();
-      const raw = this.queueStore.getItem(key);
+      const store = window.sessionStorage;
+      const key = this.storageKey("queue");
+      const raw = store.getItem(key);
       if (!raw) return;
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
         this.queue = parsed as AnyEvent[];
       } else {
-        this.queueStore.removeItem(key);
+        store.removeItem(key);
       }
     } catch {
       // ignore
     }
   }
 
-  private queueStorageKey() {
-    return `${SDK_NAME}:${this.storageNamespace()}:queue`;
-  }
-
-  private storageNamespace() {
-    return stableHash(`${this.config.projectKey}|${this.config.endpoint}`);
+  private storageKey(kind: "session" | "queue") {
+    return `${SDK_NAME}:${stableHash(`${this.config.projectKey}|${this.config.endpoint}`)}:${kind}`;
   }
 }
 
+const noop = () => {};
+const noopAsync = async () => {};
 const createNoopTracker = (): Tracker => ({
-  identify: () => {},
-  setAuthToken: () => {},
-  track: () => {},
-  flush: async () => {},
-  shutdown: async () => {}
+  identify: noop,
+  setAuthToken: noop,
+  track: noop,
+  flush: noopAsync,
+  shutdown: noopAsync
 });
 
 export const init = (config: InitConfig): Tracker => {

@@ -11,7 +11,7 @@ const storageKeys = (storage: Storage) => {
   return keys;
 };
 
-const queueKeys = () => storageKeys(localStorage).filter((key) => key.includes(":queue"));
+const queueKeys = () => storageKeys(sessionStorage).filter((key) => key.includes(":queue"));
 
 const customEvent = (eventId: string) => ({
   eventId,
@@ -67,6 +67,7 @@ describe("heat-sdk", () => {
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     const clickEvent = body.events.find((event: any) => event.type === "click");
     expect(clickEvent).toBeDefined();
+    await tracker.shutdown();
   });
 
   it("reports the package.json version as sdk.version (#184)", async () => {
@@ -81,6 +82,7 @@ describe("heat-sdk", () => {
       name: expect.any(String),
       version: sdkPackage.version
     });
+    await tracker.shutdown();
   });
 
   it("sends identified users with bearer authentication", async () => {
@@ -121,6 +123,7 @@ describe("heat-sdk", () => {
     const clickEvent = body.events.find((event: any) => event.type === "click");
     expect(clickEvent.x).toBe(35);
     expect(clickEvent.y).toBe(320);
+    await tracker.shutdown();
   });
 
   it("batches pointer movement points", async () => {
@@ -168,6 +171,7 @@ describe("heat-sdk", () => {
     expect(inputEvent).toBeDefined();
     expect(inputEvent.masked).toBeTruthy();
     expect(inputEvent.masked).not.toBe(input.value);
+    await tracker.shutdown();
   });
 
   it("respects doNotTrack", async () => {
@@ -278,7 +282,6 @@ describe("heat-sdk", () => {
       endpoint: "http://localhost:4000/ingest",
       projectKey: "test-key",
       batch: {
-        storage: "localStorage",
         maxEvents: 50,
         flushIntervalMs: 60_000,
         maxQueueBytes: 1_000_000
@@ -301,7 +304,7 @@ describe("heat-sdk", () => {
       endpoint: "http://localhost:4000/ingest-a",
       projectKey: "project-a",
       capture: { pageview: false },
-      batch: { storage: "localStorage", flushIntervalMs: 60_000 }
+      batch: { flushIntervalMs: 60_000 }
     });
 
     const btn = document.getElementById("btn") as HTMLButtonElement;
@@ -313,7 +316,7 @@ describe("heat-sdk", () => {
       endpoint: "http://localhost:4000/ingest-b",
       projectKey: "project-b",
       capture: { click: false, move: { enabled: false, throttleMs: 80 }, scroll: false, pageview: false },
-      batch: { storage: "localStorage", flushIntervalMs: 60_000 }
+      batch: { flushIntervalMs: 60_000 }
     });
 
     await trackerB.flush();
@@ -405,13 +408,13 @@ describe("heat-sdk", () => {
       endpoint: "http://localhost:4000/ingest",
       projectKey: "test-key",
       capture: { click: false, move: { enabled: false, throttleMs: 80 }, scroll: false, pageview: false },
-      batch: { storage: "localStorage", maxEvents: 10, flushIntervalMs: 60_000 }
+      batch: { maxEvents: 10, flushIntervalMs: 60_000 }
     });
     seedTracker.track("seed");
     const [queueKey] = queueKeys();
     expect(queueKey).toBeTruthy();
 
-    localStorage.setItem(
+    sessionStorage.setItem(
       queueKey,
       JSON.stringify([
         customEvent("event-1"),
@@ -427,7 +430,7 @@ describe("heat-sdk", () => {
       endpoint: "http://localhost:4000/ingest",
       projectKey: "test-key",
       capture: { click: false, move: { enabled: false, throttleMs: 80 }, scroll: false, pageview: false },
-      batch: { storage: "localStorage", maxEvents: 2, flushIntervalMs: 60_000 }
+      batch: { maxEvents: 2, flushIntervalMs: 60_000 }
     });
 
     await tracker.flush();
