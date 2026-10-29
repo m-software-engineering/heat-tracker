@@ -12,12 +12,16 @@ pnpm add @m-software-engineering/heat-collector
 yarn add @m-software-engineering/heat-collector
 ```
 
-## Database drivers (peer dependencies)
+## Database drivers (optional peer dependencies)
 
-- Postgres: `pg`
-- MySQL: `mysql2`
-- SQLite: `better-sqlite3`
-- MongoDB: `mongodb`
+Install only the driver for your database. The collector loads it when it connects, so the others are never required.
+
+- Postgres: `npm install pg`
+- MySQL: `npm install mysql2`
+- SQLite: `npm install better-sqlite3`
+- MongoDB: `npm install mongodb`
+
+`better-sqlite3` 13 needs Node.js 22 or newer. On Node.js 20, install `better-sqlite3@11`, which ships prebuilt binaries for it.
 
 ## Quick start (Express)
 
