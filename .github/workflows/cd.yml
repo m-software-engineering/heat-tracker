@@ -188,6 +188,25 @@ jobs:
             exit 1
           fi
 
+      - name: Wait for heat-sdk on npm (dashboard only)
+        if: ${{ matrix.name == 'heat-dashboard' && steps.exists.outputs.exists == 'false' }}
+        timeout-minutes: 7
+        run: |
+          sdk_version="$(node -p 'require("./packages/heat-sdk/package.json").version')"
+          spec="@m-software-engineering/heat-sdk@${sdk_version}"
+          for attempt in $(seq 1 20); do
+            if [ "$(npm view "$spec" version --fetch-timeout=20000 --fetch-retries=0 2>/dev/null)" = "$sdk_version" ]; then
+              echo "::notice::${spec} is on npm (attempt ${attempt})."
+              exit 0
+            fi
+            if [ "$attempt" -lt 20 ]; then
+              echo "${spec} not on npm yet (attempt ${attempt}/20); retrying in 15s."
+              sleep 15
+            fi
+          done
+          echo "::error::${spec} did not appear on npm within 5 minutes; refusing to build a dashboard that points at a missing SDK version."
+          exit 1
+
       - name: Build and push ${{ matrix.name }}
         if: ${{ steps.exists.outputs.exists == 'false' }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0

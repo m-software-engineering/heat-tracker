@@ -23,6 +23,8 @@ Install only the driver for your database. The collector loads it when it connec
 
 `better-sqlite3` 13 needs Node.js 22 or newer. On Node.js 20, install `better-sqlite3@11`, which ships prebuilt binaries for it.
 
+> **⚠️ Read APIs are open unless you set `admin.token`.** When you embed the collector with `createCollector`, routes under `/api` such as `GET /api/projects/<id>/events` answer without a token in every `auth.mode` and return page paths and user agents. Pass `admin.token` or put your own auth in front of `/api`. The `heat-collector` binary already sets a token for you. Making reads closed by default is tracked in [#168](https://github.com/m-software-engineering/heat-tracker/issues/168).
+
 ## Quick start (Express)
 
 Also install `express`, `cors`, and (for TypeScript) `@types/cors`. `createCollector` does not enable CORS; the host app must scope it to `/ingest` (same policy as the `heat-collector` bin).
