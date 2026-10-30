@@ -12,7 +12,7 @@ export const loadDriver = async <T>(
     const message = error instanceof Error ? error.message : "";
     if (
       (code === "ERR_MODULE_NOT_FOUND" || code === "MODULE_NOT_FOUND") &&
-      new RegExp(`'${pkg}(/[^']*)?'`).test(message)
+      (message.includes(`'${pkg}'`) || message.includes(`'${pkg}/`))
     ) {
       throw new HeatTrackerError(
         SERVER_ERRORS.HEAT_E_DB_DRIVER_MISSING,
