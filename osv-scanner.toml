@@ -3,10 +3,6 @@
 # Every entry must name the dependency path, explain the exposure, and expire so it is re-reviewed.
 
 
-[[IgnoredVulns]]
-id = "GHSA-27r3-jxmh-p828"
-ignoreUntil = 2026-10-30
-reason = "body-parser 1.20.6, runtime via express 4.22.2 in heat-collector. Fix 1.20.9 is blocked by the 7-day minimumReleaseAge until 2026-10-29. Blocks the 0.5.0 publish. Tracked in #187."
 
 [[IgnoredVulns]]
 id = "GHSA-mrhx-c7xc-m3w5"
