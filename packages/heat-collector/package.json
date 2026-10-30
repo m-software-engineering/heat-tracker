@@ -1,6 +1,6 @@
 {
   "name": "@m-software-engineering/heat-collector",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Collector server for heat-tracker sessions and events",
   "repository": {
     "type": "git",
