@@ -323,6 +323,11 @@ console.log(body.error.message); // "The JWT has expired."
 - Message: The database config has neither a connection string nor a client.
 - Fix: Set DATABASE_URL for the heat-collector server (docker compose sets it), or pass db.connectionString or db.client to createCollector().
 
+## HEAT_E_DB_DRIVER_MISSING
+
+- Message: The database driver for the configured dialect is not installed.
+- Fix: Install the driver named in the cause next to the collector, for example `npm install pg`. On Node.js 20, SQLite needs `better-sqlite3@11`.
+
 ## HEAT_E_DB_UNREACHABLE
 
 - Message: The collector could not connect to the database.

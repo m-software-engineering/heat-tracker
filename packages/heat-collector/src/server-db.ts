@@ -1,5 +1,6 @@
 import { lookup } from "node:dns/promises";
 import { sql } from "drizzle-orm";
+import { loadDriver } from "./load-driver";
 import { createHeatError, HeatTrackerError, SERVER_ERRORS } from "@m-software-engineering/heat-errors";
 import type { Logger } from "./logger";
 import { migrationFailureCause, targetHost } from "./cli-errors";
@@ -53,7 +54,7 @@ export const watchPoolErrors = (
 };
 
 const pgClient = async (connectionString: string, timeoutMs: number, logger: Logger, host: string) => {
-  const { Pool } = await import("pg");
+  const { Pool } = await loadDriver("pg", () => import("pg"));
   const pool = new Pool({ connectionString, connectionTimeoutMillis: timeoutMs });
   watchPoolErrors(pool, logger, host);
   return pool;

@@ -7,6 +7,11 @@ export const SERVER_ERRORS = {
     message: "The database config has neither a connection string nor a client.",
     fix: "Set DATABASE_URL for the heat-collector server (docker compose sets it), or pass db.connectionString or db.client to createCollector()."
   },
+  HEAT_E_DB_DRIVER_MISSING: {
+    code: "HEAT_E_DB_DRIVER_MISSING",
+    message: "The database driver for the configured dialect is not installed.",
+    fix: "Install the driver named in the cause next to the collector, for example `npm install pg`. On Node.js 20, SQLite needs `better-sqlite3@11`."
+  },
   HEAT_E_DB_UNREACHABLE: {
     code: "HEAT_E_DB_UNREACHABLE",
     message: "The collector could not connect to the database.",
