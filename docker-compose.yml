@@ -38,7 +38,7 @@ services:
 
   collector:
     <<: *hardening
-    image: ghcr.io/m-software-engineering/heat-collector:0.4.0
+    image: ghcr.io/m-software-engineering/heat-collector:0.5.0
     user: node
     environment:
       # No password in the URL: pg reads PGPASSWORD as-is, so @ : / # ? in POSTGRES_PASSWORD need no URL-encoding.
@@ -70,7 +70,7 @@ services:
 
   dashboard:
     <<: *hardening
-    image: ghcr.io/m-software-engineering/heat-dashboard:0.4.0
+    image: ghcr.io/m-software-engineering/heat-dashboard:0.5.0
     user: node
     environment:
       HEAT_COLLECTOR_URL: http://collector:4000

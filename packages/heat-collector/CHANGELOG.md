@@ -1,5 +1,56 @@
 # @m-software-engineering/heat-collector
 
+## 0.5.0
+
+### Minor Changes
+
+- 08a7a8b: Self-hosting groundwork (#24).
+
+  - New `heat-collector` binary: `heat-collector` (or `serve`) starts the collector on port 4000 from environment variables, fails fast with `HEAT_E_DB_CONFIG` (no `DATABASE_URL`) or `HEAT_E_DB_UNREACHABLE` (cause names host:port, never the password), generates an admin token once and keeps it in `HEAT_DATA_DIR/admin-token`, and prints a startup block with the dashboard URL, the token and `docker compose exec collector heat-collector token`. `heat-collector token` prints the token again.
+  - New opt-in `admin: { token }` collector option: `/api/*` then requires `Authorization: Bearer <token>` and answers 401 `HEAT_E_ADMIN_TOKEN_MISSING` / `HEAT_E_ADMIN_TOKEN_INVALID`. Without it the read API is unchanged.
+  - The server survives a dropped idle Postgres connection (logged as `HEAT_E_DB_CONNECTION_LOST`, the pool reconnects), names `ENOTFOUND` when the database host does not resolve, requires `HEAT_ADMIN_TOKEN` to be at least 32 characters, refuses an empty token file instead of crash-looping, and accepts `HEAT_TRUST_PROXY=true|false|<hops>|<addresses>`.
+  - New `GET /healthz` liveness route and `GET /api/projects/by-key/:projectKey`.
+  - Projects created by their first ingest are now named after the request `Origin` instead of `Default` (requests without an `Origin` still get `Default`).
+  - New error codes: `HEAT_E_ADMIN_TOKEN_MISSING`, `HEAT_E_ADMIN_TOKEN_INVALID`, `HEAT_E_PROJECT_QUERY_FAILED`, `HEAT_E_DB_UNREACHABLE`, `HEAT_E_ADMIN_TOKEN_STORE`, `HEAT_E_SERVER_LISTEN`, `HEAT_E_SERVER_COMMAND`, `HEAT_E_SERVER_CONFIG`, `HEAT_E_DB_CONNECTION_LOST`, `HEAT_E_ADMIN_TOKEN_FILE_INVALID`, `HEAT_E_ADMIN_TOKEN_WEAK`. `HEAT_E_DB_CONFIG`'s fix now mentions `DATABASE_URL`.
+
+- b33f7b8: Heatmaps are aggregated in the database. `GET /api/projects/:projectId/heatmap` now runs grouped queries (`GROUP BY` on bucketed coordinates for Postgres, MySQL and SQLite; aggregation pipelines for MongoDB) instead of loading every matched event into Node, so collector memory no longer grows with traffic. Whole hours are served from a `heatmap_rollup` table that ingest keeps up to date, so 1 M events stay within p95 ≤ 500 ms. Output is golden-tested on every database, plus `meta.totalEvents`, `meta.sampled` (`false`), `meta.range`, `meta.excluded` and `meta.viewportBuckets`.
+
+  - `autoMigrate` creates the `events_project_path_type_ts_idx` index on (project, path, type, ts), adds `events.viewport_bucket` (filled for existing rows) `events.rollup_state`, and creates and backfills `heatmap_rollup` in locked batches (safe under concurrent ingest; never double-counts). Ingest writes events and rollup in one transaction. The first start after upgrading reads every stored event once (about 75 s per 1M events on Postgres).
+  - **Behavior change:** without `from` and `to` a heatmap covers the last 7 days (ending with the current hour) instead of all time; `meta.range` returns the applied range.
+  - **Behavior change (SQL):** `click`/`move` events without coordinates are no longer plotted at 0,0; they are skipped (as MongoDB already did) and counted in `meta.excluded.noCoordinates`.
+  - New `viewport=<w>x<h>` query param filters events by stored viewport bucket.
+  - Without `viewportBucket`, the default viewport is the most common bucket among the 10,000 most recent matching events (identical to before when fewer events match).
+  - `viewportBucket` must be `<width>x<height>` (e.g. `1440x900`); other values now return 400 `HEAT_E_QUERY_INVALID` naming the param instead of silently using 1280x720.
+
+  During a rolling upgrade, events written by older collectors are counted before heatmap reads and by a periodic background catch-up (`heatmap.rollupCatchUpIntervalMs`), so whole-hour heatmaps no longer miss them. Adds `Collector.close()` and the `HEAT_E_ROLLUP_CATCH_UP` error code.
+
+- a3b6156: The heatmap `viewport` filter accepts several buckets (`viewport=400x800,400x900`), so a dashboard can filter a whole viewport class. The first bucket sets the grid.
+- d79f74d: Breaking: the Express quick start now enables CORS only on `/ingest`. If a browser app calls the read API directly, add CORS to those routes yourself, ideally behind auth (#165).
+- 0307fa2: Projects and popular pages, with titles, as the dashboard entry point (#25).
+
+  - Collector: `GET /api/projects` (every project with `projectKey`, `eventsLast24h`, `lastEventAt`, `receivingData`; no-event projects first, then most recent event) and `GET /api/projects/:projectId/pages?from&to&limit&cursor` (pages with a pageview in the window, default last 7 days, sorted by distinct pageview sessions, with clicks and the latest-seen title, falling back to the path). Cursor pagination: `limit` defaults to 50 and is clamped to 200 (`meta.limit` returns the applied value); at most 2 database queries per request. `autoMigrate` creates the `pages` table and the `events_project_type_ts_idx` / `events_project_ts_idx` indexes. p95 ≤ 200 ms with 10 k pages / 1 M events on Postgres (`bench:pages`).
+  - **Behavior change (collector):** stored paths never keep a query param whose name (decoded, NFKC, lowercased; split on `-` `_` `[` `]` `.` `+`, space, camelCase and digit/letter boundaries) has a token in `token`, `key`, `secret`, `password`, `passwd`, `auth`, `authorization`, `sig`, `signature`, `jwt`, `session`, `bearer`, `cookie`, `credential(s)`, `csrf`, `xsrf`, `nonce`, `hmac`, `pwd`, `pass`, `passcode`, `otp`, `ssn`, `ticket`, `assertion`, `samlresponse`; or a token ending in `token`, `secret` or `sessid`, or `secret`/`private`/`access`/`api`/`my`/`client`/`session` + `key`; or whose whole name is `apikey`, `accesstoken`, `authtoken`, `refreshtoken`, `idtoken`, `sessionid`, `sessiontoken`, `clientsecret`, `xamzsignature`, `sid`, `pin`, `jsessionid`, `phpsessid`, `oauthverifier`, `policy`, `oobcode`, `otpcode`, `code`, `authcode` or `verificationcode` (so `promo-code`, `postcode`, `keyword`, `turkey`, `author`, `passport` stay; the lists are frozen, a new case needs a fixture in `fixtures/privacy-cases.json` and its own issue); a name that cannot be decoded; or a value that looks like an email (alphabetic TLD of 2+ letters that is not a file extension such as png, heic, tiff, mov, csv, zip, pdf; so `logo@2x.png` and `react@18.2.0` stay), and `;matrix` path params are dropped (`/p;jsessionid=x` → `/p`) and email-looking path segments become `[email]` (path decoding: `+` stays `+`), on every ingest.
+  - **Behavior change (SDK):** event paths are `location.pathname` only by default; the query string and hash are dropped. Keep specific params with `privacy.keepQueryParams` (sensitive params are never kept; email-looking path segments become `[email]`). Pageviews send `title` (`document.title`, masked with `maskTextSelectors`, ≤ 200 characters); disable with `capture.pageTitle: false`.
+  - New error codes: `HEAT_E_PROJECT_NOT_FOUND`, `HEAT_E_QUERY_CURSOR`, `HEAT_E_PROJECTS_QUERY_FAILED`, `HEAT_E_PAGES_QUERY_FAILED`.
+  - **Behavior change (collector):** `/ingest` answers `HEAT_E_PROJECT_KEY_INVALID` (400) for an `x-project-key` outside `[A-Za-z0-9_-]{1,128}`.
+  - Dashboard: the install snippet writes the endpoint and projectKey as escaped JS strings (`JSON.stringify`, `<` as `\u003c`).
+
+- d79f74d: **Security notice:** when you embed the collector, read APIs under `/api` are open unless you set `admin.token` or add your own auth. The `heat-collector` binary already sets one. Closed-by-default reads are tracked in #168.
+
+### Patch Changes
+
+- f6893db: The `better-sqlite3` peer range now accepts 12.x and 13.x as well as 11.x. Version 13 fixes the Node 24 worker crash (`Assertion failed: (env) != nullptr`). It needs Node 22 or later.
+- 14f2f89: Database drivers are now optional peers. Install only the one you use. On Node 20, use `better-sqlite3@11` (#164). A missing driver now fails with `HEAT_E_DB_DRIVER_MISSING` and the install command.
+- d79f74d: Retried batches no longer count clicks twice (#111).
+- bb1838e: Privacy rules: stop dropping a few known non-sensitive names (`primary_key`, `sort_key`, `cache-key`, `publishable_key`, `key_id`, `ticket_id`, `session_count`, `boarding_pass`, `pass_type`). Every other name dropped before still drops, and `signing`/`encryption`/`master`/`shared`/`app`/`consumer` join the `<prefix>key` list.
+- Updated dependencies [14f2f89]
+- Updated dependencies [08a7a8b]
+- Updated dependencies [a3b6156]
+- Updated dependencies [c52b664]
+- Updated dependencies [0307fa2]
+- Updated dependencies [5a1481a]
+  - @m-software-engineering/heat-errors@0.2.0
+
 ## 0.4.0
 
 ### Minor Changes
