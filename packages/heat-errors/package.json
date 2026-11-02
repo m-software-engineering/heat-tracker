@@ -1,6 +1,6 @@
 {
   "name": "@m-software-engineering/heat-errors",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Structured HEAT_E_* error catalog shared by heat-tracker packages",
   "repository": {
     "type": "git",
