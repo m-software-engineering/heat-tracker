@@ -8,3 +8,13 @@
 id = "GHSA-mrhx-c7xc-m3w5"
 ignoreUntil = 2026-11-15
 reason = "zod 3.25.76, direct runtime dependency of heat-collector. No fix exists in 3.x. Removed by the zod 4 migration tracked in #188. zod 4.x is already overridden to 4.6.6."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2026-11-30
+reason = "minimatch 3.1.4/9.0.7/10.2.x, dev-only (eslint 8, api-extractor, typescript-eslint, glob). No runtime path (pnpm why --prod is empty). Fixed only in major 11.0.1, which eslint 8 cannot use. Tracked in #224."
+
+[[IgnoredVulns]]
+id = "GHSA-3g3m-2fjr-6pw4"
+ignoreUntil = 2026-11-30
+reason = "glob 10.5.0, dev-only (transitive of build tooling). No runtime path (pnpm why --prod is empty). Fixed only in major 14.0.2. Tracked in #224."
